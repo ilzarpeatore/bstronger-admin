@@ -1,0 +1,157 @@
+import { useEffect, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { toast } from 'sonner'
+import { api } from '@/lib/api'
+
+type AppSettingsData = {
+  id?: number
+  site_name?: string
+  site_email?: string
+  site_description?: string
+  site_copyright?: string
+  facebook_url?: string
+  twitter_url?: string
+  linkedin_url?: string
+  instagram_url?: string
+  language_option?: string | null
+  contact_email?: string
+  contact_number?: string
+  help_support_url?: string
+  color?: string
+  [key: string]: any
+}
+
+const AppSettingsView = () => {
+  const [settings, setSettings] = useState<AppSettingsData>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    api.get('/admin/app-settings')
+      .then(res => setSettings(res.data?.data || res.data || {}))
+      .catch(() => toast.error('No se pudieron cargar los ajustes de la aplicación'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleChange = (key: string, value: string) => {
+    setSettings(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await api.post('/admin/app-settings', settings)
+      toast.success('Ajustes de la aplicación guardados correctamente')
+    } catch {
+      toast.error('No se pudieron guardar los ajustes de la aplicación')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className='flex justify-center py-12'>
+          <div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className='flex items-center justify-between'>
+          <CardTitle>Ajustes de la aplicación</CardTitle>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className='space-y-8 max-w-2xl'>
+          <div>
+            <h3 className='text-lg font-medium mb-4'>General</h3>
+            <FieldGroup className='gap-4'>
+              <Field className='gap-2'>
+                <FieldLabel>Nombre del sitio</FieldLabel>
+                <Input value={settings.site_name || ''} onChange={e => handleChange('site_name', e.target.value)} placeholder='Nombre del sitio' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>Correo del sitio</FieldLabel>
+                <Input type='email' value={settings.site_email || ''} onChange={e => handleChange('site_email', e.target.value)} placeholder='Correo del sitio' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>Descripción del sitio</FieldLabel>
+                <textarea
+                  className='border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-[80px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2'
+                  value={settings.site_description || ''}
+                  onChange={e => handleChange('site_description', e.target.value)}
+                  placeholder='Descripción del sitio'
+                />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>Derechos de autor</FieldLabel>
+                <Input value={settings.site_copyright || ''} onChange={e => handleChange('site_copyright', e.target.value)} placeholder='Texto de derechos de autor' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>Color del tema</FieldLabel>
+                <div className='flex items-center gap-2'>
+                  <Input type='color' value={settings.color || '#4f46e5'} onChange={e => handleChange('color', e.target.value)} className='w-16 h-10 p-1' />
+                  <Input value={settings.color || ''} onChange={e => handleChange('color', e.target.value)} placeholder='#4f46e5' className='flex-1' />
+                </div>
+              </Field>
+            </FieldGroup>
+          </div>
+
+          <div>
+            <h3 className='text-lg font-medium mb-4'>Contacto</h3>
+            <FieldGroup className='gap-4'>
+              <Field className='gap-2'>
+                <FieldLabel>Correo de contacto</FieldLabel>
+                <Input type='email' value={settings.contact_email || ''} onChange={e => handleChange('contact_email', e.target.value)} placeholder='Correo de contacto' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>Teléfono de contacto</FieldLabel>
+                <Input value={settings.contact_number || ''} onChange={e => handleChange('contact_number', e.target.value)} placeholder='Teléfono de contacto' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>URL de ayuda y soporte</FieldLabel>
+                <Input value={settings.help_support_url || ''} onChange={e => handleChange('help_support_url', e.target.value)} placeholder='https://...' />
+              </Field>
+            </FieldGroup>
+          </div>
+
+          <div>
+            <h3 className='text-lg font-medium mb-4'>Redes sociales</h3>
+            <FieldGroup className='gap-4'>
+              <Field className='gap-2'>
+                <FieldLabel>URL de Facebook</FieldLabel>
+                <Input value={settings.facebook_url || ''} onChange={e => handleChange('facebook_url', e.target.value)} placeholder='https://facebook.com/...' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>URL de Twitter</FieldLabel>
+                <Input value={settings.twitter_url || ''} onChange={e => handleChange('twitter_url', e.target.value)} placeholder='https://twitter.com/...' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>URL de LinkedIn</FieldLabel>
+                <Input value={settings.linkedin_url || ''} onChange={e => handleChange('linkedin_url', e.target.value)} placeholder='https://linkedin.com/...' />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>URL de Instagram</FieldLabel>
+                <Input value={settings.instagram_url || ''} onChange={e => handleChange('instagram_url', e.target.value)} placeholder='https://instagram.com/...' />
+              </Field>
+            </FieldGroup>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default AppSettingsView
