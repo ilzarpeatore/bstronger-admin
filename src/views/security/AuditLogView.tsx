@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { es } from 'date-fns/locale/es'
 
 type AuditEntry = {
   id: number

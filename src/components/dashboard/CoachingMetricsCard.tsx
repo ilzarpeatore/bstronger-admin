@@ -54,10 +54,15 @@ export default function CoachingMetricsCard({ metrics, totals }: CoachingMetrics
             <span className="text-2xl font-semibold">{totals.pct_con_plan_promedio}%</span>
           </div>
           <div className="flex flex-col gap-1 rounded-lg border border-border p-4">
-            <span className="text-xs text-muted-foreground uppercase tracking-wide">Completan ≥80% semana</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wide" title="Estimación provisional, no calculada todavía a partir de datos reales de adherencia">
+              Completan ≥80% semana *
+            </span>
             <span className="text-2xl font-semibold">{totals.pct_completan_80_promedio}%</span>
           </div>
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          * "Completan ≥80% semana" es una estimación provisional (todavía no calculada a partir de la adherencia real de cada cliente) — no la trates como una métrica de negocio definitiva.
+        </p>
 
         <div className="flex flex-col gap-3">
           <h4 className="text-sm font-medium text-muted-foreground">Por coach</h4>
@@ -82,7 +87,7 @@ export default function CoachingMetricsCard({ metrics, totals }: CoachingMetrics
                 </div>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">≥80% semana</span>
+                    <span className="text-muted-foreground" title="Estimación provisional">≥80% semana *</span>
                     <span className="font-medium">{m.pct_completan_80}%</span>
                   </div>
                   <SimpleBar value={m.pct_completan_80} barClass="bg-chart-2" />

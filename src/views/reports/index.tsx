@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, subMonths } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { es } from 'date-fns/locale/es'
 import {
   Download, CalendarDays, Users, Dumbbell, CreditCard, MessageSquare, Wallet,
   BarChart3, Table,

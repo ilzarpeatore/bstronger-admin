@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { es } from 'date-fns/locale/es'
 import {
   PlusIcon, PencilIcon, TrashIcon, SendIcon, EyeIcon, FileTextIcon,
   TypeIcon, HashIcon, ListIcon, BarChartIcon, ToggleLeftIcon, CalendarIcon, ImageIcon,

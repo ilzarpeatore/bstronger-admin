@@ -16,9 +16,10 @@ import LibraryBreakdown from '@/components/dashboard/LibraryBreakdown'
 import RecentActivity from '@/components/dashboard/RecentActivity'
 import CoachExceptionsCard from '@/components/dashboard/CoachExceptionsCard'
 import { DashboardSkeleton } from '@/components/shared/skeletons'
-import KpiSection, { type DashboardKpis } from '@/components/dashboard/KpiSection'
+import type { DashboardKpis } from '@/components/dashboard/KpiSection'
 import CoachingMetricsCard, { type CoachMetric } from '@/components/dashboard/CoachingMetricsCard'
 
+const KpiSection = lazy(() => import('@/components/dashboard/KpiSection'))
 const RevenueChart = lazy(() => import('@/components/dashboard/RevenueChart'))
 const ContentBarChart = lazy(() => import('@/components/dashboard/ContentBarChart'))
 
@@ -174,7 +175,9 @@ export default function Dashboard() {
         <h3 className='text-sm font-semibold text-muted-foreground uppercase tracking-wide'>
           KPIs del período — comparativa {kpiPeriod === 'week' ? 'semanal' : 'mensual'}
         </h3>
-        <KpiSection kpis={kpis} loading={kpisLoading} />
+        <Suspense fallback={<div className='h-24 flex items-center justify-center rounded-lg border border-dashed'><div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div>}>
+          <KpiSection kpis={kpis} loading={kpisLoading} />
+        </Suspense>
       </div>
 
       {/* Main chart + library breakdown */}
