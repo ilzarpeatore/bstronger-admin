@@ -27,6 +27,7 @@ import HabitDialog from '@/components/coaching/HabitDialog'
 import HabitProgressPanel, { type HabitProgressItem } from '@/components/coaching/HabitProgressPanel'
 import ClientMealCalendarView from '@/views/coaching/ClientMealCalendarView'
 import { DetailSkeleton } from '@/components/shared/skeletons'
+import CoachExceptionsCard from '@/components/dashboard/CoachExceptionsCard'
 
 const BodyMetricChart = lazy(() => import('@/components/charts/body-metric-chart'))
 const ExerciseHistoryChart = lazy(() => import('@/components/charts/exercise-history-chart'))
@@ -855,6 +856,12 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                   : <p className='text-center text-muted-foreground text-xs py-3'>Sin datos de readiness todavía</p>}
                 </CardContent>
               </Card>
+              {/* Sugerencias de progresión pendientes del Motor de Auto-Regulación
+                  (sugerencia_carga/estancamiento) para este cliente -- reutiliza el
+                  mismo componente ya conectado del Dashboard general (variant="compact"
+                  + clientId, ver docs/Plan_Cierre_Motor_UI.md §2.2, nunca se había
+                  enlazado aquí). Aprobar/editar/rechazar ya funciona de verdad. */}
+              <CoachExceptionsCard clientId={userId} variant='compact' />
               <Card>
                 <CardHeader className='pb-2 flex flex-row items-center justify-between space-y-0'><CardTitle className='text-sm flex items-center gap-2'><CameraIcon className='size-4' /> Fotos de progreso</CardTitle><Button variant='ghost' size='sm' className='h-6 text-xs' onClick={() => goToTab('photos')}>Ver todo</Button></CardHeader>
                 <CardContent>
