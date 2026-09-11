@@ -56,6 +56,9 @@ type PersonalRecord = { id: string | number; exercise_id: number; date: string; 
 type SessionReview = { id: number; date: string | null; workout_title: string | null; duration_seconds: number | null; volume_kg: number | null; calories_burned: number | null; difficulty_rating: number | null; comment: string | null }
 type ExerciseNote = { id: number; date: string | null; exercise_title: string; notes: string; program_day_assignment_id?: number | null; workout_template_id?: number | null }
 type ReadinessCheck = { id: number; date: string | null; sleep_quality: number | null; soreness_level: number | null; energy_level: number | null; stress_level: number | null }
+type ReadinessScoreRow = { date: string; combined_score: number | null; band: string | null; acwr: number | null; hrv_z_score: number | null; sueno_z_score: number | null; subjetivo_score: number | null; calculated_at: string | null }
+const READINESS_BAND_LABEL: Record<string, string> = { optimo: 'Óptimo', reducido: 'Reducido', bajo: 'Bajo', dato_insuficiente: 'Datos insuficientes' }
+const READINESS_BAND_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = { optimo: 'default', reducido: 'secondary', bajo: 'destructive', dato_insuficiente: 'outline' }
 type ClientFeatureSettings = Record<string, boolean>
 const FEATURE_LABELS: Record<string, string> = { workout: 'Entrenamiento', nutrition: 'Nutrición', habits: 'Hábitos', forms: 'Formularios y check-ins', resources: 'Recursos', chatbot: 'Chatbot de IA', readiness_check: 'Chequeo diario de preparación (obligatorio antes de entrenar)' }
 type FormQuestion = { id: number; question_text: string; type: string; options: string[] | null; max_files: number | null; metric_id: number | null; sync_type: string | null; allow_multiple: boolean; placeholder: string | null; scale_max: number; star_max: number; order: number; is_required: boolean; metric?: { id: number; key: string; label: string; unit: string | null } }
@@ -274,6 +277,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const [limitationDialogOpen, setLimitationDialogOpen] = useState(false)
   const [limitationForm, setLimitationForm] = useState({ type: 'limitation', title: '', description: '', status: 'active', date_reported: '' })
   const [editingLimitationId, setEditingLimitationId] = useState<number | null>(null)
+  const [readinessScores, setReadinessScores] = useState<ReadinessScoreRow[]>([])
+  const [readinessScoresLoading, setReadinessScoresLoading] = useState(false)
   const [bodyMetrics, setBodyMetrics] = useState<ClientBodyMetric[]>([])
   const [bodyMetricsChart, setBodyMetricsChart] = useState<Record<string, BodyMetricChart>>({})
   const [bodyMetricsLoading, setBodyMetricsLoading] = useState(false)
@@ -330,6 +335,10 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const fetchPhotos = useCallback(async () => { setPhotosLoading(true); try { const res = await api.get(`/admin/progress-photo-list?client_id=${userId}`); setPhotos(res.data || []) } catch { setPhotos([]) } finally { setPhotosLoading(false) } }, [userId])
   const fetchGoals = useCallback(async () => { setGoalsLoading(true); try { const res = await api.get(`/admin/client-goal-list?client_id=${userId}`); setGoals(res.data?.data || res.data || []) } catch { setGoals([]) } finally { setGoalsLoading(false) } }, [userId])
   const fetchLimitations = useCallback(async () => { setLimitationsLoading(true); try { const res = await api.get(`/admin/client-limitation-list?client_id=${userId}`); setLimitations(res.data?.data || res.data || []) } catch { setLimitations([]) } finally { setLimitationsLoading(false) } }, [userId])
+  // Motor de Auto-Regulacion de Carga (Fase 4) -- item 10 de docs/PENDIENTE_BACKEND_ADMIN.md.
+  // Distinto del "Chequeo diario de preparacion" (fetchReadinessChecks, subjetivo) -- esto es
+  // el combined_score/band/ACWR real calculado por ReadinessCalculationService.
+  const fetchReadinessScores = useCallback(async () => { setReadinessScoresLoading(true); try { const res = await api.get(`/admin/users/${userId}/readiness?days=14`); setReadinessScores(res.data?.data?.history || []) } catch { setReadinessScores([]) } finally { setReadinessScoresLoading(false) } }, [userId])
   const fetchBodyMetrics = useCallback(async () => { setBodyMetricsLoading(true); try { const listRes = await api.get(`/admin/client-body-metric-list?client_id=${userId}&per_page=100`); const list = listRes.data?.data?.data || listRes.data?.data || []; setBodyMetrics(list); const chart: Record<string, BodyMetricChart> = {}; for (const m of list as ClientBodyMetric[]) { if (!chart[m.metric_type]) chart[m.metric_type] = { unit: m.unit, data: [] }; chart[m.metric_type].data.push({ value: m.value, date: m.recorded_at, notes: m.notes }) }; for (const k of Object.keys(chart)) chart[k].data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); setBodyMetricsChart(chart) } catch { setBodyMetrics([]); setBodyMetricsChart({}) } finally { setBodyMetricsLoading(false) } }, [userId])
   const fetchBodyMetricTypes = useCallback(async () => { try { const res = await api.get(`/admin/body-metric-type-list?client_id=${userId}`); setBodyMetricTypes(res.data || DEFAULT_BODY_METRIC_TYPES); if (res.data?.length > 0) setMetricForm(f => ({ ...f, metric_type: res.data[0].value, unit: res.data[0].unit })) } catch { setBodyMetricTypes(DEFAULT_BODY_METRIC_TYPES) } }, [userId])
   const handleSaveType = async () => { if (!typeForm.value.trim() || !typeForm.label.trim()) { toast.error('El valor y la etiqueta son obligatorios'); return }; setSavingType(true); try { if (editingType) { await api.post('/admin/body-metric-type-update', { value: editingType.value, label: typeForm.label.trim(), unit: typeForm.unit.trim(), client_id: editingType.scope === 'client' ? editingType.client_id : null }); toast.success('Tipo actualizado') } else { await api.post('/admin/body-metric-type-store', { value: typeForm.value.trim(), label: typeForm.label.trim(), unit: typeForm.unit.trim(), scope: typeForm.scope, client_id: typeForm.scope === 'client' ? Number(userId) : null }); toast.success('Tipo creado') }; setTypeDialogOpen(false); setEditingType(null); setTypeForm({ value: '', label: '', unit: '', scope: 'global' }); fetchBodyMetricTypes() } catch (err: any) { toast.error(err?.message || 'No se pudo guardar el tipo') } finally { setSavingType(false) } }
@@ -357,18 +366,18 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
       if (tab === 'training') { const [r, t, p] = await Promise.all([api.get(`/admin/client-exercise-history?client_id=${userId}`).catch(() => ({ data: [] })), api.get('/admin/workout-template-list?per_page=500').catch(() => ({ data: [] })), api.get('/admin/training-program-list?per_page=500').catch(() => ({ data: [] }))]); setRecords(r.data?.data || r.data || []); setWorkoutTemplates(t.data || []); setTrainingPrograms(p.data || []); fetchCalendar(); fetchSessionFeedback(); fetchReadinessChecks(); fetchCompletedSessions() }
       else if (tab === 'metrics') { const r = await api.get(`/admin/client-exercise-history?client_id=${userId}`).catch(() => ({ data: [] })); setRecords(r.data?.data || r.data || []); fetchBodyMetrics(); fetchBodyMetricTypes() }
       else if (tab === 'settings') { fetchFeatureSettings() }
-      else if (tab === 'overview') { await Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchCompletedSessions()]) }
+      else if (tab === 'overview') { await Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchCompletedSessions(), fetchReadinessScores()]) }
       else if (tab === 'photos') { fetchPhotos() }
       else if (tab === 'tasks') { fetchTasks() }
       else if (tab === 'habits') { fetchHabitProgress() }
       else if (tab === 'resources') { fetchResources(); fetchAssignableResources() }
       else if (tab === 'onboarding') { fetchOnboarding() }
     } catch { /* tab not found */ }
-  }, [userId, fetchCalendar, fetchSessionFeedback, fetchReadinessChecks, fetchCompletedSessions, fetchFeatureSettings, fetchNotes, fetchAssignedForms, fetchPhotos, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchBodyMetricTypes, fetchTasks, fetchHabitProgress, fetchResources, fetchAssignableResources, fetchOnboarding])
+  }, [userId, fetchCalendar, fetchSessionFeedback, fetchReadinessChecks, fetchReadinessScores, fetchCompletedSessions, fetchFeatureSettings, fetchNotes, fetchAssignedForms, fetchPhotos, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchBodyMetricTypes, fetchTasks, fetchHabitProgress, fetchResources, fetchAssignableResources, fetchOnboarding])
 
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { if (activeTab !== 'overview') fetchTabData(activeTab) }, [activeTab, fetchTabData])
-  useEffect(() => { if (activeTab === 'overview') Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes()]) }, [activeTab, fetchNotes, fetchAssignedForms, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchPhotos, fetchBodyMetricTypes])
+  useEffect(() => { if (activeTab === 'overview') Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchReadinessScores()]) }, [activeTab, fetchNotes, fetchAssignedForms, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchPhotos, fetchBodyMetricTypes, fetchReadinessScores])
   useEffect(() => { if (activeTab === 'training') fetchCalendar() }, [calYear, calMonth, fetchCalendar, activeTab])
   useEffect(() => { if (trainingSubTab === 'adherence') fetchAdherence() }, [trainingSubTab, fetchAdherence])
   useEffect(() => {
@@ -813,6 +822,37 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                   {limitationsLoading ? <div className='flex justify-center py-4'><div className='h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div>
                   : activeLimitations.length > 0 ? <div className='space-y-2'>{activeLimitations.slice(0, 4).map(l => (<div key={l.id} className='rounded-md bg-muted/50 p-2.5 space-y-1'><div className='flex items-center justify-between'><div className='flex items-center gap-1.5'><Badge variant='outline' className='text-[9px] capitalize'>{l.type.replace('_', ' ')}</Badge><p className='text-xs font-medium'>{l.title}</p></div><DropdownMenu><DropdownMenuTrigger><button type='button' className='p-0.5 text-muted-foreground hover:text-foreground'><MoreVerticalIcon className='size-3' /></button></DropdownMenuTrigger><DropdownMenuContent align='end' className='text-xs'><DropdownMenuItem onClick={() => { setEditingLimitationId(l.id); setLimitationForm({ type: l.type, title: l.title, description: l.description || '', status: l.status, date_reported: l.date_reported || '' });                             setLimitationDialogOpen(true) }}>Editar</DropdownMenuItem><DropdownMenuItem onClick={() => handleDeleteLimitation(l.id)} className='text-destructive focus:text-destructive'>Eliminar</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>{l.description && <p className='text-[10px] text-muted-foreground line-clamp-2'>{l.description}</p>}</div>))}</div>
                   : <p className='text-center text-muted-foreground text-xs py-3'>No hay limitaciones</p>}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className='pb-2'><CardTitle className='text-sm flex items-center gap-2'><ActivityIcon className='size-4' /> Readiness / Carga (ACWR)</CardTitle></CardHeader>
+                <CardContent>
+                  {readinessScoresLoading ? <div className='flex justify-center py-4'><div className='h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div>
+                  : readinessScores.length > 0 ? (() => { const latest = readinessScores[0]; const band = latest.band || 'dato_insuficiente'; return (
+                    <div className='space-y-3'>
+                      <div className='flex items-center justify-between'>
+                        <div>
+                          <p className='text-2xl font-bold'>{latest.combined_score != null ? Math.round(latest.combined_score) : '—'}</p>
+                          <p className='text-[10px] text-muted-foreground'>{new Date(latest.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</p>
+                        </div>
+                        <div className='text-right'>
+                          <Badge variant={READINESS_BAND_VARIANT[band] || 'outline'} className='text-[10px]'>{READINESS_BAND_LABEL[band] || band}</Badge>
+                          <p className='text-[10px] text-muted-foreground mt-1'>ACWR {latest.acwr != null ? latest.acwr.toFixed(2) : '—'}</p>
+                        </div>
+                      </div>
+                      <Separator />
+                      <div className='space-y-1'>
+                        {readinessScores.slice(1, 6).map(r => (
+                          <div key={r.date} className='flex items-center justify-between text-[10px] text-muted-foreground'>
+                            <span>{new Date(r.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                            <span>{r.combined_score != null ? Math.round(r.combined_score) : '—'}</span>
+                            <Badge variant={READINESS_BAND_VARIANT[r.band || 'dato_insuficiente'] || 'outline'} className='text-[9px] px-1.5 py-0'>{READINESS_BAND_LABEL[r.band || 'dato_insuficiente'] || r.band}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) })()
+                  : <p className='text-center text-muted-foreground text-xs py-3'>Sin datos de readiness todavía</p>}
                 </CardContent>
               </Card>
               <Card>
