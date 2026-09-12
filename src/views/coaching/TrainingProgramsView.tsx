@@ -16,6 +16,7 @@ import {
   SearchIcon,
   SparklesIcon,
   DumbbellIcon,
+  MoonIcon,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -29,6 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
@@ -500,6 +502,21 @@ export default function TrainingProgramsView() {
     }
   }
 
+  const [togglingDeloadWeek, setTogglingDeloadWeek] = useState<number | null>(null)
+  const handleToggleDeload = async (week: any) => {
+    if (!selected) return
+    setTogglingDeloadWeek(week.week_number)
+    try {
+      await api.post('/admin/training-program-mark-week-deload', { training_program_id: selected.id, week_number: week.week_number, is_deload: !week.is_deload })
+      toast.success(!week.is_deload ? 'Semana marcada como descarga' : 'Semana desmarcada como descarga')
+      fetchCalendar()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Error al actualizar la semana')
+    } finally {
+      setTogglingDeloadWeek(null)
+    }
+  }
+
   const handleCopyAssignment = (assignmentId: number, title: string) => {
     setClipboardAssignment({ assignment_id: assignmentId, workout_title: title })
     toast.info('Entrenamiento copiado — haz clic en una celda del día para pegar')
@@ -663,12 +680,25 @@ export default function TrainingProgramsView() {
                 {calendarWeeks.map(week => {
                   let dayCounter = (week.week_number - 1) * 7
                   return (
-                    <div key={week.week_number} className='rounded-lg border bg-card'>
-                      <div className='flex items-center justify-between px-4 py-2.5 border-b'>
+                    <div key={week.week_number} className={`rounded-lg border bg-card ${week.is_deload ? 'border-amber-400/60' : ''}`}>
+                      <div className={`flex items-center justify-between px-4 py-2.5 border-b ${week.is_deload ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
                         <div className='flex items-center gap-2'>
                           <span className='text-sm font-semibold'>Semana {week.week_number}</span>
+                          {week.is_deload && (
+                            <Badge variant='outline' className='gap-1 text-amber-700 dark:text-amber-400 border-amber-400/60'>
+                              <MoonIcon className='size-3' /> Descarga
+                            </Badge>
+                          )}
                         </div>
                         <div className='flex items-center gap-1'>
+                          <div className='flex items-center gap-1.5 mr-1' title='Marcar semana de descarga'>
+                            <MoonIcon className='size-3 text-muted-foreground' />
+                            <Switch
+                              checked={!!week.is_deload}
+                              disabled={togglingDeloadWeek === week.week_number}
+                              onCheckedChange={() => handleToggleDeload(week)}
+                            />
+                          </div>
                           {week.week_number > 1 && (
                             <Button variant='ghost' size='sm' className='h-6 text-[10px] gap-1' onClick={() => handleSwapWeeks(week.week_number, week.week_number - 1)}>
                               <ChevronLeftIcon className='size-3' /> Subir

@@ -60,6 +60,7 @@ type ApiCondition = {
   threshold_max?: number | null
   ventana_sesiones?: number | null
   logic_group?: number | null
+  min_condiciones_requeridas?: number | null
 }
 
 type ApiAction = {
@@ -325,6 +326,7 @@ type ConditionForm = {
   threshold_max: string
   ventana_sesiones: string
   logic_group: string
+  min_condiciones_requeridas: string
 }
 
 type ActionForm = {
@@ -346,7 +348,7 @@ type MetaForm = {
 }
 
 const blankCondition = (): ConditionForm => ({
-  variable: 'rir_delta_sesion', operator: 'gte', threshold_value: '', threshold_min: '', threshold_max: '', ventana_sesiones: '', logic_group: '0',
+  variable: 'rir_delta_sesion', operator: 'gte', threshold_value: '', threshold_min: '', threshold_max: '', ventana_sesiones: '', logic_group: '0', min_condiciones_requeridas: '',
 })
 const blankAction = (): ActionForm => ({ type: 'ajustar_carga_pct', value: '', rounding: 'nearest_2_5kg', base_reference: 'ultimo_prescrito' })
 // Decisión de seguridad ya tomada (documento de fundamento): una regla
@@ -363,6 +365,7 @@ const toConditionForm = (c: ApiCondition): ConditionForm => ({
   threshold_max: c.threshold_max != null ? String(c.threshold_max) : '',
   ventana_sesiones: c.ventana_sesiones != null ? String(c.ventana_sesiones) : '',
   logic_group: c.logic_group != null ? String(c.logic_group) : '0',
+  min_condiciones_requeridas: c.min_condiciones_requeridas != null ? String(c.min_condiciones_requeridas) : '',
 })
 const toActionForm = (a: ApiAction): ActionForm => ({
   type: a.type, value: a.value != null ? String(a.value) : '', rounding: a.rounding, base_reference: a.base_reference,
@@ -376,6 +379,7 @@ const fromConditionForm = (c: ConditionForm): ApiCondition => ({
   threshold_max: numOrNull(c.threshold_max),
   ventana_sesiones: numOrNull(c.ventana_sesiones),
   logic_group: numOrNull(c.logic_group) ?? 0,
+  min_condiciones_requeridas: numOrNull(c.min_condiciones_requeridas),
 })
 const fromActionForm = (a: ActionForm): ApiAction => ({
   type: a.type, value: numOrNull(a.value), rounding: a.rounding, base_reference: a.base_reference,
@@ -402,6 +406,7 @@ function ruleToFullPayload(rule: RuleItem, overrides: Partial<Pick<RuleItem, 'ac
       threshold_max: c.threshold_max ?? null,
       ventana_sesiones: c.ventana_sesiones ?? null,
       logic_group: c.logic_group ?? 0,
+      min_condiciones_requeridas: c.min_condiciones_requeridas ?? null,
     })),
     action: rule.action
       ? { type: rule.action.type, value: rule.action.value ?? null, rounding: rule.action.rounding, base_reference: rule.action.base_reference }
@@ -411,15 +416,28 @@ function ruleToFullPayload(rule: RuleItem, overrides: Partial<Pick<RuleItem, 'ac
 
 function summarizeConditions(rule: RuleItem): string {
   if (!rule.conditions.length) return 'Sin condiciones (siempre coincide)'
-  return rule.conditions
-    .map(c => {
-      let val = ''
-      if (c.operator === 'between') val = `${c.threshold_min ?? '?'} - ${c.threshold_max ?? '?'}`
-      else if (c.operator === 'no_change_for_n') val = `${c.ventana_sesiones ?? '?'} sesiones`
-      else val = c.threshold_value != null ? String(c.threshold_value) : '—'
-      return `${VARIABLE_LABELS[c.variable] || c.variable} ${OPERATOR_LABELS[c.operator] || c.operator} ${val}`
-    })
-    .join('  ·  ')
+  const parts = rule.conditions.map(c => {
+    let val = ''
+    if (c.operator === 'between') val = `${c.threshold_min ?? '?'} - ${c.threshold_max ?? '?'}`
+    else if (c.operator === 'no_change_for_n') val = `${c.ventana_sesiones ?? '?'} sesiones`
+    else val = c.threshold_value != null ? String(c.threshold_value) : '—'
+    return `${VARIABLE_LABELS[c.variable] || c.variable} ${OPERATOR_LABELS[c.operator] || c.operator} ${val}`
+  })
+
+  // Grupos con min_condiciones_requeridas seteado -- operador "N de M" en vez
+  // del AND clásico entre condiciones del mismo logic_group.
+  const groups = new Map<number, ApiCondition[]>()
+  for (const c of rule.conditions) {
+    const g = c.logic_group ?? 0
+    if (!groups.has(g)) groups.set(g, [])
+    groups.get(g)!.push(c)
+  }
+  for (const [group, conds] of groups) {
+    const min = conds.find(c => c.min_condiciones_requeridas != null)?.min_condiciones_requeridas
+    if (min != null) parts.push(`Grupo ${group}: requiere ${min} de ${conds.length} condiciones del grupo`)
+  }
+
+  return parts.join('  ·  ')
 }
 
 // ═══ Componente ══════════════════════════════════════════════════════════
@@ -1103,6 +1121,14 @@ const ProgressionRulesView = () => {
                               <Input className='h-8 text-xs' type='number' step='1' min='0' value={c.logic_group} onChange={e => updateCondition(idx, { logic_group: e.target.value })} />
                             </Field>
                           </div>
+                          <Field className='gap-1.5'>
+                            <FieldLabel className='text-xs'>Mínimo de condiciones requeridas (N de M en este grupo)</FieldLabel>
+                            <Input className='h-8 text-xs' type='number' step='1' min='1' value={c.min_condiciones_requeridas} onChange={e => updateCondition(idx, { min_condiciones_requeridas: e.target.value })} placeholder='Vacío = deben cumplirse todas (AND)' />
+                            <p className='text-[11px] text-muted-foreground'>
+                              Opcional. Si 2 o más condiciones comparten el mismo grupo lógico, por defecto deben cumplirse
+                              TODAS. Rellena esto para exigir solo N de las M condiciones de ese grupo en vez de todas.
+                            </p>
+                          </Field>
                         </div>
                       ))}
                     </div>

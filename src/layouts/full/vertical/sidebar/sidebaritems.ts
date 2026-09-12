@@ -69,6 +69,8 @@ import {
   UserPlus,
   Flame,
   Trophy,
+  SlidersHorizontal,
+  ArrowLeftRight,
   LucideIcon,
 } from "lucide-react"
 
@@ -173,6 +175,18 @@ const SidebarContent: MenuItem[] = [
         name: "Recursos",
         icon: FolderOpen,
         url: "/resources",
+      },
+      {
+        id: uniqueId(),
+        name: "Reglas de progresión",
+        icon: SlidersHorizontal,
+        url: "/progression-rules",
+      },
+      {
+        id: uniqueId(),
+        name: "Sustituciones de ejercicio",
+        icon: ArrowLeftRight,
+        url: "/exercise-substitutions",
       },
     ],
   },
