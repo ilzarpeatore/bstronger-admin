@@ -71,6 +71,7 @@ import {
   Trophy,
   SlidersHorizontal,
   ArrowLeftRight,
+  History,
   LucideIcon,
 } from "lucide-react"
 
@@ -187,6 +188,12 @@ const SidebarContent: MenuItem[] = [
         name: "Sustituciones de ejercicio",
         icon: ArrowLeftRight,
         url: "/exercise-substitutions",
+      },
+      {
+        id: uniqueId(),
+        name: "Decisiones del motor",
+        icon: History,
+        url: "/progression-decisions",
       },
     ],
   },

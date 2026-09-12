@@ -87,6 +87,7 @@ const Challenges = Loadable(lazy(() => import('../views/coaching/ChallengesView'
 // pantalla de sustituciones de ejercicio.
 const ProgressionRules = Loadable(lazy(() => import('../views/coaching/ProgressionRulesView')));
 const ExerciseSubstitutions = Loadable(lazy(() => import('../views/coaching/ExerciseSubstitutionsView')));
+const ProgressionDecisions = Loadable(lazy(() => import('../views/coaching/ProgressionDecisionsView')));
 
 // mightyfitness content
 const Posts = Loadable(lazy(() => import('../views/content/PostView')));
@@ -225,6 +226,7 @@ const Router = [
       { path: '/challenges', element: <Challenges /> },
       { path: '/progression-rules', element: <ProgressionRules /> },
       { path: '/exercise-substitutions', element: <ExerciseSubstitutions /> },
+      { path: '/progression-decisions', element: <ProgressionDecisions /> },
 
       { path: '/settings', element: <Settings /> },
       { path: '/settings/:tab', element: <Settings /> },

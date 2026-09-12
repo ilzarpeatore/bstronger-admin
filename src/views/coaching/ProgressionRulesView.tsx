@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   RefreshCw, Plus, Pencil, Trash2, FlaskConical, BarChart3, TrendingUp, Repeat,
-  TrendingDown, AlertTriangle, MoonStar, Wrench, ArrowLeft, X as XIcon,
+  TrendingDown, AlertTriangle, MoonStar, Wrench, ArrowLeft, X as XIcon, ArrowUp, Minus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,8 +45,10 @@ type FallbackBehaviorVal = 'aplicar_igual' | 'mantener_sin_cambio' | 'escalar_a_
 type ConditionVariableVal =
   | 'rir_delta_sesion' | 'completion_ratio' | 'tendencia_rir' | 'sesiones_consecutivas_sin_cambio'
   | 'peor_serie' | 'sin_dato_suficiente' | 'e1rm_delta' | 'readiness_band' | 'hrv_z_score' | 'sueno_z_score'
+  | 'nivel_experiencia' | 'tendencia_volumen' | 'reps_en_tope_rango' | 'rir_delta_serie_top'
+  | 'rol_ejercicio' | 'dolor_reciente_no_bloqueante' | 'acciones_bajada_en_sesion'
 type ConditionOperatorVal = 'gte' | 'lte' | 'eq' | 'between' | 'no_change_for_n'
-type ActionTypeVal =
+export type ActionTypeVal =
   | 'ajustar_carga_pct' | 'ajustar_carga_absoluta' | 'ajustar_reps' | 'mantener'
   | 'bajar_carga_pct' | 'sustituir_ejercicio' | 'bloquear_progresion' | 'marcar_para_coach'
 type RoundingVal = 'nearest_1kg' | 'nearest_2_5kg' | 'none'
@@ -116,6 +118,13 @@ const VARIABLE_LABELS: Record<ConditionVariableVal, string> = {
   readiness_band: 'Banda de readiness (0=bajo, 1=reducido, 2=óptimo)',
   hrv_z_score: 'Z-score de HRV (requiere wearable)',
   sueno_z_score: 'Z-score de sueño (requiere wearable)',
+  nivel_experiencia: 'Nivel de experiencia del cliente (meses de entrenamiento real)',
+  tendencia_volumen: 'Tendencia de volumen total (pendiente reciente de tonelaje)',
+  reps_en_tope_rango: 'Repeticiones en el tope del rango prescrito (1 = sí llegó, 0 = no)',
+  rir_delta_serie_top: 'Diferencia de RIR de la serie top (primera serie válida de la sesión)',
+  rol_ejercicio: 'Rol del ejercicio en el bloque (1 = principal, 0 = accesorio)',
+  dolor_reciente_no_bloqueante: 'Dolor reciente no bloqueante (gradiente de precaución)',
+  acciones_bajada_en_sesion: 'Nº de bajadas de carga ya disparadas en esta misma sesión (otros ejercicios)',
 }
 const OPERATOR_LABELS: Record<ConditionOperatorVal, string> = {
   gte: 'mayor o igual que',
@@ -124,7 +133,7 @@ const OPERATOR_LABELS: Record<ConditionOperatorVal, string> = {
   between: 'entre',
   no_change_for_n: 'sin cambio durante N sesiones',
 }
-const ACTION_TYPE_LABELS: Record<ActionTypeVal, string> = {
+export const ACTION_TYPE_LABELS: Record<ActionTypeVal, string> = {
   ajustar_carga_pct: 'Subir carga (%)',
   ajustar_carga_absoluta: 'Ajustar carga (valor absoluto)',
   ajustar_reps: 'Ajustar repeticiones',
@@ -305,6 +314,95 @@ const TEMPLATES: Template[] = [
       if (!r.action || r.action.type !== 'mantener') return null
       return {}
     },
+  },
+  {
+    id: 'doble_progresion_rir_subir_reps',
+    title: 'Doble progresión — subir repeticiones',
+    icon: ArrowUp,
+    summary: 'Si no ha llegado al tope del rango de repeticiones prescrito y la sesión fue igual o más fácil de lo pedido, sube 1 repetición manteniendo la carga.',
+    foundation: 'Doble progresión clásica combinada con autorregulación por RIR — requiere que el coach defina el tope de repeticiones (reps_max) en la prescripción del ejercicio.',
+    suggestedName: 'Doble progresión — subir repeticiones',
+    paramFields: [
+      { key: 'threshold', label: 'Umbral de RIR (igual o mejor que lo pedido)', step: 0.5 },
+      { key: 'incremento', label: 'Repeticiones a añadir', min: 1, step: 1 },
+    ],
+    defaultParams: { threshold: 0, incremento: 1 },
+    build: (p) => ({
+      conditions: [
+        { variable: 'reps_en_tope_rango', operator: 'eq', threshold_value: 0, logic_group: 0 },
+        { variable: 'rir_delta_sesion', operator: 'gte', threshold_value: p.threshold, logic_group: 0 },
+      ],
+      action: { type: 'ajustar_reps', value: p.incremento, rounding: 'none', base_reference: 'ultimo_prescrito' },
+    }),
+    match: (r) => {
+      const c = r.conditions
+      if (c.length !== 2) return null
+      const tope = c.find(x => x.variable === 'reps_en_tope_rango' && x.operator === 'eq' && approxEq(x.threshold_value, 0))
+      const rir = c.find(x => x.variable === 'rir_delta_sesion' && x.operator === 'gte')
+      if (!tope || !rir || tope.logic_group !== rir.logic_group) return null
+      if (!r.action || r.action.type !== 'ajustar_reps') return null
+      return { threshold: rir.threshold_value ?? 0, incremento: r.action.value ?? 1 }
+    },
+    caveat: 'Requiere reps_max configurado en la prescripción de este ejercicio — sin eso, la condición nunca tendrá dato y la regla no actuará.',
+  },
+  {
+    id: 'doble_progresion_rir_mantener',
+    title: 'Doble progresión — mantener por esfuerzo extra',
+    icon: Minus,
+    summary: 'Si no ha llegado al tope del rango pero la sesión costó más esfuerzo del pedido (sin ser un caso extremo), mantiene la carga y las repeticiones igual.',
+    foundation: 'Evita progresar cuando el cliente ya está al límite del esfuerzo pedido, sin llegar todavía al umbral de bajar carga.',
+    suggestedName: 'Doble progresión — mantener por esfuerzo extra',
+    paramFields: [
+      { key: 'threshold', label: 'Umbral de RIR (negativo, costó más de lo pedido)', step: 0.5 },
+    ],
+    defaultParams: { threshold: -1 },
+    build: (p) => ({
+      conditions: [
+        { variable: 'reps_en_tope_rango', operator: 'eq', threshold_value: 0, logic_group: 0 },
+        { variable: 'rir_delta_sesion', operator: 'lte', threshold_value: p.threshold, logic_group: 0 },
+      ],
+      action: { type: 'mantener', rounding: 'none', base_reference: 'ultimo_prescrito' },
+    }),
+    match: (r) => {
+      const c = r.conditions
+      if (c.length !== 2) return null
+      const tope = c.find(x => x.variable === 'reps_en_tope_rango' && x.operator === 'eq' && approxEq(x.threshold_value, 0))
+      const rir = c.find(x => x.variable === 'rir_delta_sesion' && x.operator === 'lte')
+      if (!tope || !rir || tope.logic_group !== rir.logic_group) return null
+      if (!r.action || r.action.type !== 'mantener') return null
+      return { threshold: rir.threshold_value ?? -1 }
+    },
+    caveat: "Si también activas 'Bajar carga si la sesión costó mucho más', pon la prioridad de ESTA regla más baja (número de prioridad más alto = se evalúa después, revisa el campo Prioridad) para que el caso extremo siga bajando carga en vez de solo mantener.",
+  },
+  {
+    id: 'doble_progresion_rir_subir_carga',
+    title: 'Doble progresión — subir carga al llegar al tope',
+    icon: TrendingUp,
+    summary: 'Si ha llegado al tope del rango de repeticiones prescrito con margen de esfuerzo (igual o mejor que lo pedido), sube la carga — las repeticiones vuelven de forma natural a la base del rango la próxima vez.',
+    foundation: 'Segunda mitad de la doble progresión clásica combinada con autorregulación por RIR.',
+    suggestedName: 'Doble progresión — subir carga al llegar al tope',
+    paramFields: [
+      { key: 'threshold', label: 'Umbral de RIR (igual o mejor que lo pedido)', step: 0.5 },
+      { key: 'pct', label: 'Subida de carga', suffix: '%', min: 0, step: 0.5 },
+    ],
+    defaultParams: { threshold: 0, pct: 2.5 },
+    build: (p) => ({
+      conditions: [
+        { variable: 'reps_en_tope_rango', operator: 'eq', threshold_value: 1, logic_group: 0 },
+        { variable: 'rir_delta_sesion', operator: 'gte', threshold_value: p.threshold, logic_group: 0 },
+      ],
+      action: { type: 'ajustar_carga_pct', value: p.pct, rounding: 'nearest_2_5kg', base_reference: 'ultimo_prescrito' },
+    }),
+    match: (r) => {
+      const c = r.conditions
+      if (c.length !== 2) return null
+      const tope = c.find(x => x.variable === 'reps_en_tope_rango' && x.operator === 'eq' && approxEq(x.threshold_value, 1))
+      const rir = c.find(x => x.variable === 'rir_delta_sesion' && x.operator === 'gte')
+      if (!tope || !rir || tope.logic_group !== rir.logic_group) return null
+      if (!r.action || r.action.type !== 'ajustar_carga_pct') return null
+      return { threshold: rir.threshold_value ?? 0, pct: r.action.value ?? 2.5 }
+    },
+    caveat: 'Requiere reps_max configurado en la prescripción de este ejercicio (misma clave que el Camino A).',
   },
 ]
 
@@ -1060,6 +1158,11 @@ const ProgressionRulesView = () => {
                         Las variables de readiness (banda / HRV / sueño) solo tienen dato los días en que el cliente
                         completó el cuestionario diario o tiene wearable conectado — sin dato ese día, la condición
                         no se cumple. La banda de readiness se compara en escala 0=bajo, 1=reducido, 2=óptimo.
+                      </p>
+                      <p className='text-[11px] text-muted-foreground'>
+                        "Repeticiones en el tope del rango prescrito" requiere que el coach haya definido{' '}
+                        <code>reps_max</code> en la prescripción de este ejercicio (plantilla de entrenamiento) —
+                        sin eso, esta condición nunca tiene dato.
                       </p>
                       {conditions.map((c, idx) => (
                         <div key={idx} className='rounded-lg border p-3 space-y-2.5'>
