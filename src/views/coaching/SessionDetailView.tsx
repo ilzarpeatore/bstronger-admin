@@ -65,6 +65,7 @@ type SessionExercise = {
   prs_this_session?: number
   exercise_volume?: number
   load_suggestion?: LoadSuggestion | null
+  last_performance?: { sets: Record<string, any>[] } | null
 }
 
 type SessionBlock = {
@@ -166,6 +167,7 @@ function mapSessionToViewer(sessionData: SessionData): {
         prs_this_session: e.prs_this_session,
         exercise_volume: e.exercise_volume,
         load_suggestion: e.load_suggestion,
+        last_performance: e.last_performance,
       })),
     })),
     totalExercises: countExercises(sessionData),
