@@ -413,7 +413,7 @@ function summarizeConditions(rule: RuleItem): string {
   if (!rule.conditions.length) return 'Sin condiciones (siempre coincide)'
   return rule.conditions
     .map(c => {
-      let val = ''
+      let val: string
       if (c.operator === 'between') val = `${c.threshold_min ?? '?'} - ${c.threshold_max ?? '?'}`
       else if (c.operator === 'no_change_for_n') val = `${c.ventana_sesiones ?? '?'} sesiones`
       else val = c.threshold_value != null ? String(c.threshold_value) : '—'
