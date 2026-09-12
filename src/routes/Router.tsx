@@ -88,6 +88,10 @@ const Challenges = Loadable(lazy(() => import('../views/coaching/ChallengesView'
 const ProgressionRules = Loadable(lazy(() => import('../views/coaching/ProgressionRulesView')));
 const ExerciseSubstitutions = Loadable(lazy(() => import('../views/coaching/ExerciseSubstitutionsView')));
 const ProgressionDecisions = Loadable(lazy(() => import('../views/coaching/ProgressionDecisionsView')));
+// CoachExceptionsView.tsx tampoco estaba enrutada -- el botón "Ver todas
+// las excepciones" de la campana de notificaciones (Notifications.tsx)
+// enlazaba a /coach-exceptions sin que esa ruta existiera.
+const CoachExceptions = Loadable(lazy(() => import('../views/coaching/CoachExceptionsView')));
 
 // mightyfitness content
 const Posts = Loadable(lazy(() => import('../views/content/PostView')));
@@ -227,6 +231,7 @@ const Router = [
       { path: '/progression-rules', element: <ProgressionRules /> },
       { path: '/exercise-substitutions', element: <ExerciseSubstitutions /> },
       { path: '/progression-decisions', element: <ProgressionDecisions /> },
+      { path: '/coach-exceptions', element: <CoachExceptions /> },
 
       { path: '/settings', element: <Settings /> },
       { path: '/settings/:tab', element: <Settings /> },

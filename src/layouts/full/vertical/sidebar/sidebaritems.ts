@@ -72,6 +72,7 @@ import {
   SlidersHorizontal,
   ArrowLeftRight,
   History,
+  AlertTriangle,
   LucideIcon,
 } from "lucide-react"
 
@@ -194,6 +195,12 @@ const SidebarContent: MenuItem[] = [
         name: "Decisiones del motor",
         icon: History,
         url: "/progression-decisions",
+      },
+      {
+        id: uniqueId(),
+        name: "Panel de Excepciones",
+        icon: AlertTriangle,
+        url: "/coach-exceptions",
       },
     ],
   },
