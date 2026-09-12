@@ -86,6 +86,28 @@ type TrainingQuestionnaireAnswers = { goal_type: string | null; activity_level: 
 type NutritionQuestionnaireAnswers = { allergies_intolerances: string | null; disliked_foods: string | null; liked_foods: string | null; current_meals_per_day: number | null; desired_meals_per_day: number | null; typical_day_meals: string | null; favorite_meats: string | null; favorite_fish: string | null; favorite_fruits_vegetables: string | null; favorite_combined_dishes: string | null }
 type OnboardingDetail = { flagged_for_review: boolean; flagged_for_review_at: string | null; onboarding_completed: boolean; onboarding_completed_at: string | null; par_q: ParQAnswers | null; training_questionnaire: TrainingQuestionnaireAnswers | null; nutrition_questionnaire: NutritionQuestionnaireAnswers | null }
 
+// Feed de logros (achievement_events) -- historial de hitos detectados por el
+// motor de progresión que hoy no se ve en ningún sitio del panel.
+type AchievementEventType =
+  | 'pr_carga' | 'pr_reps' | 'racha_sesiones' | 'mesociclo_cerrado' | 'mejora_e1rm'
+  | 'hito_compliance' | 'progreso_sesion' | 'mejor_marca_reciente' | 'mantiene_fuerza_en_deficit'
+type AchievementEvent = {
+  id: number; client_id: number; type: AchievementEventType; exercise_id: number | null
+  value: number | null; previous_best: number | null; significancia_verificada: boolean
+  shown_to_client: boolean; created_at: string; exercise: { id: number; title: string } | null
+}
+const ACHIEVEMENT_TYPE_LABELS: Record<AchievementEventType, string> = {
+  pr_carga: 'Récord de carga',
+  pr_reps: 'Récord de repeticiones',
+  racha_sesiones: 'Racha de sesiones',
+  mesociclo_cerrado: 'Mesociclo cerrado',
+  mejora_e1rm: 'Mejora de e1RM',
+  hito_compliance: 'Hito de cumplimiento',
+  progreso_sesion: 'Progreso vs. sesión anterior',
+  mejor_marca_reciente: 'Mejor marca reciente',
+  mantiene_fuerza_en_deficit: 'Mantiene fuerza en déficit',
+}
+
 const CAL_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 const GOAL_TYPES = [{ value: 'weight_loss', label: 'Pérdida de peso' }, { value: 'strength', label: 'Fuerza' }, { value: 'endurance', label: 'Resistencia' }, { value: 'flexibility', label: 'Flexibilidad' }, { value: 'body_comp', label: 'Composición corporal' }, { value: 'custom', label: 'Personalizado' }]
@@ -280,6 +302,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const [editingLimitationId, setEditingLimitationId] = useState<number | null>(null)
   const [readinessScores, setReadinessScores] = useState<ReadinessScoreRow[]>([])
   const [readinessScoresLoading, setReadinessScoresLoading] = useState(false)
+  const [achievementEvents, setAchievementEvents] = useState<AchievementEvent[]>([])
+  const [achievementEventsLoading, setAchievementEventsLoading] = useState(false)
   const [bodyMetrics, setBodyMetrics] = useState<ClientBodyMetric[]>([])
   const [bodyMetricsChart, setBodyMetricsChart] = useState<Record<string, BodyMetricChart>>({})
   const [bodyMetricsLoading, setBodyMetricsLoading] = useState(false)
@@ -310,6 +334,9 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const [assigningResource, setAssigningResource] = useState(false)
   const [onboarding, setOnboarding] = useState<OnboardingDetail | null>(null)
   const [onboardingLoading, setOnboardingLoading] = useState(false)
+  const [trainingExpDialogOpen, setTrainingExpDialogOpen] = useState(false)
+  const [trainingExpForm, setTrainingExpForm] = useState({ training_experience_months: '', technique_level: '' })
+  const [savingTrainingExp, setSavingTrainingExp] = useState(false)
   const [habitProgress, setHabitProgress] = useState<HabitProgressItem[]>([])
   const [habitProgressLoading, setHabitProgressLoading] = useState(false)
   const [habitDialogOpen, setHabitDialogOpen] = useState(false)
@@ -340,6 +367,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   // Distinto del "Chequeo diario de preparacion" (fetchReadinessChecks, subjetivo) -- esto es
   // el combined_score/band/ACWR real calculado por ReadinessCalculationService.
   const fetchReadinessScores = useCallback(async () => { setReadinessScoresLoading(true); try { const res = await api.get(`/admin/users/${userId}/readiness?days=14`); setReadinessScores(res.data?.data?.history || []) } catch { setReadinessScores([]) } finally { setReadinessScoresLoading(false) } }, [userId])
+  // Feed de logros del motor de progresión (achievement_events) -- no existía en ningún sitio del panel.
+  const fetchAchievementEvents = useCallback(async () => { setAchievementEventsLoading(true); try { const res = await api.get(`/admin/achievement-events?client_id=${userId}`); setAchievementEvents(res.data?.data || res.data || []) } catch { setAchievementEvents([]) } finally { setAchievementEventsLoading(false) } }, [userId])
   const fetchBodyMetrics = useCallback(async () => { setBodyMetricsLoading(true); try { const listRes = await api.get(`/admin/client-body-metric-list?client_id=${userId}&per_page=100`); const list = listRes.data?.data?.data || listRes.data?.data || []; setBodyMetrics(list); const chart: Record<string, BodyMetricChart> = {}; for (const m of list as ClientBodyMetric[]) { if (!chart[m.metric_type]) chart[m.metric_type] = { unit: m.unit, data: [] }; chart[m.metric_type].data.push({ value: m.value, date: m.recorded_at, notes: m.notes }) }; for (const k of Object.keys(chart)) chart[k].data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); setBodyMetricsChart(chart) } catch { setBodyMetrics([]); setBodyMetricsChart({}) } finally { setBodyMetricsLoading(false) } }, [userId])
   const fetchBodyMetricTypes = useCallback(async () => { try { const res = await api.get(`/admin/body-metric-type-list?client_id=${userId}`); setBodyMetricTypes(res.data || DEFAULT_BODY_METRIC_TYPES); if (res.data?.length > 0) setMetricForm(f => ({ ...f, metric_type: res.data[0].value, unit: res.data[0].unit })) } catch { setBodyMetricTypes(DEFAULT_BODY_METRIC_TYPES) } }, [userId])
   const handleSaveType = async () => { if (!typeForm.value.trim() || !typeForm.label.trim()) { toast.error('El valor y la etiqueta son obligatorios'); return }; setSavingType(true); try { if (editingType) { await api.post('/admin/body-metric-type-update', { value: editingType.value, label: typeForm.label.trim(), unit: typeForm.unit.trim(), client_id: editingType.scope === 'client' ? editingType.client_id : null }); toast.success('Tipo actualizado') } else { await api.post('/admin/body-metric-type-store', { value: typeForm.value.trim(), label: typeForm.label.trim(), unit: typeForm.unit.trim(), scope: typeForm.scope, client_id: typeForm.scope === 'client' ? Number(userId) : null }); toast.success('Tipo creado') }; setTypeDialogOpen(false); setEditingType(null); setTypeForm({ value: '', label: '', unit: '', scope: 'global' }); fetchBodyMetricTypes() } catch (err: any) { toast.error(err?.message || 'No se pudo guardar el tipo') } finally { setSavingType(false) } }
@@ -347,6 +376,25 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const fetchTasks = useCallback(async () => { setTasksLoading(true); try { const res = await api.get(`/admin/task-list?client_id=${userId}&per_page=200`); setTasks(res.data?.data || res.data || []) } catch { setTasks([]) } finally { setTasksLoading(false) } }, [userId])
   const fetchResources = useCallback(async () => { setResourcesLoading(true); try { const res = await api.get(`/admin/admin-resource-list?per_page=200&client_id=${userId}`); setResources(res.data?.data?.data || res.data?.data || res.data || []) } catch { setResources([]) } finally { setResourcesLoading(false) } }, [userId])
   const fetchOnboarding = useCallback(async () => { setOnboardingLoading(true); try { const res = await api.get(`/admin/admin-onboarding-detail?user_id=${userId}`); setOnboarding(res.data?.data || res.data || null) } catch { setOnboarding(null) } finally { setOnboardingLoading(false) } }, [userId])
+  const handleSaveTrainingExperience = async () => {
+    const months = trainingExpForm.training_experience_months.trim()
+    const level = trainingExpForm.technique_level.trim()
+    if (months === '' && level === '') { toast.error('Rellena al menos un campo'); return }
+    setSavingTrainingExp(true)
+    try {
+      const payload: any = { user_id: Number(userId) }
+      if (months !== '') payload.training_experience_months = Number(months)
+      if (level !== '') payload.technique_level = Number(level)
+      await api.post('/admin/admin-onboarding-training-experience-update', payload)
+      toast.success('Experiencia de entrenamiento actualizada')
+      setTrainingExpDialogOpen(false)
+      fetchOnboarding()
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo actualizar la experiencia de entrenamiento')
+    } finally {
+      setSavingTrainingExp(false)
+    }
+  }
   const fetchAssignableResources = useCallback(async () => { try { const res = await api.get('/admin/admin-resource-list?scope=assigned&per_page=500'); setAssignableResources(res.data?.data?.data || res.data?.data || []) } catch { setAssignableResources([]) } }, [])
   const fetchHabitProgress = useCallback(async () => { setHabitProgressLoading(true); try { const res = await api.get(`/admin/client-habit-progress?client_id=${userId}&days=371`); setHabitProgress(res.data?.data || res.data || []) } catch { setHabitProgress([]) } finally { setHabitProgressLoading(false) } }, [userId])
   const fetchSubmissions = useCallback(async () => { setSubmissionsLoading(true); try { const params = new URLSearchParams({ client_id: userId, per_page: '100' }); if (submissionFormFilter && submissionFormFilter !== 'all') params.set('form_id', submissionFormFilter); const res = await api.get(`/admin/admin-form-submission-list?${params}`); const items = (res.data?.data || []) as FormSubmission[]; setSubmissions(items); setSelectedSubmission(prev => items.length > 0 ? (prev && items.find(s => s.id === prev.id) || items[0]) : null) } catch { setSubmissions([]); setSelectedSubmission(null) } finally { setSubmissionsLoading(false) } }, [userId, submissionFormFilter])
@@ -367,18 +415,18 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
       if (tab === 'training') { const [r, t, p] = await Promise.all([api.get(`/admin/client-exercise-history?client_id=${userId}`).catch(() => ({ data: [] })), api.get('/admin/workout-template-list?per_page=500').catch(() => ({ data: [] })), api.get('/admin/training-program-list?per_page=500').catch(() => ({ data: [] }))]); setRecords(r.data?.data || r.data || []); setWorkoutTemplates(t.data || []); setTrainingPrograms(p.data || []); fetchCalendar(); fetchSessionFeedback(); fetchReadinessChecks(); fetchCompletedSessions() }
       else if (tab === 'metrics') { const r = await api.get(`/admin/client-exercise-history?client_id=${userId}`).catch(() => ({ data: [] })); setRecords(r.data?.data || r.data || []); fetchBodyMetrics(); fetchBodyMetricTypes() }
       else if (tab === 'settings') { fetchFeatureSettings() }
-      else if (tab === 'overview') { await Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchCompletedSessions(), fetchReadinessScores()]) }
+      else if (tab === 'overview') { await Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchCompletedSessions(), fetchReadinessScores(), fetchAchievementEvents()]) }
       else if (tab === 'photos') { fetchPhotos() }
       else if (tab === 'tasks') { fetchTasks() }
       else if (tab === 'habits') { fetchHabitProgress() }
       else if (tab === 'resources') { fetchResources(); fetchAssignableResources() }
       else if (tab === 'onboarding') { fetchOnboarding() }
     } catch { /* tab not found */ }
-  }, [userId, fetchCalendar, fetchSessionFeedback, fetchReadinessChecks, fetchReadinessScores, fetchCompletedSessions, fetchFeatureSettings, fetchNotes, fetchAssignedForms, fetchPhotos, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchBodyMetricTypes, fetchTasks, fetchHabitProgress, fetchResources, fetchAssignableResources, fetchOnboarding])
+  }, [userId, fetchCalendar, fetchSessionFeedback, fetchReadinessChecks, fetchReadinessScores, fetchAchievementEvents, fetchCompletedSessions, fetchFeatureSettings, fetchNotes, fetchAssignedForms, fetchPhotos, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchBodyMetricTypes, fetchTasks, fetchHabitProgress, fetchResources, fetchAssignableResources, fetchOnboarding])
 
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { if (activeTab !== 'overview') fetchTabData(activeTab) }, [activeTab, fetchTabData])
-  useEffect(() => { if (activeTab === 'overview') Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchReadinessScores()]) }, [activeTab, fetchNotes, fetchAssignedForms, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchPhotos, fetchBodyMetricTypes, fetchReadinessScores])
+  useEffect(() => { if (activeTab === 'overview') Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchReadinessScores(), fetchAchievementEvents()]) }, [activeTab, fetchNotes, fetchAssignedForms, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchPhotos, fetchBodyMetricTypes, fetchReadinessScores, fetchAchievementEvents])
   useEffect(() => { if (activeTab === 'training') fetchCalendar() }, [calYear, calMonth, fetchCalendar, activeTab])
   useEffect(() => { if (trainingSubTab === 'adherence') fetchAdherence() }, [trainingSubTab, fetchAdherence])
   useEffect(() => {
@@ -856,6 +904,38 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                   : <p className='text-center text-muted-foreground text-xs py-3'>Sin datos de readiness todavía</p>}
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader className='pb-2'><CardTitle className='text-sm flex items-center gap-2'><TrophyIcon className='size-4' /> Feed de logros</CardTitle></CardHeader>
+                <CardContent>
+                  {achievementEventsLoading ? <div className='flex justify-center py-4'><div className='h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div>
+                  : achievementEvents.length > 0 ? (
+                    <div className='max-h-[320px] overflow-y-auto overflow-x-auto'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className='text-[10px]'>Fecha</TableHead>
+                            <TableHead className='text-[10px]'>Tipo</TableHead>
+                            <TableHead className='text-[10px]'>Ejercicio</TableHead>
+                            <TableHead className='text-[10px]'>Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {achievementEvents.map(ev => (
+                            <TableRow key={ev.id}>
+                              <TableCell className='text-[10px] whitespace-nowrap'>{new Date(ev.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</TableCell>
+                              <TableCell className='text-[10px]'>{ACHIEVEMENT_TYPE_LABELS[ev.type] || ev.type}</TableCell>
+                              <TableCell className='text-[10px]'>{ev.exercise?.title || '—'}</TableCell>
+                              <TableCell className='text-[10px] whitespace-nowrap'>
+                                {ev.value ?? '—'}{ev.previous_best != null && <span className='text-muted-foreground'> (antes {ev.previous_best})</span>}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : <p className='text-center text-muted-foreground text-xs py-3'>Aún no hay logros registrados</p>}
+                </CardContent>
+              </Card>
               {/* Sugerencias de progresión pendientes del Motor de Auto-Regulación
                   (sugerencia_carga/estancamiento) para este cliente -- reutiliza el
                   mismo componente ya conectado del Dashboard general (variant="compact"
@@ -1290,7 +1370,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Objetivo</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.goal_type)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Nivel de actividad</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.activity_level)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Estilo de vida</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.lifestyle_type)}</span></div>
-                <div className='flex items-center justify-between'><span className='text-muted-foreground'>Experiencia entrenando</span><span className='font-medium'>{onboarding.training_questionnaire.training_experience_months ?? '—'} meses</span></div>
+                <div className='flex items-center justify-between'><span className='text-muted-foreground'>Experiencia entrenando</span><span className='font-medium flex items-center gap-1.5'>{onboarding.training_questionnaire.training_experience_months ?? '—'} meses<Button variant='ghost' size='sm' className='h-5 w-5 p-0' title='Corregir experiencia' onClick={() => { setTrainingExpForm({ training_experience_months: onboarding.training_questionnaire?.training_experience_months != null ? String(onboarding.training_questionnaire.training_experience_months) : '', technique_level: onboarding.training_questionnaire?.technique_level != null ? String(onboarding.training_questionnaire.technique_level) : '' }); setTrainingExpDialogOpen(true) }}><PencilIcon className='size-3' /></Button></span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Días de entrenamiento/semana</span><span className='font-medium'>{onboarding.training_questionnaire.training_days_per_week ?? '—'}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Duración de sesión preferida</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.session_duration_preference)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Mentalidad de entrenamiento</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.training_mindset)}</span></div>
@@ -1551,6 +1631,12 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
         <Field className='gap-2'><FieldLabel>URL externa</FieldLabel><Input value={resourceForm.external_url} onChange={e => setResourceForm(f => ({ ...f, external_url: e.target.value }))} placeholder='https://...' /></Field>
         <Field className='gap-2'><FieldLabel>Contenido</FieldLabel><Textarea value={resourceForm.content} onChange={e => setResourceForm(f => ({ ...f, content: e.target.value }))} rows={4} className='resize-none' placeholder='Contenido en Markdown...' /></Field>
       </FieldGroup><DialogFooter><Button variant='outline' onClick={() => setResourceDialogOpen(false)}>Cancelar</Button><Button onClick={handleSaveResource} disabled={!resourceForm.title.trim()}>{editingResourceId ? 'Actualizar' : 'Crear'}</Button></DialogFooter></DialogContent></Dialog>
+
+      <Dialog open={trainingExpDialogOpen} onOpenChange={setTrainingExpDialogOpen}><DialogContent><DialogHeader><DialogTitle>Corregir experiencia de entrenamiento</DialogTitle></DialogHeader><FieldGroup className='gap-4'>
+        <p className='text-xs text-muted-foreground'>Corrige lo que el cliente respondió en el onboarding. Deja un campo vacío para no modificarlo.</p>
+        <Field className='gap-2'><FieldLabel>Meses de experiencia real</FieldLabel><Input type='number' min='0' step='1' value={trainingExpForm.training_experience_months} onChange={e => setTrainingExpForm(f => ({ ...f, training_experience_months: e.target.value }))} placeholder='p. ej. 18' /></Field>
+        <Field className='gap-2'><FieldLabel>Nivel de técnica (1-10)</FieldLabel><Input type='number' min='1' max='10' step='1' value={trainingExpForm.technique_level} onChange={e => setTrainingExpForm(f => ({ ...f, technique_level: e.target.value }))} placeholder='p. ej. 6' /></Field>
+      </FieldGroup><DialogFooter><Button variant='outline' onClick={() => setTrainingExpDialogOpen(false)} disabled={savingTrainingExp}>Cancelar</Button><Button onClick={handleSaveTrainingExperience} disabled={savingTrainingExp}>{savingTrainingExp ? 'Guardando...' : 'Guardar'}</Button></DialogFooter></DialogContent></Dialog>
     </div>
   )
 }

@@ -81,6 +81,12 @@ const FormsCheckIns = Loadable(lazy(() => import('../views/forms/FormsCheckInsVi
 const Metrics = Loadable(lazy(() => import('../views/metrics/MetricsView')));
 const Habits = Loadable(lazy(() => import('../views/coaching/HabitsView')));
 const Challenges = Loadable(lazy(() => import('../views/coaching/ChallengesView')));
+// Motor de Auto-Regulación de Carga -- estas dos vistas ya existían en el
+// repo pero nunca se habían registrado en el router ni en el sidebar
+// (ver CLAUDE.md/nota de la tarea). Se registran aquí junto con la nueva
+// pantalla de sustituciones de ejercicio.
+const ProgressionRules = Loadable(lazy(() => import('../views/coaching/ProgressionRulesView')));
+const ExerciseSubstitutions = Loadable(lazy(() => import('../views/coaching/ExerciseSubstitutionsView')));
 
 // mightyfitness content
 const Posts = Loadable(lazy(() => import('../views/content/PostView')));
@@ -217,6 +223,8 @@ const Router = [
       { path: '/habits', element: <Habits /> },
       { path: '/habits/:tab', element: <Habits /> },
       { path: '/challenges', element: <Challenges /> },
+      { path: '/progression-rules', element: <ProgressionRules /> },
+      { path: '/exercise-substitutions', element: <ExerciseSubstitutions /> },
 
       { path: '/settings', element: <Settings /> },
       { path: '/settings/:tab', element: <Settings /> },
