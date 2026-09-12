@@ -14,6 +14,10 @@ import {
   TrashIcon,
   LayersIcon,
   ClockIcon,
+  Gauge,
+  Check,
+  X,
+  PencilIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +50,19 @@ export type WorkoutViewerExercise = {
   // el detalle se pidio con client_id) - referencia para ajustar la carga
   // prescrita sin salir a Historial de ejercicios/Entrenamientos completados.
   last_performance?: { sets: Record<string, any>[] } | null
+  // Motor de Auto-Regulación de Carga: null salvo que haya una sugerencia
+  // pendiente de aprobación o aplicada recientemente para este ejercicio
+  // (ver ClientCalendarController::getDayDetail / SessionDetailController::
+  // getSessionDetail en el backend). Solo presente en sesiones de programa
+  // asignado (no en plantillas sueltas del catálogo).
+  load_suggestion?: {
+    id: number
+    status: 'pendiente' | 'aplicado'
+    proposed_weight: number | null
+    proposed_reps: number | null
+    resolved_at: string | null
+    rule_name: string | null
+  } | null
 }
 
 export type WorkoutViewerBlock = {
@@ -78,6 +95,12 @@ export type WorkoutTemplateViewerProps = {
   onSearchExercises?: (query: string) => void
   prescribedReadOnly?: boolean
   metricsReadOnly?: boolean
+  // Motor de Auto-Regulación de Carga: acciones sobre exercise.load_suggestion
+  // -- solo se pintan botones cuando el ejercicio trae una sugerencia
+  // 'pendiente' (aprobar/editar/rechazar la mueve a 'aplicado'/'rechazado').
+  onLoadSuggestionApprove?: (exercise: WorkoutViewerExercise) => void
+  onLoadSuggestionEdit?: (exercise: WorkoutViewerExercise) => void
+  onLoadSuggestionReject?: (exercise: WorkoutViewerExercise) => void
 }
 
 const DEFAULT_THUMBNAIL = 'https://app.hubfit.com/media/workout-thumbnails/default.jpg'
@@ -320,6 +343,9 @@ export default function WorkoutTemplateViewer({
   onSearchExercises,
   prescribedReadOnly = false,
   metricsReadOnly,
+  onLoadSuggestionApprove,
+  onLoadSuggestionEdit,
+  onLoadSuggestionReject,
 }: WorkoutTemplateViewerProps) {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
   const [search, setSearch] = useState('')
@@ -712,6 +738,43 @@ export default function WorkoutTemplateViewer({
                               onFieldChange={(field, value) => onUpdateExerciseField?.(ex, block.id, field, value)}
                               onMetricsChange={metrics => onUpdateExerciseMetrics?.(ex, block.id, metrics)}
                             />
+
+                            {ex.load_suggestion && (
+                              <div className={cn(
+                                'flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-xs',
+                                ex.load_suggestion.status === 'pendiente'
+                                  ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20'
+                                  : 'border-blue-200 bg-blue-50/60 dark:border-blue-900 dark:bg-blue-950/20'
+                              )}>
+                                <div className='flex items-center gap-1.5 flex-wrap'>
+                                  <Gauge className='size-3.5 shrink-0' />
+                                  <span className='font-medium'>
+                                    {ex.load_suggestion.status === 'pendiente' ? 'Sugerencia de carga pendiente' : 'Carga ajustada por el motor'}
+                                  </span>
+                                  {(ex.load_suggestion.proposed_weight != null || ex.load_suggestion.proposed_reps != null) && (
+                                    <span className='text-muted-foreground'>
+                                      {[
+                                        ex.load_suggestion.proposed_weight != null ? `${ex.load_suggestion.proposed_weight} kg` : null,
+                                        ex.load_suggestion.proposed_reps != null ? `${ex.load_suggestion.proposed_reps} reps` : null,
+                                      ].filter(Boolean).join(' × ')}
+                                    </span>
+                                  )}
+                                </div>
+                                {ex.load_suggestion.status === 'pendiente' && (
+                                  <div className='flex items-center gap-1'>
+                                    <Button variant='outline' size='sm' className='h-6 text-[10px] px-2 gap-1' onClick={() => onLoadSuggestionApprove?.(ex)}>
+                                      <Check className='size-3' /> Aprobar
+                                    </Button>
+                                    <Button variant='outline' size='sm' className='h-6 text-[10px] px-2 gap-1' onClick={() => onLoadSuggestionEdit?.(ex)}>
+                                      <PencilIcon className='size-3' /> Editar
+                                    </Button>
+                                    <Button variant='outline' size='sm' className='h-6 text-[10px] px-2 gap-1 text-destructive hover:text-destructive' onClick={() => onLoadSuggestionReject?.(ex)}>
+                                      <X className='size-3' /> Rechazar
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
