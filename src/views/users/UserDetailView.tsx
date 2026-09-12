@@ -465,7 +465,26 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const handleCalDragStart = (e: React.DragEvent, id: number) => { setCalDraggedId(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(id)) }
   const handleCalDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
   const handleCalDrop = async (e: React.DragEvent, dateStr: string) => { e.preventDefault(); if (!calDraggedId) return; try { await api.post('/admin/session-detail-duplicate', { assignment_id: calDraggedId, new_date: dateStr, client_id: Number(userId) }); await api.post('/admin/client-calendar-remove', { assignment_id: calDraggedId }); toast.success('Movido'); setCalDraggedId(null); fetchCalendar() } catch { toast.error('Error'); setCalDraggedId(null) } }
+  // Edita la PLANTILLA compartida (workout_template) -- afecta a todas las
+  // semanas/clientes que la reutilicen. Se conserva como acción secundaria
+  // explícita (menú "..."), ya no es la acción por defecto al abrir un día
+  // futuro del calendario -- ver handleCalOpenUpcoming().
   const handleCalOpenPreview = (id: number) => { setPreviewTemplateId(id); setPreviewOpen(true) }
+  // Abre la sesión de ESTE día/cliente concreto (program_day_assignment_id),
+  // no la plantilla: /admin/session-detail ya fusiona el prescrito base con
+  // cualquier ClientExerciseOverride que el Motor de Auto-Regulación de
+  // Carga haya escrito para esta sesión (applyToNextScheduledSession(), ya
+  // sea por una regla automática o por una sugerencia aprobada) -- por eso
+  // un día TODAVÍA no completado también debe abrir SessionDetailModal, no
+  // WorkoutPreviewModal, para que el coach vea la carga/reps ya ajustadas
+  // por el motor (editable) en vez del valor estático de la plantilla.
+  const handleCalOpenUpcoming = (workout: CalendarWorkout, dateStr: string | null) => {
+    setSelectedCompletedSession({
+      id: workout.assignment_id, program_day_assignment_id: workout.assignment_id, workout_template_id: workout.id,
+      title: workout.title, thumbnail: workout.thumbnail ?? null, date: dateStr || null,
+      duration_seconds: null, volume_kg: null, calories_burned: null, difficulty_rating: null, difficulty_label: null,
+    })
+  }
   const handleCalOpenSession = (workout: CalendarWorkout, dateStr: string | null) => {
     const dayKey = dateStr || ''
     const matched = completedSessions.find(s =>
@@ -733,14 +752,15 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
           {isToday && <span className='text-[9px] bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center'>T</span>}
         </div>
         {workout ? (
-          <div className={cn('group rounded-lg border shadow-sm overflow-hidden hover:shadow-md transition-shadow flex-1', isCompleted ? 'border-green-500/50 bg-green-500/10 cursor-pointer' : 'bg-card cursor-grab active:cursor-grabbing')} draggable onDragStart={(e) => handleCalDragStart(e, workout.assignment_id)} onClick={() => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenPreview(workout.id) }}>
+          <div className={cn('group rounded-lg border shadow-sm overflow-hidden hover:shadow-md transition-shadow flex-1', isCompleted ? 'border-green-500/50 bg-green-500/10 cursor-pointer' : 'bg-card cursor-grab active:cursor-grabbing')} draggable onDragStart={(e) => handleCalDragStart(e, workout.assignment_id)} onClick={() => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }}>
             {workout.thumbnail ? <div className={cn('h-16 w-full overflow-hidden', isCompleted ? 'bg-green-500/20' : 'bg-muted')}><img src={workout.thumbnail} alt='' loading='lazy' decoding='async' className='w-full h-full object-cover' /></div> : <div className={cn('h-16 w-full flex items-center justify-center', isCompleted ? 'bg-green-500/20 text-green-600' : 'bg-muted text-muted-foreground/30')}><DumbbellIcon className='size-5' /></div>}
             <div className='px-2 py-1.5'>
               <div className='flex items-start justify-between gap-1'>
-                <span className='text-[11px] font-semibold leading-tight cursor-pointer hover:underline line-clamp-2' title={workout.title} onClick={(e) => { e.stopPropagation(); if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenPreview(workout.id) }}>{workout.title}</span>
+                <span className='text-[11px] font-semibold leading-tight cursor-pointer hover:underline line-clamp-2' title={workout.title} onClick={(e) => { e.stopPropagation(); if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }}>{workout.title}</span>
                 <DropdownMenu><DropdownMenuTrigger><button type='button' className='opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-foreground shrink-0' onClick={(e) => e.stopPropagation()}><MoreVerticalIcon className='size-3' /></button></DropdownMenuTrigger>
                   <DropdownMenuContent align='end' className='text-xs'>
-                    <DropdownMenuItem onClick={() => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenPreview(workout.id) }}><SearchIcon className='size-3 mr-1.5' /> {isCompleted ? 'Ver sesión' : 'Abrir'}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }}><SearchIcon className='size-3 mr-1.5' /> {isCompleted ? 'Ver sesión' : 'Abrir'}</DropdownMenuItem>
+                    {!isCompleted && <DropdownMenuItem onClick={() => handleCalOpenPreview(workout.id)}><PencilIcon className='size-3 mr-1.5' /> Editar plantilla base (afecta a todos)</DropdownMenuItem>}
                     <DropdownMenuItem onClick={() => handleCalCopy(workout.assignment_id, workout.title)}><CopyIcon className='size-3 mr-1.5' /> Copiar</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleRemoveAssignment(workout.assignment_id)} className='text-destructive focus:text-destructive'><XIcon className='size-3 mr-1.5' /> Quitar</DropdownMenuItem>
                   </DropdownMenuContent>
