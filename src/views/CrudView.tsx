@@ -5,7 +5,7 @@ import { PlusIcon, PencilIcon, TrashIcon, ChevronLeftIcon, ChevronRightIcon } fr
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldGroup, FieldLabel, FieldError } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -65,6 +65,8 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
   const [editingItem, setEditingItem] = useState<any>(null)
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingItem, setDeletingItem] = useState<any>(null)
   const [page, setPage] = useState(1)
@@ -154,6 +156,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
   const openCreate = () => {
     setEditingItem(null)
     setFormData({})
+    setFieldErrors({})
     setDialogOpen(true)
   }
 
@@ -162,10 +165,28 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
     const data: Record<string, any> = {}
     fields.forEach(f => { data[f.name] = f.type === 'boolean' ? !!item[f.name] : (item[f.name] ?? '') })
     setFormData(data)
+    setFieldErrors({})
     setDialogOpen(true)
   }, [fields])
 
   const handleSubmit = async () => {
+    // FIX (auditoría 2026-09-13): `required` en CrudField era solo
+    // cosmético -- no bloqueaba nada, se podía enviar el formulario con
+    // campos obligatorios vacíos y dejar que Laravel lo rechazara (o, peor,
+    // que lo aceptara si el backend no validaba ese campo).
+    const missing: Record<string, string> = {}
+    for (const f of fields) {
+      if (f.required && (formData[f.name] === '' || formData[f.name] == null)) {
+        missing[f.name] = `${f.label} es obligatorio`
+      }
+    }
+    if (Object.keys(missing).length > 0) {
+      setFieldErrors(missing)
+      toast.error('Revisa los campos obligatorios')
+      return
+    }
+
+    setFieldErrors({})
     setSubmitting(true)
     try {
       // Los selects opcionales (ej. relaciones nullable como training_program_id)
@@ -188,7 +209,21 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
       setDialogOpen(false)
       fetchItems()
     } catch (err: any) {
-      toast.error(err?.message || 'La operación no se pudo completar')
+      // FIX (auditoría 2026-09-13): un 422 de Laravel trae { errors: { campo:
+      // [mensaje] } } -- antes se ignoraba del todo y solo se mostraba un
+      // toast genérico, sin decir qué campo falló.
+      const errors = err?.data?.errors
+      if (errors && typeof errors === 'object') {
+        const perField: Record<string, string> = {}
+        for (const key of Object.keys(errors)) {
+          const msg = Array.isArray(errors[key]) ? errors[key][0] : errors[key]
+          if (msg) perField[key] = String(msg)
+        }
+        setFieldErrors(perField)
+        toast.error('La operación no se pudo completar -- revisa los campos marcados')
+      } else {
+        toast.error(err?.message || 'La operación no se pudo completar')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -196,6 +231,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
 
   const handleDelete = async () => {
     if (!deletingItem) return
+    setDeleting(true)
     try {
       await api.delete(`${endpoint}/${deletingItem.id}`)
       toast.success('Eliminado correctamente')
@@ -203,6 +239,8 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
       fetchItems()
     } catch (err: any) {
       toast.error(err?.message || 'No se pudo eliminar')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -415,6 +453,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
                     placeholder={field.placeholder}
                   />
                 )}
+                {fieldErrors[field.name] && <FieldError>{fieldErrors[field.name]}</FieldError>}
               </Field>
             ))}
           </FieldGroup>
@@ -435,8 +474,10 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
           </DialogHeader>
           <p>¿Estás seguro de que quieres eliminar este elemento? Esta acción no se puede deshacer.</p>
           <DialogFooter>
-            <Button variant='outline' onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
-            <Button variant='destructive' onClick={handleDelete}>Eliminar</Button>
+            <Button variant='outline' onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>Cancelar</Button>
+            <Button variant='destructive' onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Eliminando...' : 'Eliminar'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
