@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { TrashIcon, BanIcon, CheckIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 
@@ -11,6 +13,7 @@ const ReportedPostingView = () => {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [actingId, setActingId] = useState<number | null>(null)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -27,6 +30,36 @@ const ReportedPostingView = () => {
   }, [search])
 
   useEffect(() => { fetchItems() }, [fetchItems])
+
+  // FIX (auditoría 2026-09-13): esta vista solo listaba, sin ninguna acción
+  // de moderación -- el backend ya tenía admin-posting-delete y
+  // postings/{id}/status, no estaban conectados.
+  const handleSetStatus = async (item: any, status: 'active' | 'inactive' | 'banned') => {
+    setActingId(item.id)
+    try {
+      await api.post(`/admin/postings/${item.id}/status`, { status })
+      setItems(prev => prev.map(p => p.id === item.id ? { ...p, status } : p))
+      toast.success(status === 'active' ? 'Publicación restaurada' : status === 'banned' ? 'Publicación baneada' : 'Publicación desactivada')
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo actualizar el estado')
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  const handleDelete = async (item: any) => {
+    if (!confirm(`¿Eliminar definitivamente esta publicación (ID ${item.id})? Esta acción no se puede deshacer.`)) return
+    setActingId(item.id)
+    try {
+      await api.post('/admin/admin-posting-delete', { id: item.id })
+      setItems(prev => prev.filter(p => p.id !== item.id))
+      toast.success('Publicación eliminada')
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo eliminar la publicación')
+    } finally {
+      setActingId(null)
+    }
+  }
 
   const truncate = (str: string, len = 50) => str && str.length > len ? str.slice(0, len) + '...' : str
 
@@ -47,6 +80,31 @@ const ReportedPostingView = () => {
       id: 'status',
       header: 'Estado',
       cell: ({ row }) => <Badge variant={row.original.status === 'active' ? 'default' : 'secondary'}>{row.original.status}</Badge>,
+    },
+    {
+      id: 'actions',
+      header: 'Acciones',
+      cell: ({ row }) => {
+        const item = row.original
+        const busy = actingId === item.id
+        return (
+          <div className='flex gap-1.5'>
+            {item.status !== 'active' && (
+              <Button variant='outline' size='sm' disabled={busy} onClick={() => handleSetStatus(item, 'active')} title='Descartar reporte y restaurar la publicación'>
+                <CheckIcon className='size-3.5' />
+              </Button>
+            )}
+            {item.status !== 'banned' && (
+              <Button variant='outline' size='sm' disabled={busy} onClick={() => handleSetStatus(item, 'banned')} title='Banear publicación (ocultar sin borrar)'>
+                <BanIcon className='size-3.5' />
+              </Button>
+            )}
+            <Button variant='destructive' size='sm' disabled={busy} onClick={() => handleDelete(item)} title='Eliminar publicación permanentemente'>
+              <TrashIcon className='size-3.5' />
+            </Button>
+          </div>
+        )
+      },
     },
   ]
 

@@ -49,7 +49,7 @@ type DashboardData = {
 
 type CoachingData = {
   metrics: CoachMetric[]
-  totals: { total_clientes: number; clientes_activos: number; pct_con_plan_promedio: number; pct_completan_80_promedio: number }
+  totals: { total_clientes: number; clientes_activos: number; pct_con_plan_promedio: number }
 }
 
 function useGreeting() {

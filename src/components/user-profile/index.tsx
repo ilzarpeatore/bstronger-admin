@@ -1,5 +1,13 @@
 
-
+// FIX (auditoría 2026-09-13): esta página era 100% mock -- datos de la
+// plantilla original (Mathew Anderson, redes sociales de wrappixel/
+// shadcndashboard) que nunca se cargaban del backend, y "Guardar" solo
+// actualizaba estado local en memoria (se perdía al recargar). El backend
+// real (Admin\AuthController) ya tenía GET /admin/me, POST
+// /admin/update-profile y POST /admin/change-password -- solo faltaba
+// conectarlos aquí. "Dirección"/redes sociales/"Cargo" se quitan del todo:
+// no existe ningún campo real para ellos en el modelo de admin, e
+// inventar columnas nuevas para rellenar esta página no era el objetivo.
 
 import { Icon } from '@iconify-icon/react'
 import {
@@ -16,81 +24,100 @@ import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp'
 import StyleDivider from '../shared/StyleDivider'
-import { Link } from 'react-router'
+import { api } from '@/lib/api'
+import { toast } from 'sonner'
 import avatar from "@/assets/images/profile/avtar.webp"
 
+type Personal = {
+  first_name: string
+  last_name: string
+  email: string
+  phone_number: string
+  user_type: string
+}
+
+const EMPTY_PERSONAL: Personal = { first_name: '', last_name: '', email: '', phone_number: '', user_type: '' }
+
 const UserProfile = () => {
+  const [loading, setLoading] = useState(true)
+  const [personal, setPersonal] = useState<Personal>(EMPTY_PERSONAL)
+  const [tempPersonal, setTempPersonal] = useState<Personal>(EMPTY_PERSONAL)
   const [openModal, setOpenModal] = useState(false)
-  const [modalType, setModalType] = useState<'personal' | 'address' | null>(
-    null
-  )
+  const [saving, setSaving] = useState(false)
+
+  const [openPasswordModal, setOpenPasswordModal] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ old_password: '', new_password: '', new_password_confirmation: '' })
+  const [savingPassword, setSavingPassword] = useState(false)
 
   const BCrumb = [
-    {
-      to: '/',
-      title: 'Inicio',
-    },
-    {
-      title: 'Perfil de usuario',
-    },
+    { to: '/', title: 'Inicio' },
+    { title: 'Perfil de usuario' },
   ]
 
-  const [personal, setPersonal] = useState({
-    firstName: 'Mathew',
-    lastName: 'Anderson',
-    email: 'mathew.anderson@gmail.com',
-    phone: '(347) 528-1947',
-    position: 'Team Leader',
-    facebook: 'https://www.facebook.com/wrappixel',
-    twitter: 'https://x.com/shadcndashboard',
-    github: 'https://github.com/shadcndashboard',
-    dribbble: 'https://dribbble.com/wrappixel',
-  })
-
-  const [address, setAddress] = useState({
-    location: 'United States',
-    state: 'San Diego, California, United States',
-    pin: '92101',
-    zip: '30303',
-    taxNo: 'GA45273910',
-  })
-
-  const [tempPersonal, setTempPersonal] = useState(personal)
-  const [tempAddress, setTempAddress] = useState(address)
-
-  useEffect(() => {
-    if (openModal && modalType === 'personal') {
-      setTempPersonal(personal)
+  const loadProfile = async () => {
+    setLoading(true)
+    try {
+      const res = await api.get('/admin/me')
+      const d = res.data
+      setPersonal({
+        first_name: d.first_name || '',
+        last_name: d.last_name || '',
+        email: d.email || '',
+        phone_number: d.phone_number || '',
+        user_type: d.user_type || '',
+      })
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo cargar el perfil')
+    } finally {
+      setLoading(false)
     }
-    if (openModal && modalType === 'address') {
-      setTempAddress(address)
-    }
-  }, [openModal, modalType, personal, address])
-
-  const handleSave = () => {
-    if (modalType === 'personal') {
-      setPersonal(tempPersonal)
-    } else if (modalType === 'address') {
-      setAddress(tempAddress)
-    }
-    setOpenModal(false)
   }
 
-  const socialLinks = [
-    {
-      href: 'https://www.facebook.com/wrappixel',
-      icon: 'streamline-logos:facebook-logo-2-solid',
-    },
-    {
-      href: 'https://x.com/shadcndashboard',
-      icon: 'streamline-logos:x-twitter-logo-solid',
-    },
-    { href: 'https://github.com/shadcndashboard', icon: 'ion:logo-github' },
-    {
-      href: 'https://dribbble.com/wrappixel',
-      icon: 'streamline-flex:dribble-logo-remix',
-    },
-  ]
+  useEffect(() => { loadProfile() }, [])
+
+  const openEdit = () => {
+    setTempPersonal(personal)
+    setOpenModal(true)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await api.post('/admin/update-profile', {
+        first_name: tempPersonal.first_name,
+        last_name: tempPersonal.last_name,
+        email: tempPersonal.email,
+        phone_number: tempPersonal.phone_number,
+      })
+      setPersonal(tempPersonal)
+      toast.success('Perfil actualizado')
+      setOpenModal(false)
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo actualizar el perfil')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    if (passwordForm.new_password !== passwordForm.new_password_confirmation) {
+      toast.error('Las contraseñas nuevas no coinciden')
+      return
+    }
+    setSavingPassword(true)
+    try {
+      await api.post('/admin/change-password', passwordForm)
+      toast.success('Contraseña actualizada')
+      setOpenPasswordModal(false)
+      setPasswordForm({ old_password: '', new_password: '', new_password_confirmation: '' })
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo cambiar la contraseña')
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
+  const fullName = [personal.first_name, personal.last_name].filter(Boolean).join(' ') || '—'
 
   return (
     <div className="flex flex-col p-px bg-border gap-px">
@@ -100,115 +127,44 @@ const UserProfile = () => {
         <Card className='p-6 overflow-hidden'>
           <div className='flex flex-col sm:flex-row items-center gap-6 rounded-xl relative w-full break-words'>
             <div>
-              <img
-                src={avatar}
-                alt='image'
-                width={80}
-                height={80}
-                className='rounded-full'
-              />
+              <img src={avatar} alt='image' width={80} height={80} className='rounded-full' />
             </div>
             <div className='flex flex-wrap gap-4 justify-center sm:justify-between items-center w-full'>
               <div className='flex flex-col sm:text-left text-center gap-1.5'>
-                <h5 className='card-title'>
-                  {personal.firstName} {personal.lastName}
-                </h5>
-                <div className='flex flex-wrap items-center gap-1 md:gap-3'>
-                  <p className='text-sm text-gray-500 dark:text-gray-400'>
-                    {personal.position}
-                  </p>
-                  <div className='hidden h-4 w-px bg-gray-300 dark:bg-gray-700 xl:block'></div>
-                  <p className='text-sm text-gray-500 dark:text-gray-400'>
-                    {address.location}
-                  </p>
-                </div>
-              </div>
-              <div className='flex items-center gap-2'>
-                {socialLinks.map((item, index) => (
-                  <Link
-                    key={index}
-                    to={item.href}
-                    target='_blank'
-                    className='flex h-11 w-11 items-center justify-center gap-2 rounded-full shadow-md border border-border hover:bg-gray-50 dark:hover:bg-white/[0.03] dark:hover:text-gray-200'>
-                    <Icon icon={item.icon} width='20' height='20' />
-                  </Link>
-                ))}
+                <h5 className='card-title'>{loading ? 'Cargando…' : fullName}</h5>
+                <p className='text-sm text-gray-500 dark:text-gray-400 capitalize'>{personal.user_type}</p>
               </div>
             </div>
           </div>
         </Card>
 
-        <div className='grid grid-cols-1 xl:grid-cols-2 gap-px'>
-          <div className='space-y-6 bg-background md:p-6 p-4 relative w-full break-words'>
-            <h5 className='card-title'>Información personal</h5>
-            <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-7 2xl:gap-x-32'>
-              <div>
-                <p className='text-xs text-gray-500'>Nombre</p>
-                <p>{personal.firstName}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>Apellidos</p>
-                <p>{personal.lastName}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>Correo electrónico</p>
-                <p>{personal.email}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>Teléfono</p>
-                <p>{personal.phone}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>Cargo</p>
-                <p>{personal.position}</p>
-              </div>
+        <div className='space-y-6 bg-background md:p-6 p-4 relative w-full break-words'>
+          <h5 className='card-title'>Información personal</h5>
+          <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-7 2xl:gap-x-32'>
+            <div>
+              <p className='text-xs text-gray-500'>Nombre</p>
+              <p>{personal.first_name || '—'}</p>
             </div>
-            <div className='flex justify-end'>
-              <Button
-                onClick={() => {
-                  setModalType('personal')
-                  setOpenModal(true)
-                }}
-                className='flex items-center gap-1.5 rounded-md'>
-                <Icon icon='ic:outline-edit' width='18' height='18' /> Editar
-              </Button>
+            <div>
+              <p className='text-xs text-gray-500'>Apellidos</p>
+              <p>{personal.last_name || '—'}</p>
+            </div>
+            <div>
+              <p className='text-xs text-gray-500'>Correo electrónico</p>
+              <p>{personal.email || '—'}</p>
+            </div>
+            <div>
+              <p className='text-xs text-gray-500'>Teléfono</p>
+              <p>{personal.phone_number || '—'}</p>
             </div>
           </div>
-
-          <div className='space-y-6 bg-background md:p-6 p-4 relative w-full break-words'>
-            <h5 className='card-title'>Datos de dirección</h5>
-            <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-7 2xl:gap-x-32'>
-              <div>
-                <p className='text-xs text-gray-500'>Ubicación</p>
-                <p>{address.location}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>Provincia / Estado</p>
-                <p>{address.state}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>Código postal</p>
-                <p>{address.pin}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>ZIP</p>
-                <p>{address.zip}</p>
-              </div>
-              <div>
-                <p className='text-xs text-gray-500'>N.º de identificación fiscal</p>
-                <p>{address.taxNo}</p>
-              </div>
-            </div>
-            <div className='flex justify-end'>
-              <Button
-                onClick={() => {
-                  setModalType('address')
-                  setOpenModal(true)
-                }}
-                className='flex items-center gap-1.5 rounded-md'>
-                <Icon icon='ic:outline-edit' width='18' height='18' /> Editar
-              </Button>
-            </div>
+          <div className='flex justify-end gap-2'>
+            <Button variant='outline' onClick={() => setOpenPasswordModal(true)} className='flex items-center gap-1.5 rounded-md'>
+              <Icon icon='ic:outline-lock' width='18' height='18' /> Cambiar contraseña
+            </Button>
+            <Button onClick={openEdit} className='flex items-center gap-1.5 rounded-md' disabled={loading}>
+              <Icon icon='ic:outline-edit' width='18' height='18' /> Editar
+            </Button>
           </div>
         </div>
       </div>
@@ -216,202 +172,105 @@ const UserProfile = () => {
       <Dialog open={openModal} onOpenChange={setOpenModal}>
         <DialogContent className='max-w-2xl'>
           <DialogHeader>
-            <DialogTitle className='mb-4'>
-              {modalType === 'personal'
-                ? 'Editar información personal'
-                : 'Editar datos de dirección'}
-            </DialogTitle>
+            <DialogTitle className='mb-4'>Editar información personal</DialogTitle>
           </DialogHeader>
 
-          {modalType === 'personal' ? (
-            <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='firstName'>Nombre</Label>
-                <Input
-                  id='firstName'
-                  placeholder='Nombre'
-                  value={tempPersonal.firstName}
-                  onChange={(e) =>
-                    setTempPersonal({
-                      ...tempPersonal,
-                      firstName: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='lastName'>Apellidos</Label>
-                <Input
-                  id='lastName'
-                  placeholder='Apellidos'
-                  value={tempPersonal.lastName}
-                  onChange={(e) =>
-                    setTempPersonal({
-                      ...tempPersonal,
-                      lastName: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='email'>Correo electrónico</Label>
-                <Input
-                  id='email'
-                  placeholder='Correo electrónico'
-                  value={tempPersonal.email}
-                  onChange={(e) =>
-                    setTempPersonal({ ...tempPersonal, email: e.target.value })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='phone'>Teléfono</Label>
-                <Input
-                  id='phone'
-                  placeholder='Teléfono'
-                  value={tempPersonal.phone}
-                  onChange={(e) =>
-                    setTempPersonal({ ...tempPersonal, phone: e.target.value })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='position'>Cargo</Label>
-                <Input
-                  id='position'
-                  placeholder='Cargo'
-                  value={tempPersonal.position}
-                  onChange={(e) =>
-                    setTempPersonal({
-                      ...tempPersonal,
-                      position: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='facebook'>URL de Facebook</Label>
-                <Input
-                  id='facebook'
-                  placeholder='URL de Facebook'
-                  value={tempPersonal.facebook}
-                  onChange={(e) =>
-                    setTempPersonal({
-                      ...tempPersonal,
-                      facebook: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='twitter'>URL de Twitter</Label>
-                <Input
-                  id='twitter'
-                  placeholder='URL de Twitter'
-                  value={tempPersonal.twitter}
-                  onChange={(e) =>
-                    setTempPersonal({
-                      ...tempPersonal,
-                      twitter: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='github'>URL de GitHub</Label>
-                <Input
-                  id='github'
-                  placeholder='URL de GitHub'
-                  value={tempPersonal.github}
-                  onChange={(e) =>
-                    setTempPersonal({ ...tempPersonal, github: e.target.value })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='dribbble'>URL de Dribbble</Label>
-                <Input
-                  id='dribbble'
-                  placeholder='URL de Dribbble'
-                  value={tempPersonal.dribbble}
-                  onChange={(e) =>
-                    setTempPersonal({
-                      ...tempPersonal,
-                      dribbble: e.target.value,
-                    })
-                  }
-                />
-              </div>
+          <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='firstName'>Nombre</Label>
+              <Input
+                id='firstName'
+                placeholder='Nombre'
+                value={tempPersonal.first_name}
+                onChange={(e) => setTempPersonal({ ...tempPersonal, first_name: e.target.value })}
+              />
             </div>
-          ) : (
-            <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='location'>Ubicación</Label>
-                <Input
-                  id='location'
-                  placeholder='Ubicación'
-                  value={tempAddress.location}
-                  onChange={(e) =>
-                    setTempAddress({ ...tempAddress, location: e.target.value })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='state'>Provincia / Estado</Label>
-                <Input
-                  id='state'
-                  placeholder='Provincia / Estado'
-                  value={tempAddress.state}
-                  onChange={(e) =>
-                    setTempAddress({ ...tempAddress, state: e.target.value })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='pin'>Código postal</Label>
-                <Input
-                  id='pin'
-                  placeholder='Código postal'
-                  value={tempAddress.pin}
-                  onChange={(e) =>
-                    setTempAddress({ ...tempAddress, pin: e.target.value })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='zip'>ZIP</Label>
-                <Input
-                  id='zip'
-                  placeholder='ZIP'
-                  value={tempAddress.zip}
-                  onChange={(e) =>
-                    setTempAddress({ ...tempAddress, zip: e.target.value })
-                  }
-                />
-              </div>
-              <div className='flex flex-col gap-2'>
-                <Label htmlFor='taxNo'>N.º de identificación fiscal</Label>
-                <Input
-                  id='taxNo'
-                  placeholder='N.º de identificación fiscal'
-                  value={tempAddress.taxNo}
-                  onChange={(e) =>
-                    setTempAddress({ ...tempAddress, taxNo: e.target.value })
-                  }
-                />
-              </div>
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='lastName'>Apellidos</Label>
+              <Input
+                id='lastName'
+                placeholder='Apellidos'
+                value={tempPersonal.last_name}
+                onChange={(e) => setTempPersonal({ ...tempPersonal, last_name: e.target.value })}
+              />
             </div>
-          )}
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='email'>Correo electrónico</Label>
+              <Input
+                id='email'
+                type='email'
+                placeholder='Correo electrónico'
+                value={tempPersonal.email}
+                onChange={(e) => setTempPersonal({ ...tempPersonal, email: e.target.value })}
+              />
+            </div>
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='phone'>Teléfono</Label>
+              <Input
+                id='phone'
+                placeholder='Teléfono'
+                value={tempPersonal.phone_number}
+                onChange={(e) => setTempPersonal({ ...tempPersonal, phone_number: e.target.value })}
+              />
+            </div>
+          </div>
 
           <DialogFooter className='flex gap-2 mt-4'>
-            <Button
-              className='rounded-md'
-              onClick={handleSave}>
-              Guardar cambios
+            <Button className='rounded-md' onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar cambios'}
             </Button>
             <Button
               className='rounded-md bg-lighterror dark:bg-darkerror text-error hover:bg-error hover:text-white'
               onClick={() => setOpenModal(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openPasswordModal} onOpenChange={setOpenPasswordModal}>
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle className='mb-4'>Cambiar contraseña</DialogTitle>
+          </DialogHeader>
+
+          <div className='grid grid-cols-1 gap-4'>
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='old_password'>Contraseña actual</Label>
+              <Input
+                id='old_password'
+                type='password'
+                value={passwordForm.old_password}
+                onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })}
+              />
+            </div>
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='new_password'>Contraseña nueva</Label>
+              <Input
+                id='new_password'
+                type='password'
+                value={passwordForm.new_password}
+                onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+              />
+            </div>
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='new_password_confirmation'>Repite la contraseña nueva</Label>
+              <Input
+                id='new_password_confirmation'
+                type='password'
+                value={passwordForm.new_password_confirmation}
+                onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirmation: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className='flex gap-2 mt-4'>
+            <Button className='rounded-md' onClick={handleChangePassword} disabled={savingPassword}>
+              {savingPassword ? 'Guardando…' : 'Cambiar contraseña'}
+            </Button>
+            <Button
+              className='rounded-md bg-lighterror dark:bg-darkerror text-error hover:bg-error hover:text-white'
+              onClick={() => setOpenPasswordModal(false)}>
               Cerrar
             </Button>
           </DialogFooter>

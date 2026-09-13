@@ -21,10 +21,6 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 type SummaryRow = { label: string; value: number }
 type SummaryPayload = { period_label: string; data: SummaryRow[]; total: number }
 
-const gyms = ['MightyFitness Central', 'MightyFitness Norte', 'MightyFitness Sur', 'Online']
-const coaches = ['Carlos Martínez', 'Ana García', 'Luis Rodríguez', 'María López']
-const programas = ['Premium', 'Básico', 'Pro', 'Elite']
-
 type ReportType = 'users' | 'sessions' | 'subscriptions' | 'payments' | 'checkins'
 
 const reportTabs: { value: ReportType; label: string; icon: typeof Users }[] = [
@@ -57,25 +53,31 @@ export default function ReportsView() {
   const defaultFrom = subMonths(today, 1)
 
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({ from: defaultFrom, to: today })
-  const [gymFilter, setGymFilter] = useState<string>('all')
   const [coachFilter, setCoachFilter] = useState<string>('all')
-  const [programFilter, setProgramFilter] = useState<string>('all')
+  const [coaches, setCoaches] = useState<{ id: number; name: string }[]>([])
   const [groupBy, setGroupBy] = useState<string>('month')
   const [activeTab, setActiveTab] = useState<ReportType>('users')
   const [data, setData] = useState<SummaryPayload | null>(null)
   const [rows, setRows] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(false)
 
+  // FIX (auditoría 2026-09-13): "Gimnasio" y "Programa" eran filtros de la
+  // plantilla original (MightyFitness, nombres inventados) sin aplicación
+  // en este negocio (servicio presencial 1:1, no cadena de gimnasios) --
+  // quitados. "Coach" ahora carga la lista real (mismo endpoint que
+  // CoachExceptionsView) y el backend sí filtra por coach_id.
+  useEffect(() => {
+    api.get('/admin/coach-exceptions/coaches').then(res => setCoaches(res.data || [])).catch(() => {})
+  }, [])
+
   const queryParams = useMemo(() => {
     const p = new URLSearchParams()
     p.set('from', format(dateRange.from, 'yyyy-MM-dd'))
     p.set('to', format(dateRange.to, 'yyyy-MM-dd'))
     p.set('group_by', groupBy)
-    if (gymFilter !== 'all') p.set('gym', gymFilter)
-    if (coachFilter !== 'all') p.set('coach', coachFilter)
-    if (programFilter !== 'all') p.set('program', programFilter)
+    if (coachFilter !== 'all') p.set('coach_id', coachFilter)
     return p.toString()
-  }, [dateRange, gymFilter, coachFilter, programFilter, groupBy])
+  }, [dateRange, coachFilter, groupBy])
 
   const fetchReport = useCallback(async () => {
     setLoading(true)
@@ -149,33 +151,13 @@ export default function ReportsView() {
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <Select value={gymFilter} onValueChange={(v) => v && setGymFilter(v)}>
-          <SelectTrigger className="w-[180px] cursor-pointer">
-            <SelectValue placeholder="Gimnasio" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los gimnasios</SelectItem>
-            {gyms.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
         <Select value={coachFilter} onValueChange={(v) => v && setCoachFilter(v)}>
           <SelectTrigger className="w-[180px] cursor-pointer">
             <SelectValue placeholder="Coach" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos los coaches</SelectItem>
-            {coaches.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={programFilter} onValueChange={(v) => v && setProgramFilter(v)}>
-          <SelectTrigger className="w-[180px] cursor-pointer">
-            <SelectValue placeholder="Programa" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los programas</SelectItem>
-            {programas.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            {coaches.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
 
@@ -186,8 +168,6 @@ export default function ReportsView() {
           <SelectContent>
             <SelectItem value="month">Por mes</SelectItem>
             <SelectItem value="day">Por día</SelectItem>
-            <SelectItem value="coach">Por coach</SelectItem>
-            <SelectItem value="gym">Por gimnasio</SelectItem>
             <SelectItem value="plan">Por plan</SelectItem>
             <SelectItem value="type">Por tipo</SelectItem>
           </SelectContent>

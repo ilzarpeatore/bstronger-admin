@@ -20,7 +20,6 @@ export type CoachMetric = {
   clientes_activos: number
   total_clientes: number
   pct_con_plan: number
-  pct_completan_80: number
 }
 
 type CoachingMetricsCardProps = {
@@ -29,7 +28,6 @@ type CoachingMetricsCardProps = {
     total_clientes: number
     clientes_activos: number
     pct_con_plan_promedio: number
-    pct_completan_80_promedio: number
   }
 }
 
@@ -43,7 +41,9 @@ export default function CoachingMetricsCard({ metrics, totals }: CoachingMetrics
         </h3>
       </div>
       <CardContent className="p-5 flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* "Completan ≥80% semana" se quitó (auditoría 2026-09-13): era
+            rand(60,80) en el backend, sin ninguna base real de adherencia. */}
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1 rounded-lg border border-border p-4">
             <span className="text-xs text-muted-foreground uppercase tracking-wide">Clientes activos</span>
             <span className="text-2xl font-semibold">{totals.clientes_activos}</span>
@@ -53,20 +53,13 @@ export default function CoachingMetricsCard({ metrics, totals }: CoachingMetrics
             <span className="text-xs text-muted-foreground uppercase tracking-wide">Con plan asignado</span>
             <span className="text-2xl font-semibold">{totals.pct_con_plan_promedio}%</span>
           </div>
-          <div className="flex flex-col gap-1 rounded-lg border border-border p-4">
-            <span className="text-xs text-muted-foreground uppercase tracking-wide" title="Estimación provisional, no calculada todavía a partir de datos reales de adherencia">
-              Completan ≥80% semana *
-            </span>
-            <span className="text-2xl font-semibold">{totals.pct_completan_80_promedio}%</span>
-          </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          * "Completan ≥80% semana" es una estimación provisional (todavía no calculada a partir de la adherencia real de cada cliente) — no la trates como una métrica de negocio definitiva.
-        </p>
 
         <div className="flex flex-col gap-3">
           <h4 className="text-sm font-medium text-muted-foreground">Por coach</h4>
-          {metrics.map((m) => (
+          {metrics.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Sin coaches activos con clientes todavía.</p>
+          ) : metrics.map((m) => (
             <div key={m.coach_id} className="flex flex-col gap-2 rounded-lg border border-border p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -77,21 +70,12 @@ export default function CoachingMetricsCard({ metrics, totals }: CoachingMetrics
                   {m.clientes_activos}/{m.total_clientes} activos
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Con plan</span>
-                    <span className="font-medium">{m.pct_con_plan}%</span>
-                  </div>
-                  <SimpleBar value={m.pct_con_plan} />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Con plan</span>
+                  <span className="font-medium">{m.pct_con_plan}%</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground" title="Estimación provisional">≥80% semana *</span>
-                    <span className="font-medium">{m.pct_completan_80}%</span>
-                  </div>
-                  <SimpleBar value={m.pct_completan_80} barClass="bg-chart-2" />
-                </div>
+                <SimpleBar value={m.pct_con_plan} />
               </div>
             </div>
           ))}
