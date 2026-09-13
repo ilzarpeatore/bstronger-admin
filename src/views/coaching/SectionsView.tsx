@@ -38,6 +38,9 @@ const PRESCRIBED_FIELDS = [
   { key: 'reps_max', label: 'Reps máx' },
   { key: 'weight', label: 'Peso (kg)' },
   { key: 'rest_seconds', label: 'Descanso (s)' },
+  // RIR/RPE es obligatorio (uno u otro) para todo ejercicio -- antes solo
+  // había columna de RPE, sin forma de reportar RIR.
+  { key: 'rir', label: 'RIR' },
   { key: 'rpe', label: 'RPE' },
 ]
 

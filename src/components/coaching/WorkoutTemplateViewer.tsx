@@ -195,6 +195,42 @@ function MetricSelector({
   )
 }
 
+/** RIR/RPE es obligatorio (uno u otro) para todo ejercicio -- ya no es una metrica mas del selector generico, es una columna fija con este toggle de 2 opciones. */
+function IntensityToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: 'rir' | 'rpe'
+  onChange: (value: 'rir' | 'rpe') => void
+  disabled?: boolean
+}) {
+  return (
+    <div className='flex h-7 w-full overflow-hidden rounded-md border border-input text-[10px] font-medium'>
+      {(['rir', 'rpe'] as const).map(opt => (
+        <button
+          key={opt}
+          type='button'
+          disabled={disabled}
+          onClick={() => onChange(opt)}
+          className={cn(
+            'flex-1 uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+            value === opt ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted'
+          )}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Series/Reps/Carga/RIR-RPE tienen columna fija propia -- los selectores
+// genericos restantes (descanso/tempo/duracion/...) no deben poder volver
+// a ofrecerlas.
+const FIXED_METRIC_KEYS = ['series', 'reps', 'carga', 'rir', 'rpe']
+const OTHER_METRIC_SLOTS = 2
+
 function PrescribedEditor({
   exercise,
   readOnly,
@@ -229,18 +265,31 @@ function PrescribedEditor({
   const handleFieldChange = (key: string, value: string) => setLocalValues(prev => ({ ...prev, [key]: value }))
   const handleFieldBlur = (key: string, value: string) => onFieldChange?.(key, value)
 
-  const metrics = useMemo(() => {
-    const base = exercise.enabled_metrics || []
-    const arr = Array(5).fill('')
-    base.forEach((m, i) => { if (i < 5) arr[i] = m })
-    return arr
-  }, [exercise.enabled_metrics])
+  const enabledMetrics = exercise.enabled_metrics || []
+  // Si por lo que sea vinieran los dos a la vez (dato viejo), RIR gana --
+  // es el default del backend. Si no hay ninguno (no debería pasar tras el
+  // backfill), tambien cae a RIR.
+  const intensityKey: 'rir' | 'rpe' = !enabledMetrics.includes('rir') && enabledMetrics.includes('rpe') ? 'rpe' : 'rir'
 
-  const handleMetricChange = (idx: number, value: string) => {
-    const next = [...metrics]
+  const otherOptions = useMemo(
+    () => metricOptions.filter(o => !FIXED_METRIC_KEYS.includes(o.value)),
+    [metricOptions]
+  )
+  const otherMetrics = useMemo(() => {
+    const rest = enabledMetrics.filter(m => !FIXED_METRIC_KEYS.includes(m))
+    const arr = Array(OTHER_METRIC_SLOTS).fill('')
+    rest.forEach((m, i) => { if (i < OTHER_METRIC_SLOTS) arr[i] = m })
+    return arr
+  }, [enabledMetrics])
+
+  const buildMetrics = (intensity: string, others: string[]) => ['reps', 'carga', intensity, ...others]
+
+  const handleIntensityChange = (value: 'rir' | 'rpe') => onMetricsChange?.(buildMetrics(value, otherMetrics))
+
+  const handleOtherMetricChange = (idx: number, value: string) => {
+    const next = [...otherMetrics]
     next[idx] = value
-    // remove trailing empty strings but keep internal empties? normalize to first 5
-    onMetricsChange?.(next)
+    onMetricsChange?.(buildMetrics(intensityKey, next))
   }
 
   const lastPerformanceText = formatLastPerformance(exercise.last_performance)
@@ -255,17 +304,26 @@ function PrescribedEditor({
             <span className='truncate'>{lastPerformanceText}</span>
           </div>
         )}
-        {/* Header row: Sets + 5 metric selectors */}
+        {/* Header row: Series/Reps/Carga fijos, toggle RIR|RPE fijo, y hasta 2 selectores libres (descanso/tempo/...) */}
         <div className='grid grid-cols-6 gap-2 mb-1'>
           <div className='flex flex-col gap-1'>
             <span className='text-[10px] uppercase tracking-wider text-muted-foreground text-center'>Series</span>
           </div>
-          {metrics.map((m, i) => (
+          <div className='flex flex-col gap-1'>
+            <span className='text-[10px] uppercase tracking-wider text-muted-foreground text-center'>Reps</span>
+          </div>
+          <div className='flex flex-col gap-1'>
+            <span className='text-[10px] uppercase tracking-wider text-muted-foreground text-center'>Carga</span>
+          </div>
+          <div className='flex flex-col gap-1'>
+            <IntensityToggle value={intensityKey} onChange={handleIntensityChange} disabled={metricsReadOnly} />
+          </div>
+          {otherMetrics.map((m, i) => (
             <div key={i} className='flex flex-col gap-1'>
               <MetricSelector
                 value={m}
-                options={metricOptions}
-                onChange={v => handleMetricChange(i, v)}
+                options={otherOptions}
+                onChange={v => handleOtherMetricChange(i, v)}
                 disabled={metricsReadOnly}
               />
             </div>
@@ -274,23 +332,41 @@ function PrescribedEditor({
 
         {/* Values row */}
         <div className='grid grid-cols-6 gap-2'>
+          {(['series', 'reps', 'carga'] as const).map(key => (
+            <div key={key} className='flex flex-col gap-1'>
+              {readOnly ? (
+                <div className='h-7 flex items-center justify-center rounded-md border bg-muted/50 text-xs px-1'>
+                  {exercise.prescribed?.[key] ?? <span className='text-muted-foreground'>—</span>}
+                </div>
+              ) : (
+                <Input
+                  className='h-7 text-center text-xs px-1'
+                  value={getFieldValue(key)}
+                  onChange={e => handleFieldChange(key, e.target.value)}
+                  onBlur={e => handleFieldBlur(key, e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  placeholder={key === 'series' ? 'Series' : key === 'reps' ? 'Reps' : 'Carga'}
+                />
+              )}
+            </div>
+          ))}
           <div className='flex flex-col gap-1'>
             {readOnly ? (
               <div className='h-7 flex items-center justify-center rounded-md border bg-muted/50 text-xs px-1'>
-                {exercise.prescribed?.series ?? <span className='text-muted-foreground'>—</span>}
+                {exercise.prescribed?.[intensityKey] ?? <span className='text-muted-foreground'>—</span>}
               </div>
             ) : (
               <Input
                 className='h-7 text-center text-xs px-1'
-                value={getFieldValue('series')}
-                onChange={e => handleFieldChange('series', e.target.value)}
-                onBlur={e => handleFieldBlur('series', e.target.value)}
+                value={getFieldValue(intensityKey)}
+                onChange={e => handleFieldChange(intensityKey, e.target.value)}
+                onBlur={e => handleFieldBlur(intensityKey, e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                placeholder='Series'
+                placeholder={intensityKey.toUpperCase()}
               />
             )}
           </div>
-          {metrics.map((m, i) => {
+          {otherMetrics.map((m, i) => {
             // La clave de metrica (m) ES la clave real de prescribed - sin mapeo indirecto.
             return (
               <div key={i} className='flex flex-col gap-1'>
@@ -308,7 +384,7 @@ function PrescribedEditor({
                     onChange={e => handleFieldChange(m, e.target.value)}
                     onBlur={e => handleFieldBlur(m, e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                    placeholder={metricOptions.find(o => o.value === m)?.label}
+                    placeholder={otherOptions.find(o => o.value === m)?.label}
                   />
                 )}
               </div>
