@@ -338,18 +338,6 @@ const SidebarContent: MenuItem[] = [
       },
       {
         id: uniqueId(),
-        name: "Notas",
-        icon: FileText,
-        url: "/apps/notes",
-      },
-      {
-        id: uniqueId(),
-        name: "Tickets",
-        icon: Ticket,
-        url: "/apps/tickets",
-      },
-      {
-        id: uniqueId(),
         name: "Perfil",
         icon: UserCog,
         url: "/pages/user-profile",
