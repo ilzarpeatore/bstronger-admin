@@ -124,7 +124,11 @@ const BannerSliderView = () => {
       }
 
       if (editingItem) {
-        await api.put(`/admin/banner-sliders/${editingItem.id}`, fd)
+        // BUG (auditoría 2026-09-13): api.put(url, fd) manda un PUT real con
+        // cuerpo multipart -- Laravel/PHP no lo parsea en verbos != POST, así
+        // que la validación server-side fallaba siempre. api.upload()
+        // spoofea PUT vía POST + _method (mismo patrón que ResourcesView).
+        await api.upload(`/admin/banner-sliders/${editingItem.id}`, fd, 'PUT')
         toast.success('Deslizante de banner actualizado')
       } else {
         await api.post('/admin/banner-sliders', fd)

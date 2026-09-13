@@ -155,7 +155,13 @@ export default function ExerciseView() {
       if (imageFile) fd.append('image', imageFile)
 
       if (editingItem) {
-        await apiFetch(`/admin/exercises/${editingItem.id}`, { method: 'PUT', body: fd })
+        // BUG (auditoría 2026-09-13): apiFetch con method:'PUT' + FormData
+        // manda un PUT real con cuerpo multipart -- Laravel/PHP no lo
+        // parsea en verbos != POST, así que 'title' (required) llegaba
+        // vacío y la validación fallaba SIEMPRE, en toda edición de
+        // ejercicio (no solo al cambiar imagen). api.upload() spoofea PUT
+        // vía POST + _method.
+        await api.upload(`/admin/exercises/${editingItem.id}`, fd, 'PUT')
         toast.success('Ejercicio actualizado')
       } else {
         await apiFetch('/admin/exercises', { method: 'POST', body: fd })

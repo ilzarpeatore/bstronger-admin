@@ -23,6 +23,10 @@ type Recipe = {
   carbs: number
   status: string
   is_premium: boolean
+  // RecipeResource devuelve solo los títulos (pluck('title')), no ids --
+  // hay que resolverlos contra `categories`/`dietTags` ya cargados.
+  recipe_category?: string[]
+  recipe_tag?: string[]
 }
 
 type RecipeIngredient = {
@@ -125,7 +129,18 @@ const RecipeView = () => {
   }, [])
 
   const openCreate = () => { setEditingRecipe(null); setFormData({ categories: [], tags: [] }); setDialogOpen(true) }
-  const openEdit = (r: Recipe) => { setEditingRecipe(r); setFormData({ title: r.title, slug: r.slug, calories: r.calories, protein: r.protein, fats: r.fats, carbs: r.carbs, status: r.status, is_premium: !!r.is_premium, categories: [], tags: [] }); setDialogOpen(true) }
+  const openEdit = (r: Recipe) => {
+    setEditingRecipe(r)
+    // BUG (auditoría 2026-09-13): antes se inicializaba siempre a [], y
+    // afterSave() hace categories()->sync($request->categories) -- guardar
+    // sin tocar los checkboxes borraba silenciosamente las categorías/
+    // etiquetas ya asignadas. RecipeResource solo devuelve títulos
+    // (pluck('title')), así que se resuelven contra las listas ya cargadas.
+    const categoryIds = categories.filter((c: any) => r.recipe_category?.includes(c.title)).map((c: any) => c.id)
+    const tagIds = dietTags.filter((t: any) => r.recipe_tag?.includes(t.title)).map((t: any) => t.id)
+    setFormData({ title: r.title, slug: r.slug, calories: r.calories, protein: r.protein, fats: r.fats, carbs: r.carbs, status: r.status, is_premium: !!r.is_premium, categories: categoryIds, tags: tagIds })
+    setDialogOpen(true)
+  }
 
   const handleSubmit = async () => {
     if (!formData.title?.trim()) { toast.error('El título es obligatorio'); return }
