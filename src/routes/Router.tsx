@@ -94,7 +94,6 @@ const ProgressionDecisions = Loadable(lazy(() => import('../views/coaching/Progr
 const CoachExceptions = Loadable(lazy(() => import('../views/coaching/CoachExceptionsView')));
 
 // mightyfitness content
-const Posts = Loadable(lazy(() => import('../views/content/PostView')));
 const Quotes = Loadable(lazy(() => import('../views/content/QuotesView')));
 const BannerSliders = Loadable(lazy(() => import('../views/content/BannerSliderView')));
 const PushNotifications = Loadable(lazy(() => import('../views/content/PushNotificationView')));
@@ -238,7 +237,12 @@ const Router = [
       { path: '/app-settings', element: <AppSettings /> },
       { path: '/tasks', element: <Tasks /> },
 
-      { path: '/posts', element: <Posts /> },
+      // /posts (CrudView genérico) solo exponía título/descripción/destacado/estado --
+      // sin contenido, imagen ni bibliografía, aunque el backend y el editor de
+      // /apps/blog/* ya los soportan por completo (misma API /admin/posts). En vez
+      // de duplicar esa lógica (subida de imagen, etc.) dentro de CrudView, se
+      // redirige al editor real.
+      { path: '/posts', element: <Navigate to="/apps/blog/manage-blog" replace /> },
       { path: '/quotes', element: <Quotes /> },
       { path: '/banner-sliders', element: <BannerSliders /> },
       { path: '/push-notifications', element: <PushNotifications /> },

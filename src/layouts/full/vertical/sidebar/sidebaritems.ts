@@ -299,7 +299,7 @@ const SidebarContent: MenuItem[] = [
         id: uniqueId(),
         name: "Entradas de blog",
         icon: FileText,
-        url: "/posts",
+        url: "/apps/blog/manage-blog",
       },
       {
         id: uniqueId(),
