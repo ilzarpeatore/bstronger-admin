@@ -8,7 +8,7 @@ const DietView = () => (
     fields={[
       { name: 'title', label: 'Título', required: true },
       { name: 'slug', label: 'Slug', type: 'slug' },
-      { name: 'categorydiet_id', label: 'ID de categoría de dieta', type: 'number', required: true },
+      { name: 'categorydiet_id', label: 'Categoría de dieta', type: 'select', endpoint: '/admin/diet-categories', required: true },
       { name: 'calories', label: 'Calorías', type: 'number', required: true },
       { name: 'carbs', label: 'Carbohidratos', type: 'number' },
       { name: 'protein', label: 'Proteína', type: 'number' },

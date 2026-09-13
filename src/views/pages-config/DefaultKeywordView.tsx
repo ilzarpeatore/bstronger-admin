@@ -5,7 +5,10 @@ const DefaultKeywordView = () => (
     title='Palabras clave predeterminadas'
     endpoint='/admin/default-keywords'
     fields={[
-      { name: 'screen_id', label: 'ID de pantalla', required: true },
+      // DefaultKeywordController valida 'screen_id' contra screens.id (el PK
+      // interno), no contra el campo screenId visible en /admin/screens --
+      // por eso optionValue queda en el 'id' por defecto, no un override.
+      { name: 'screen_id', label: 'Pantalla', type: 'select', endpoint: '/admin/screens', optionLabel: 'screenName', required: true },
       { name: 'keyword_id', label: 'ID de palabra clave', required: true },
       { name: 'keyword_name', label: 'Nombre de la palabra clave', required: true },
       { name: 'keyword_value', label: 'Valor de la palabra clave', required: true },

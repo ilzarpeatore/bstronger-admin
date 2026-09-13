@@ -5,8 +5,8 @@ const UnitConversionView = () => (
     title='Conversiones de unidades'
     endpoint='/admin/unit-conversions'
     fields={[
-      { name: 'ingredient_id', label: 'ID de ingrediente', type: 'number', required: true },
-      { name: 'measurement_unit_id', label: 'ID de unidad de medida', type: 'number', required: true },
+      { name: 'ingredient_id', label: 'Ingrediente', type: 'select', endpoint: '/admin/ingredients', required: true },
+      { name: 'measurement_unit_id', label: 'Unidad de medida', type: 'select', endpoint: '/admin/measurement-units', required: true },
       { name: 'gram_equivalent', label: 'Equivalente en gramos', type: 'number', required: true },
     ]}
     columns={[

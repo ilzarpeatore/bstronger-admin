@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from 'sonner'
@@ -18,6 +19,22 @@ const LanguageKeywordView = () => {
   const [editingItem, setEditingItem] = useState<any>(null)
   const [formData, setFormData] = useState<Record<string, any>>({})
   const [submitting, setSubmitting] = useState(false)
+
+  // FIX (auditoría 2026-09-13): language_id/keyword_id/screen_id se pedían
+  // como IDs en bruto -- el admin tenía que saber de memoria qué número
+  // correspondía a cada idioma/palabra clave/pantalla. Ojo con las claves
+  // reales: LanguageWithKeyword.screen_id apunta a screens.screenId (no
+  // screens.id) y .keyword_id apunta a default_keywords.keyword_id (no su
+  // id) -- ver app/Models/LanguageWithKeyword.php en el backend.
+  const [languages, setLanguages] = useState<{ id: number; language_name: string }[]>([])
+  const [screens, setScreens] = useState<{ id: number; screenId: string; screenName: string }[]>([])
+  const [defaultKeywords, setDefaultKeywords] = useState<{ id: number; keyword_id: number; keyword_name: string }[]>([])
+
+  useEffect(() => {
+    api.get('/admin/languages?per_page=-1').then(res => setLanguages(res.data || [])).catch(() => {})
+    api.get('/admin/screens?per_page=-1').then(res => setScreens(res.data || [])).catch(() => {})
+    api.get('/admin/default-keywords?per_page=-1').then(res => setDefaultKeywords(res.data || [])).catch(() => {})
+  }, [])
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -68,9 +85,9 @@ const LanguageKeywordView = () => {
 
   const columns: ColumnDef<any, any>[] = [
     { id: 'id', header: 'ID', accessorKey: 'id' },
-    { id: 'language_id', header: 'Idioma', accessorKey: 'language_id' },
-    { id: 'keyword_id', header: 'Palabra clave', accessorKey: 'keyword_id' },
-    { id: 'screen_id', header: 'Pantalla', accessorKey: 'screen_id' },
+    { id: 'language_id', header: 'Idioma', cell: ({ row }) => row.original.languagelist?.language_name || row.original.language_id },
+    { id: 'keyword_id', header: 'Palabra clave', cell: ({ row }) => row.original.defaultkeyword?.keyword_name || row.original.keyword_id },
+    { id: 'screen_id', header: 'Pantalla', cell: ({ row }) => row.original.screen?.screenName || row.original.screen_id },
     { id: 'keyword_value', header: 'Valor', accessorKey: 'keyword_value' },
     {
       id: 'actions',
@@ -147,16 +164,31 @@ const LanguageKeywordView = () => {
           </DialogHeader>
           <FieldGroup className='gap-4'>
             <Field className='gap-2'>
-              <FieldLabel>ID de idioma</FieldLabel>
-              <Input type='number' value={formData.language_id || ''} onChange={e => setFormData(prev => ({ ...prev, language_id: e.target.value }))} />
+              <FieldLabel>Idioma</FieldLabel>
+              <Select value={String(formData.language_id || '')} onValueChange={v => setFormData(prev => ({ ...prev, language_id: v }))}>
+                <SelectTrigger><SelectValue placeholder='Selecciona un idioma' /></SelectTrigger>
+                <SelectContent>
+                  {languages.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.language_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </Field>
             <Field className='gap-2'>
-              <FieldLabel>ID de palabra clave</FieldLabel>
-              <Input type='number' value={formData.keyword_id || ''} onChange={e => setFormData(prev => ({ ...prev, keyword_id: e.target.value }))} />
+              <FieldLabel>Palabra clave</FieldLabel>
+              <Select value={String(formData.keyword_id || '')} onValueChange={v => setFormData(prev => ({ ...prev, keyword_id: v }))}>
+                <SelectTrigger><SelectValue placeholder='Selecciona una palabra clave' /></SelectTrigger>
+                <SelectContent>
+                  {defaultKeywords.map(k => <SelectItem key={k.id} value={String(k.keyword_id)}>{k.keyword_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </Field>
             <Field className='gap-2'>
-              <FieldLabel>ID de pantalla</FieldLabel>
-              <Input type='number' value={formData.screen_id || ''} onChange={e => setFormData(prev => ({ ...prev, screen_id: e.target.value }))} />
+              <FieldLabel>Pantalla</FieldLabel>
+              <Select value={String(formData.screen_id || '')} onValueChange={v => setFormData(prev => ({ ...prev, screen_id: v }))}>
+                <SelectTrigger><SelectValue placeholder='Selecciona una pantalla' /></SelectTrigger>
+                <SelectContent>
+                  {screens.map(s => <SelectItem key={s.id} value={s.screenId}>{s.screenName}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </Field>
             <Field className='gap-2'>
               <FieldLabel>Valor de la palabra clave</FieldLabel>

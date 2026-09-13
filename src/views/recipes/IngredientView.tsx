@@ -8,7 +8,7 @@ const IngredientView = () => (
     fields={[
       { name: 'title', label: 'Título', required: true },
       { name: 'slug', label: 'Slug', type: 'slug' },
-      { name: 'ingredient_category_id', label: 'ID de categoría', type: 'number', required: true },
+      { name: 'ingredient_category_id', label: 'Categoría', type: 'select', endpoint: '/admin/ingredient-categories', required: true },
       { name: 'calories_per_gram', label: 'Calorías por gramo', type: 'number' },
       { name: 'protein_per_gram', label: 'Proteína por gramo', type: 'number' },
       { name: 'fat_per_gram', label: 'Grasa por gramo', type: 'number' },

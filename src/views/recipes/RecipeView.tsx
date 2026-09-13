@@ -27,6 +27,7 @@ type Recipe = {
   // hay que resolverlos contra `categories`/`dietTags` ya cargados.
   recipe_category?: string[]
   recipe_tag?: string[]
+  recipe_image?: string | null
 }
 
 type RecipeIngredient = {
@@ -59,6 +60,10 @@ const RecipeView = () => {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
   const [formData, setFormData] = useState<Record<string, any>>({})
+  // FIX (auditoría 2026-09-13): no había forma de subir la imagen de
+  // portada de una receta aunque el backend ya la soporta (recipe_image).
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [existingImage, setExistingImage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingRecipe, setDeletingRecipe] = useState<Recipe | null>(null)
@@ -128,9 +133,17 @@ const RecipeView = () => {
       })
   }, [])
 
-  const openCreate = () => { setEditingRecipe(null); setFormData({ categories: [], tags: [] }); setDialogOpen(true) }
+  const openCreate = () => {
+    setEditingRecipe(null)
+    setFormData({ categories: [], tags: [] })
+    setImageFile(null)
+    setExistingImage(null)
+    setDialogOpen(true)
+  }
   const openEdit = (r: Recipe) => {
     setEditingRecipe(r)
+    setImageFile(null)
+    setExistingImage(r.recipe_image || null)
     // BUG (auditoría 2026-09-13): antes se inicializaba siempre a [], y
     // afterSave() hace categories()->sync($request->categories) -- guardar
     // sin tocar los checkboxes borraba silenciosamente las categorías/
@@ -146,11 +159,26 @@ const RecipeView = () => {
     if (!formData.title?.trim()) { toast.error('El título es obligatorio'); return }
     setSubmitting(true)
     try {
+      const fd = new FormData()
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v == null) return
+        if (Array.isArray(v)) {
+          v.forEach(item => fd.append(`${k}[]`, String(item)))
+        } else if (typeof v === 'boolean') {
+          // Laravel 'boolean' rule solo acepta true/false/0/1/"0"/"1" --
+          // "true"/"false" (lo que da String(v) en un booleano) no vale.
+          fd.append(k, v ? '1' : '0')
+        } else {
+          fd.append(k, String(v))
+        }
+      })
+      if (imageFile) fd.append('recipe_image', imageFile)
+
       if (editingRecipe) {
-        await api.put(`/admin/recipes/${editingRecipe.id}`, formData)
+        await api.upload(`/admin/recipes/${editingRecipe.id}`, fd, 'PUT')
         toast.success('Receta actualizada')
       } else {
-        await api.post('/admin/recipes', formData)
+        await api.upload('/admin/recipes', fd)
         toast.success('Receta creada')
       }
       setDialogOpen(false)
@@ -390,6 +418,15 @@ const RecipeView = () => {
             <Field className='gap-2'>
               <FieldLabel>Título</FieldLabel>
               <Input value={formData.title || ''} onChange={e => setFormData(p => ({ ...p, title: e.target.value }))} />
+            </Field>
+            <Field className='gap-2'>
+              <FieldLabel>Imagen de portada</FieldLabel>
+              {imageFile ? (
+                <img src={URL.createObjectURL(imageFile)} alt='Vista previa' className='h-32 w-32 object-cover rounded-md border' />
+              ) : existingImage ? (
+                <img src={existingImage} alt='Actual' className='h-32 w-32 object-cover rounded-md border' />
+              ) : null}
+              <Input type='file' accept='image/*' onChange={e => setImageFile(e.target.files?.[0] || null)} />
             </Field>
             <div className='grid grid-cols-2 gap-4'>
               <Field className='gap-2'>
