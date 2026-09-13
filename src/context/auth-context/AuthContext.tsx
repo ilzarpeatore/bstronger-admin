@@ -62,8 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = (permission: string) => {
     if (!user) return false
-    if (user.permissions.includes('*')) return true
-    return user.permissions.includes(permission)
+    // Defensive: some backend responses may omit `permissions` entirely
+    // rather than send an empty array — treat that the same as "no permissions".
+    const permissions = user.permissions ?? []
+    if (permissions.includes('*')) return true
+    return permissions.includes(permission)
   }
 
   return (

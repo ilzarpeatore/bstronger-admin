@@ -13,7 +13,9 @@ export interface ChildItem {
   badgeContent?: string;
   isActive?: boolean;
   external?: boolean;
-  isPro?: boolean
+  isPro?: boolean;
+  /** Permission key (see src/constants/permissions.ts) required to see this entry. */
+  requiredPermission?: string
 }
 
 export interface MenuItem {
@@ -35,6 +37,7 @@ export interface MenuItem {
 }
 
 import { uniqueId } from "lodash";
+import { PERMISSIONS } from "@/constants/permissions";
 
 import {
   LayoutDashboard,
@@ -382,12 +385,12 @@ const SidebarContent: MenuItem[] = [
         name: "Seguridad",
         icon: Shield,
         items: [
-          { id: uniqueId(), name: "Roles", url: "/roles" },
-          { id: uniqueId(), name: "Permisos", url: "/permissions" },
-          { id: uniqueId(), name: "Subadministradores", url: "/sub-admins" },
+          { id: uniqueId(), name: "Roles", url: "/roles", requiredPermission: PERMISSIONS.ROLES },
+          { id: uniqueId(), name: "Permisos", url: "/permissions", requiredPermission: PERMISSIONS.PERMISSIONS },
+          { id: uniqueId(), name: "Subadministradores", url: "/sub-admins", requiredPermission: PERMISSIONS.SUB_ADMINS },
           { id: uniqueId(), name: "Historial de inicio de sesión", url: "/admin-login-history" },
           { id: uniqueId(), name: "Dispositivos de inicio de sesión", url: "/admin-login-devices" },
-          { id: uniqueId(), name: "Registro de auditoría", url: "/audit-log" },
+          { id: uniqueId(), name: "Registro de auditoría", url: "/audit-log", requiredPermission: PERMISSIONS.AUDIT_LOG },
           { id: uniqueId(), name: "Autenticación 2FA", url: "/two-factor" },
         ],
       },
