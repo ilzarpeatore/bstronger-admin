@@ -41,6 +41,15 @@ type LoggedSet = {
   volume: number
 }
 
+type LoadSuggestion = {
+  id: number
+  status: 'pendiente' | 'aplicado'
+  proposed_weight: number | null
+  proposed_reps: number | null
+  resolved_at: string | null
+  rule_name: string | null
+}
+
 type SessionExercise = {
   exercise_id: number
   workout_template_exercise_id: number
@@ -55,6 +64,8 @@ type SessionExercise = {
   sets: LoggedSet[]
   prs_this_session?: number
   exercise_volume?: number
+  load_suggestion?: LoadSuggestion | null
+  last_performance?: { sets: Record<string, any>[] } | null
 }
 
 type SessionBlock = {
@@ -155,6 +166,8 @@ function mapSessionToViewer(sessionData: SessionData): {
         sets: e.sets,
         prs_this_session: e.prs_this_session,
         exercise_volume: e.exercise_volume,
+        load_suggestion: e.load_suggestion,
+        last_performance: e.last_performance,
       })),
     })),
     totalExercises: countExercises(sessionData),
@@ -418,6 +431,72 @@ function SessionContent({
     return map
   }, [sessionData])
 
+  // Motor de Auto-Regulación de Carga: aprobar/editar/rechazar una
+  // sugerencia directamente desde el visualizador de la sesión, en vez de
+  // obligar al coach a ir al panel de excepciones aparte -- reutiliza los
+  // mismos endpoints admin/session-progression/suggestions/{id}/* que ya
+  // usa CoachExceptionsCard.tsx.
+  const [editSuggestionExercise, setEditSuggestionExercise] = useState<SessionExercise | null>(null)
+  const [editWeight, setEditWeight] = useState('')
+  const [editReps, setEditReps] = useState('')
+  const [editMotivo, setEditMotivo] = useState('')
+  const [savingSuggestion, setSavingSuggestion] = useState(false)
+
+  const refreshSession = useCallback(async () => {
+    const res = await api.get(`/admin/session-detail?program_day_assignment_id=${programDayAssignmentId}&client_id=${clientId}`)
+    onUpdate(res.data ?? res)
+  }, [programDayAssignmentId, clientId, onUpdate])
+
+  const handleApproveSuggestion = async (ex: WorkoutViewerExercise) => {
+    if (!ex.load_suggestion) return
+    try {
+      await api.post(`/admin/session-progression/suggestions/${ex.load_suggestion.id}/approve`, {})
+      toast.success('Sugerencia aprobada')
+      await refreshSession()
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al aprobar la sugerencia')
+    }
+  }
+
+  const handleRejectSuggestion = async (ex: WorkoutViewerExercise) => {
+    if (!ex.load_suggestion) return
+    try {
+      await api.post(`/admin/session-progression/suggestions/${ex.load_suggestion.id}/reject`, {})
+      toast.success('Sugerencia rechazada')
+      await refreshSession()
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al rechazar la sugerencia')
+    }
+  }
+
+  const handleOpenEditSuggestion = (ex: WorkoutViewerExercise) => {
+    const original = exerciseLookup.get(ex.id)
+    if (!original?.load_suggestion) return
+    setEditSuggestionExercise(original)
+    setEditWeight(original.load_suggestion.proposed_weight != null ? String(original.load_suggestion.proposed_weight) : '')
+    setEditReps(original.load_suggestion.proposed_reps != null ? String(original.load_suggestion.proposed_reps) : '')
+    setEditMotivo('')
+  }
+
+  const handleSaveEditSuggestion = async () => {
+    if (!editSuggestionExercise?.load_suggestion) return
+    setSavingSuggestion(true)
+    try {
+      await api.post(`/admin/session-progression/suggestions/${editSuggestionExercise.load_suggestion.id}/edit`, {
+        proposed_weight: editWeight !== '' ? Number(editWeight) : null,
+        proposed_reps: editReps !== '' ? Number(editReps) : null,
+        motivo: editMotivo || undefined,
+      })
+      toast.success('Sugerencia editada y aplicada')
+      setEditSuggestionExercise(null)
+      await refreshSession()
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al editar la sugerencia')
+    } finally {
+      setSavingSuggestion(false)
+    }
+  }
+
   const batchRef = useRef<Map<number, { prescribed?: Record<string, any>; notes?: string | null }>>(new Map())
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -622,6 +701,9 @@ function SessionContent({
             if (original) handleOpenNotes(original)
           }}
           onSearchExercises={fetchAvailableExercises}
+          onLoadSuggestionApprove={handleApproveSuggestion}
+          onLoadSuggestionEdit={handleOpenEditSuggestion}
+          onLoadSuggestionReject={handleRejectSuggestion}
         />
       )}
       </div>
@@ -640,6 +722,41 @@ function SessionContent({
           <div className='flex justify-end gap-2 mt-2'>
             <Button variant='outline' onClick={() => setNotesDialogExercise(null)}>Cancelar</Button>
             <Button onClick={handleSaveNotes}>Guardar notas</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editSuggestionExercise} onOpenChange={open => { if (!open) setEditSuggestionExercise(null) }}>
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle>Editar sugerencia — {editSuggestionExercise?.title}</DialogTitle>
+          </DialogHeader>
+          <div className='space-y-3'>
+            <div className='grid grid-cols-2 gap-3'>
+              <div className='space-y-1'>
+                <label className='text-xs font-medium text-muted-foreground'>Peso (kg)</label>
+                <Input type='number' value={editWeight} onChange={e => setEditWeight(e.target.value)} placeholder='—' />
+              </div>
+              <div className='space-y-1'>
+                <label className='text-xs font-medium text-muted-foreground'>Reps</label>
+                <Input type='number' value={editReps} onChange={e => setEditReps(e.target.value)} placeholder='—' />
+              </div>
+            </div>
+            <div className='space-y-1'>
+              <label className='text-xs font-medium text-muted-foreground'>Motivo (opcional)</label>
+              <Textarea
+                className='min-h-[60px] text-sm'
+                value={editMotivo}
+                onChange={e => setEditMotivo(e.target.value)}
+                placeholder='Por qué se ajusta la sugerencia del motor...'
+              />
+            </div>
+          </div>
+          <div className='flex justify-end gap-2 mt-2'>
+            <Button variant='outline' onClick={() => setEditSuggestionExercise(null)} disabled={savingSuggestion}>Cancelar</Button>
+            <Button onClick={handleSaveEditSuggestion} disabled={savingSuggestion}>
+              {savingSuggestion ? 'Guardando...' : 'Guardar y aplicar'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
