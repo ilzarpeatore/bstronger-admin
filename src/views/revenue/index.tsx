@@ -8,6 +8,7 @@ import { CardContent } from '@/components/ui/card'
 import { DashboardCard } from '@/components/shared/dashboard-card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 type RevenueData = {
   revenue_current_cents: number
@@ -23,6 +24,7 @@ type RevenueData = {
 export default function RevenueView() {
   const [data, setData] = useState<RevenueData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [period, setPeriod] = useState('month')
 
   const fetchData = useCallback(async () => {
@@ -30,7 +32,13 @@ export default function RevenueView() {
     try {
       const res = await api.get(`/admin/reports/revenue?period=${period}`)
       setData(res.data)
-    } catch { /* ignore */ } finally {
+      setLoadError(false)
+    } catch {
+      // FIX (auditoría 2026-09-13): fallo de carga 100% silencioso --
+      // pantalla en blanco (return null) indistinguible de "sin ingresos".
+      setLoadError(true)
+      toast.error('No se pudieron cargar los ingresos')
+    } finally {
       setLoading(false)
     }
   }, [period])
@@ -43,6 +51,10 @@ export default function RevenueView() {
     return <div className="flex flex-col gap-4">
       <div className="h-[200px] rounded-none bg-muted/50 animate-pulse" />
     </div>
+  }
+
+  if (loadError && !data) {
+    return <p className="text-sm text-muted-foreground py-8 text-center">No se pudieron cargar los ingresos. Inténtalo de nuevo más tarde.</p>
   }
 
   if (!data) return null

@@ -78,22 +78,30 @@ const BulkAssignView = () => {
     }
     setSubmitting(true)
     let successCount = 0
-    let errorCount = 0
+    // FIX (auditoría 2026-09-13): antes solo se contaban los fallos, sin
+    // identificar a quién -- con un fallo parcial no había forma de saber
+    // a quién reintentar sin arriesgarse a duplicar los que sí funcionaron.
+    const failedUsers: User[] = []
     for (const userId of selectedUserIds) {
       try {
         await api.post(endpoint, { user_id: userId, [idKey]: Number(selectedItemId) })
         successCount++
       } catch {
-        errorCount++
+        const u = users.find(x => x.id === userId)
+        if (u) failedUsers.push(u)
       }
     }
     setSubmitting(false)
-    if (errorCount === 0) {
+    if (failedUsers.length === 0) {
       toast.success(`${successCount} asignación(es) creada(s) correctamente`)
+      setSelectedUserIds(new Set())
     } else {
-      toast.warning(`${successCount} exitosas, ${errorCount} fallidas`)
+      const names = failedUsers.map(userLabel).join(', ')
+      toast.warning(`${successCount} exitosas, ${failedUsers.length} fallidas: ${names}`, { duration: 8000 })
+      // Deja seleccionados solo los que fallaron, para poder reintentar sin
+      // volver a asignar (y potencialmente duplicar) a los que sí funcionaron.
+      setSelectedUserIds(new Set(failedUsers.map(u => u.id)))
     }
-    setSelectedUserIds(new Set())
     setSelectedItemId('')
   }
 

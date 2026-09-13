@@ -33,6 +33,7 @@ const methodLabels: Record<string, string> = {
 
 export default function TransactionsView() {
   const [items, setItems] = useState<Transaction[]>([])
+  const [itemsTotal, setItemsTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [methodFilter, setMethodFilter] = useState('all')
@@ -44,7 +45,16 @@ export default function TransactionsView() {
       if (search) params.set('search', search)
       if (methodFilter !== 'all') params.set('payment_method', methodFilter)
       const res = await api.get(`/admin/reports/transactions?${params}`)
-      setItems(res.data?.data || res.data || [])
+      const list = res.data?.data || res.data || []
+      setItems(list)
+      // FIX (auditoría 2026-09-13): per_page fijo en 100 sin paginación real
+      // ni aviso -- si hay más de 100, las de más allá nunca se ven ni se
+      // exportan, y antes no había ninguna señal de ello.
+      const total = res.pagination?.total_items
+      setItemsTotal(typeof total === 'number' ? total : null)
+      if (typeof total === 'number' && total > list.length) {
+        toast.warning(`Mostrando ${list.length} de ${total} transacciones -- afina la búsqueda para ver el resto.`)
+      }
     } catch {
       toast.error('No se pudieron cargar las transacciones')
     } finally {
@@ -55,6 +65,9 @@ export default function TransactionsView() {
   useEffect(() => { fetchItems() }, [fetchItems])
 
   const exportCsv = () => {
+    if (itemsTotal != null && itemsTotal > items.length) {
+      toast.warning(`El CSV solo incluye ${items.length} de ${itemsTotal} transacciones -- afina la búsqueda para exportar el resto.`)
+    }
     const headers = ['ID', 'Cliente', 'Plan', 'Importe (EUR)', 'Método', 'Notas', 'Estado', 'Inicio', 'Fin']
     const rows = items.map(t => [
       t.id, t.subscriber_name, t.plan_name,

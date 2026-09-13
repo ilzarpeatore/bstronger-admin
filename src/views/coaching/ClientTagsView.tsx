@@ -46,6 +46,7 @@ export default function ClientTagsView() {
   const [editingTag, setEditingTag] = useState<ClientTag | null>(null)
 
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
+  const [assigningTag, setAssigningTag] = useState(false)
   const [assignTagId, setAssignTagId] = useState('')
   const [assignClientId, setAssignClientId] = useState('')
   const [clients, setClients] = useState<User[]>([])
@@ -134,6 +135,9 @@ export default function ClientTagsView() {
 
   const handleAssignTag = async () => {
     if (!assignClientId || !assignTagId) { toast.error('Selecciona un cliente y una etiqueta'); return }
+    // FIX (auditoría 2026-09-13): sin estado de envío -- doble clic podía
+    // mandar dos POST /client-tag-assign seguidos.
+    setAssigningTag(true)
     try {
       await api.post('/admin/client-tag-assign', {
         client_id: Number(assignClientId),
@@ -144,11 +148,16 @@ export default function ClientTagsView() {
       if (selectedClientId === assignClientId) fetchClientTags(assignClientId)
     } catch (err: any) {
       toast.error(err?.message || 'Error al asignar')
+    } finally {
+      setAssigningTag(false)
     }
   }
 
   const handleRemoveTag = async (tagId: number) => {
     if (!selectedClientId) return
+    // FIX (auditoría 2026-09-13): desasignar sin confirmación, inconsistente
+    // con borrar la etiqueta global (handleDeleteTag), que sí la tiene.
+    if (!confirm('¿Desasignar esta etiqueta del cliente?')) return
     try {
       await api.post('/admin/client-tag-remove', {
         client_id: Number(selectedClientId),
@@ -334,7 +343,7 @@ export default function ClientTagsView() {
           </FieldGroup>
           <DialogFooter>
             <Button variant='outline' onClick={() => setAssignDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAssignTag}>Asignar</Button>
+            <Button onClick={handleAssignTag} disabled={assigningTag}>{assigningTag ? 'Asignando...' : 'Asignar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

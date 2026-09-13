@@ -325,6 +325,10 @@ export default function TrainingProgramsView() {
   }
 
   const handleRemoveAssignment = async (assignmentId: number) => {
+    // FIX (auditoría 2026-09-13): sin confirmación -- desasignaba al
+    // cliente del programa con un solo clic (la vista ya usa confirm() en
+    // "vaciar semana", mismo criterio aquí).
+    if (!confirm('¿Quitar a este cliente del programa de entrenamiento?')) return
     try {
       await api.post('/admin/training-program-remove-assignment', { id: assignmentId })
 

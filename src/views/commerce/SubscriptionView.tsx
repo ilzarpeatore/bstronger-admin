@@ -214,6 +214,7 @@ export default function SubscriptionView() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactionsTotal, setTransactionsTotal] = useState<number | null>(null)
   const [transactionsLoading, setTransactionsLoading] = useState(false)
   const [transactionSearch, setTransactionSearch] = useState('')
   const [transactionMethod, setTransactionMethod] = useState<string>('all')
@@ -253,7 +254,15 @@ export default function SubscriptionView() {
       const params = new URLSearchParams({ per_page: '100' })
       if (search) params.set('search', search)
       const res = await api.get<ListResponse<Subscription>>(`/admin/plan-subscriptions?${params.toString()}`)
-      setSubscriptions(extractList(res))
+      const list = extractList(res)
+      setSubscriptions(list)
+      // FIX (auditoría 2026-09-13): per_page fijo en 100 sin paginación real
+      // ni aviso -- si hay más de 100 suscripciones, las de más allá nunca
+      // se ven ni se exportan, y antes no había ninguna señal de ello.
+      const total = (res as any)?.pagination?.total_items
+      if (typeof total === 'number' && total > list.length) {
+        toast.warning(`Mostrando ${list.length} de ${total} suscripciones -- afina la búsqueda para ver el resto.`)
+      }
     } catch {
       toast.error('Error al cargar suscripciones')
     } finally {
@@ -269,7 +278,13 @@ export default function SubscriptionView() {
       if (transactionMethod !== 'all') params.set('payment_method', transactionMethod)
       if (transactionStatus !== 'all') params.set('payment_status', transactionStatus)
       const res = await api.get<ListResponse<Transaction>>(`/admin/transactions?${params.toString()}`)
-      setTransactions(extractList(res))
+      const list = extractList(res)
+      setTransactions(list)
+      const total = (res as any)?.pagination?.total_items
+      setTransactionsTotal(typeof total === 'number' ? total : null)
+      if (typeof total === 'number' && total > list.length) {
+        toast.warning(`Mostrando ${list.length} de ${total} pagos -- afina la búsqueda para ver el resto.`)
+      }
     } catch {
       toast.error('Error al cargar pagos')
     } finally {
@@ -361,8 +376,11 @@ export default function SubscriptionView() {
       setGrantOpen(false)
       fetchItems()
       fetchStats()
-    } catch {
-      toast.error('Error al conceder el plan')
+    } catch (err: any) {
+      // FIX (auditoría 2026-09-13): antes descartaba el error real del
+      // backend (catch sin capturar `err`) -- mensaje fijo aunque el
+      // backend explique la causa (ej. "el usuario ya tiene un plan activo").
+      toast.error(err?.message || 'Error al conceder el plan')
     } finally {
       setGranting(false)
     }
@@ -402,8 +420,8 @@ export default function SubscriptionView() {
       setRevokeSub(null)
       fetchItems()
       fetchStats()
-    } catch {
-      toast.error('Error al revocar el acceso')
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al revocar el acceso')
     } finally {
       setRevoking(false)
     }
@@ -429,6 +447,11 @@ export default function SubscriptionView() {
 
   const exportCsv = useCallback(() => {
     if (filteredTransactions.length === 0) return
+    // FIX (auditoría 2026-09-13): el CSV solo exportaba los 100 pagos
+    // cargados en memoria, sin avisar si había más en total.
+    if (transactionsTotal != null && transactionsTotal > filteredTransactions.length) {
+      toast.warning(`El CSV solo incluye ${filteredTransactions.length} de ${transactionsTotal} pagos -- afina la búsqueda para exportar el resto.`)
+    }
     const headers = ['Cliente', 'Plan', 'Importe', 'Método', 'Estado', 'Fecha pago']
     const rows = filteredTransactions.map((t) => [
       t.user?.name ?? '',
@@ -447,7 +470,7 @@ export default function SubscriptionView() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }, [filteredTransactions])
+  }, [filteredTransactions, transactionsTotal])
 
   const subscriptionColumns = useMemo<ColumnDef<Subscription>[]>(
     () => [
