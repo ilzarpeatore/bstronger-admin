@@ -13,10 +13,12 @@ import {
 import { NavUser } from './NavUser';
 import { Badge } from 'src/components/ui/badge';
 import sidebaritems from './sidebaritems';
+import { filterSidebarByPermission } from './filterSidebarByPermission';
+import { useAuth } from '@/context/auth-context/AuthContext';
 
 const SidebarLayout = ({ ...props }: React.ComponentProps<typeof Sidebar>) => {
-
-
+  const { hasPermission } = useAuth();
+  const menu = filterSidebarByPermission(sidebaritems, hasPermission);
 
   return (
      <Sidebar
@@ -35,7 +37,7 @@ const SidebarLayout = ({ ...props }: React.ComponentProps<typeof Sidebar>) => {
                 <SimpleBar style={{ height: "100%" }} >
                     <SidebarGroup className="flex items-center justify-center group-data-[state=collapsed]:px-2 px-3 py-4">
                         <div className="px-0 group-data-[state=collapsed]:px-0 w-full flex flex-col gap-4">
-                            <NavCollapse menu={sidebaritems} className="text-sm" />
+                            <NavCollapse menu={menu} className="text-sm" />
                         </div>
                     </SidebarGroup>
                 </SimpleBar>

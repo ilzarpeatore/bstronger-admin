@@ -4,7 +4,9 @@ import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
 import Loadable from '../layouts/full/shared/loadable/Loadable';
 import RequireAuth from './RequireAuth';
+import RequirePermission from './RequirePermission';
 import { RouteError } from '../components/shared/RouteError';
+import { PERMISSIONS } from '../constants/permissions';
 
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
@@ -169,12 +171,40 @@ const Router = [
       { path: '/onboarding', element: <OnboardingList /> },
       { path: '/users/:id', element: <UserDetail /> },
       { path: '/users/:id/:tab', element: <UserDetail /> },
-      { path: '/sub-admins', element: <SubAdmins /> },
-      { path: '/permissions', element: <Permissions /> },
-      { path: '/roles', element: <Roles /> },
+      {
+        path: '/sub-admins',
+        element: (
+          <RequirePermission permission={PERMISSIONS.SUB_ADMINS}>
+            <SubAdmins />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: '/permissions',
+        element: (
+          <RequirePermission permission={PERMISSIONS.PERMISSIONS}>
+            <Permissions />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: '/roles',
+        element: (
+          <RequirePermission permission={PERMISSIONS.ROLES}>
+            <Roles />
+          </RequirePermission>
+        ),
+      },
       { path: '/admin-login-history', element: <LoginHistory /> },
       { path: '/admin-login-devices', element: <LoginDevices /> },
-      { path: '/audit-log', element: <AuditLog /> },
+      {
+        path: '/audit-log',
+        element: (
+          <RequirePermission permission={PERMISSIONS.AUDIT_LOG}>
+            <AuditLog />
+          </RequirePermission>
+        ),
+      },
       { path: '/two-factor', element: <TwoFactor /> },
 
       { path: '/exercises', element: <Exercises /> },
