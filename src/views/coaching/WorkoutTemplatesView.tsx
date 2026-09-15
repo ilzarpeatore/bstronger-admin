@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { PlusIcon, TrashIcon, ArrowLeftIcon, DownloadIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -467,7 +467,13 @@ export default function WorkoutTemplatesView() {
     <>
       <Card>
         <CardHeader className='flex flex-row items-center justify-between'>
-          <CardTitle>Plantillas de entrenamiento</CardTitle>
+          <div>
+            <CardTitle>Plantillas de entrenamiento</CardTitle>
+            <CardDescription>
+              Solo plantillas sueltas para reutilizar. Las sesiones que ya pertenecen a un programa
+              (import o generador de semanas) se ven en su "Calendario del programa", en Programas de entrenamiento.
+            </CardDescription>
+          </div>
           <div className='flex items-center gap-2'>
             <Input placeholder='Buscar plantillas...' value={search} onChange={e => setSearch(e.target.value)} className='w-64' />
             <Button onClick={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setDialogOpen(true) }}>
