@@ -240,6 +240,30 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
     }
   }
 
+  const handleSubstituteExercise = async (exercise: WorkoutViewerExercise, blockId: number, newExercise: WorkoutViewerExercise) => {
+    // Misma fila (id de workout_template_exercises), solo cambia
+    // exercise_id -- sin prescribed/enabled_metrics/notes/sequence en el
+    // payload, saveExercise() en el backend los deja tal cual (updateOrCreate
+    // solo toca las claves presentes en el payload).
+    updateExerciseLocally(exercise.id, {
+      exercise_id: newExercise.id,
+      title: newExercise.title,
+      exercise_image: newExercise.exercise_image,
+      video_url: newExercise.video_url,
+    })
+    try {
+      await api.post('/admin/workout-template-exercise-save', {
+        id: exercise.id,
+        workout_template_block_id: blockId,
+        exercise_id: newExercise.id,
+      })
+      toast.success('Ejercicio sustituido')
+    } catch {
+      toast.error('No se pudo sustituir el ejercicio')
+      fetchDetail()
+    }
+  }
+
   const handleOpenNotes = (exercise: WorkoutViewerExercise) => {
     setNotesExercise(exercise)
     setNotesValue(exercise.notes || '')
@@ -328,6 +352,7 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
               onUpdateExerciseField={handleUpdateField}
               onUpdateExerciseMetrics={handleUpdateMetrics}
               onExerciseNotes={handleOpenNotes}
+              onSubstituteExercise={handleSubstituteExercise}
               onSearchExercises={fetchAvailableExercises}
               headerExtras={
                 onEdit ? (

@@ -18,6 +18,7 @@ import {
   Check,
   X,
   PencilIcon,
+  RefreshCwIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -92,6 +93,10 @@ export type WorkoutTemplateViewerProps = {
   onUpdateExerciseField?: (exercise: WorkoutViewerExercise, blockId: number, field: string, value: string) => void
   onUpdateExerciseMetrics?: (exercise: WorkoutViewerExercise, blockId: number, metrics: string[]) => void
   onExerciseNotes?: (exercise: WorkoutViewerExercise, blockId: number) => void
+  // Sustituir ejercicio en sitio (misma fila de workout_template_exercises,
+  // solo cambia exercise_id) -- conserva prescribed/enabled_metrics/notes,
+  // a diferencia de "eliminar + añadir desde la biblioteca" que los perdía.
+  onSubstituteExercise?: (exercise: WorkoutViewerExercise, blockId: number, newExercise: WorkoutViewerExercise) => void
   onSearchExercises?: (query: string) => void
   prescribedReadOnly?: boolean
   metricsReadOnly?: boolean
@@ -416,6 +421,7 @@ export default function WorkoutTemplateViewer({
   onUpdateExerciseField,
   onUpdateExerciseMetrics,
   onExerciseNotes,
+  onSubstituteExercise,
   onSearchExercises,
   prescribedReadOnly = false,
   metricsReadOnly,
@@ -434,6 +440,8 @@ export default function WorkoutTemplateViewer({
   const [renamingBlockId, setRenamingBlockId] = useState<number | null>(null)
   const [confirmDeleteExercise, setConfirmDeleteExercise] = useState<{ blockId: number; exercise: WorkoutViewerExercise } | null>(null)
   const [confirmDeleteBlock, setConfirmDeleteBlock] = useState<WorkoutViewerBlock | null>(null)
+  const [substituteTarget, setSubstituteTarget] = useState<{ blockId: number; exercise: WorkoutViewerExercise } | null>(null)
+  const [substituteSearch, setSubstituteSearch] = useState('')
   const [renamingBlockTitle, setRenamingBlockTitle] = useState('')
   const exerciseRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
@@ -464,6 +472,29 @@ export default function WorkoutTemplateViewer({
     }, 250)
     return () => clearTimeout(timer)
   }, [exerciseSearch, mode, onSearchExercises])
+
+  // Mismo catalogo (availableExercises) que la biblioteca del panel
+  // izquierdo, con su propio termino de busqueda -- el dialogo de
+  // sustitucion reusa el fetch existente en vez de duplicar la logica.
+  useEffect(() => {
+    if (!substituteTarget) return
+    const timer = setTimeout(() => {
+      onSearchExercises?.(substituteSearch)
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [substituteSearch, substituteTarget, onSearchExercises])
+
+  const openSubstitute = (blockId: number, exercise: WorkoutViewerExercise) => {
+    setSubstituteSearch('')
+    onSearchExercises?.('')
+    setSubstituteTarget({ blockId, exercise })
+  }
+
+  const handleSubstitutePick = (newExercise: WorkoutViewerExercise) => {
+    if (!substituteTarget) return
+    onSubstituteExercise?.(substituteTarget.exercise, substituteTarget.blockId, newExercise)
+    setSubstituteTarget(null)
+  }
 
   const scrollToExercise = (id: number) => {
     const block = blocks.find(b => b.exercises.some(e => e.id === id))
@@ -554,28 +585,32 @@ export default function WorkoutTemplateViewer({
           </div>
           <div className='flex items-center gap-2 shrink-0 flex-wrap'>
             {headerExtras}
-            <div className='flex items-center rounded-lg border p-0.5'>
-              <button
-                type='button'
-                onClick={() => setViewMode('list')}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                  viewMode === 'list' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <LayoutListIcon className='size-3.5' /> Lista
-              </button>
-              <button
-                type='button'
-                onClick={() => setViewMode('grid')}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                  viewMode === 'grid' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <LayoutGridIcon className='size-3.5' /> Cuadrícula
-              </button>
-            </div>
+            {mode === 'library' && (
+              <div className='flex items-center rounded-lg border p-0.5'>
+                <button
+                  type='button'
+                  onClick={() => setViewMode('list')}
+                  title='Lista de resultados del buscador de ejercicios'
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                    viewMode === 'list' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <LayoutListIcon className='size-3.5' /> Lista
+                </button>
+                <button
+                  type='button'
+                  onClick={() => setViewMode('grid')}
+                  title='Cuadrícula de resultados del buscador de ejercicios'
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                    viewMode === 'grid' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <LayoutGridIcon className='size-3.5' /> Cuadrícula
+                </button>
+              </div>
+            )}
             <div className='relative hidden sm:block'>
               <SearchIcon className='absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground' />
               <Input
@@ -623,6 +658,22 @@ export default function WorkoutTemplateViewer({
                 <p className='text-xs text-muted-foreground text-center py-4'>Cargando ejercicios...</p>
               ) : availableExercises.length === 0 ? (
                 <p className='text-xs text-muted-foreground text-center py-4'>No se encontraron ejercicios.</p>
+              ) : viewMode === 'grid' ? (
+                <div className='grid grid-cols-2 gap-2'>
+                  {availableExercises.map(ex => (
+                    <button
+                      key={ex.id}
+                      type='button'
+                      draggable
+                      onDragStart={e => handleDragStart(e, ex)}
+                      onClick={() => handleLibraryExerciseClick(ex)}
+                      className='group flex flex-col items-stretch gap-1.5 rounded-xl border p-1.5 text-left transition-colors hover:bg-muted/50 hover:border-primary cursor-grab active:cursor-grabbing'
+                    >
+                      <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='aspect-square w-full rounded-md' />
+                      <span className='line-clamp-2 text-[11px] font-medium leading-tight'>{ex.title}</span>
+                    </button>
+                  ))}
+                </div>
               ) : (
                 availableExercises.map(ex => (
                   <button
@@ -782,6 +833,17 @@ export default function WorkoutTemplateViewer({
                                     <MessageSquareTextIcon className='size-3.5' />
                                   </Button>
                                 )}
+                                {onSubstituteExercise && !readOnly && (
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    className='size-7'
+                                    onClick={() => openSubstitute(block.id, ex)}
+                                    title='Sustituir ejercicio (conserva series/reps/carga)'
+                                  >
+                                    <RefreshCwIcon className='size-3.5' />
+                                  </Button>
+                                )}
                                 {!readOnly && (
                                   <Button
                                     variant='ghost'
@@ -912,6 +974,53 @@ export default function WorkoutTemplateViewer({
             >
               Eliminar
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sustituir ejercicio -- reemplaza exercise_id en la misma fila,
+          conserva series/reps/carga/rir/notas (a diferencia de borrar +
+          añadir desde la biblioteca, que empieza en blanco). */}
+      <Dialog open={!!substituteTarget} onOpenChange={open => { if (!open) setSubstituteTarget(null) }}>
+        <DialogContent className='max-w-md'>
+          <DialogHeader>
+            <DialogTitle className='text-sm'>
+              Sustituir <span className='text-muted-foreground font-normal'>«{substituteTarget?.exercise.title}»</span>
+            </DialogTitle>
+          </DialogHeader>
+          <p className='text-xs text-muted-foreground -mt-2'>
+            Series, reps, carga, RIR/RPE y notas se mantienen — solo cambia el ejercicio.
+          </p>
+          <div className='relative'>
+            <SearchIcon className='absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground' />
+            <Input
+              autoFocus
+              placeholder='Buscar ejercicio de sustitución...'
+              className='h-9 pl-7 text-sm'
+              value={substituteSearch}
+              onChange={e => setSubstituteSearch(e.target.value)}
+            />
+          </div>
+          <div className='max-h-80 overflow-y-auto space-y-1.5'>
+            {availableExercisesLoading ? (
+              <p className='text-xs text-muted-foreground text-center py-4'>Cargando ejercicios...</p>
+            ) : availableExercises.length === 0 ? (
+              <p className='text-xs text-muted-foreground text-center py-4'>No se encontraron ejercicios.</p>
+            ) : (
+              availableExercises
+                .filter(ex => ex.id !== substituteTarget?.exercise.exercise_id)
+                .map(ex => (
+                  <button
+                    key={ex.id}
+                    type='button'
+                    onClick={() => handleSubstitutePick(ex)}
+                    className='group flex w-full items-center gap-3 rounded-xl border p-2 text-left transition-colors hover:bg-muted/50 hover:border-primary'
+                  >
+                    <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='size-10 rounded-md' />
+                    <span className='line-clamp-2 text-xs font-medium leading-tight flex-1'>{ex.title}</span>
+                  </button>
+                ))
+            )}
           </div>
         </DialogContent>
       </Dialog>
