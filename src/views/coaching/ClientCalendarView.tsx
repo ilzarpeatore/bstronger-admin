@@ -495,11 +495,11 @@ export default function ClientCalendarView() {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <div className='flex items-center gap-4'>
+        <CardHeader className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4'>
             <CardTitle>Calendario del cliente</CardTitle>
             <Select value={clientId} onValueChange={v => setClientId(v ?? '')}>
-              <SelectTrigger className='w-[280px]'>
+              <SelectTrigger className='w-full sm:w-[280px]'>
                 <SelectValue placeholder='Seleccionar cliente' />
               </SelectTrigger>
               <SelectContent>
@@ -510,7 +510,7 @@ export default function ClientCalendarView() {
                 ))}
               </SelectContent>
             </Select>
-            <div className='flex items-center gap-2 text-xs text-muted-foreground ml-2'>
+            <div className='flex items-center gap-3 text-xs text-muted-foreground sm:ml-2'>
               <span className='flex items-center gap-1'>
                 <span className='inline-block h-3 w-3 rounded bg-blue-100 border border-blue-300' />
                 Directo
@@ -525,6 +525,7 @@ export default function ClientCalendarView() {
             <Button
               variant='outline'
               size='sm'
+              className='w-full sm:w-auto'
               onClick={() => {
                 setImportStartDate('')
                 setImportProgramId('')
@@ -558,7 +559,8 @@ export default function ClientCalendarView() {
                 </Button>
               </div>
 
-              <div className='grid grid-cols-7 border-t border-l'>
+              <div className='overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0'>
+              <div className='grid grid-cols-7 border-t border-l min-w-[640px] sm:min-w-0'>
                 {DAYS.map(d => (
                   <div
                     key={d}
@@ -714,6 +716,7 @@ export default function ClientCalendarView() {
                   )
                 })}
               </div>
+              </div>
             </>
           )}
         </CardContent>
@@ -721,15 +724,16 @@ export default function ClientCalendarView() {
 
       {clipboard && (
         <div className='fixed bottom-0 left-0 right-0 z-50 bg-popover border-t shadow-lg'>
-          <div className='flex items-center justify-between px-4 py-3 max-w-screen-2xl mx-auto'>
+          <div className='flex flex-col gap-2 sm:flex-row items-start sm:items-center justify-between px-4 py-3 max-w-screen-2xl mx-auto'>
             <div className='flex items-center gap-2 text-sm'>
               <span className='text-base'>📋</span>
               <span className='font-medium'>Entrenamiento copiado</span>
-              <span className='text-muted-foreground'>— haz clic en un día para pegar (Ctrl+clic para pegar en varios días)</span>
+              <span className='text-muted-foreground hidden sm:inline'>— haz clic en un día para pegar (Ctrl+clic para pegar en varios días)</span>
             </div>
             <Button
               variant='outline'
               size='sm'
+              className='w-full sm:w-auto'
               onClick={() => setClipboard(null)}
             >
               Cancelar

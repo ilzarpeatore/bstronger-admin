@@ -301,32 +301,32 @@ const RecipeView = () => {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Recetas</CardTitle>
-          <div className='flex items-center gap-2'>
-            <Input placeholder='Buscar recetas...' value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} className='w-48' />
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Input placeholder='Buscar recetas...' value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} className='w-full sm:w-48' />
             <Select value={filterCategory} onValueChange={v => { setFilterCategory(v === 'all' ? '' : v ?? ''); setPage(1) }}>
-              <SelectTrigger className='w-40'><SelectValue placeholder='Categoría' /></SelectTrigger>
+              <SelectTrigger className='w-full sm:w-40'><SelectValue placeholder='Categoría' /></SelectTrigger>
               <SelectContent>
                 <SelectItem value='all'>Todas las categorías</SelectItem>
                 {categories.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.title}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterCountry} onValueChange={v => { setFilterCountry(v === 'all' ? '' : v ?? ''); setPage(1) }}>
-              <SelectTrigger className='w-[130px]'><SelectValue placeholder='País' /></SelectTrigger>
+              <SelectTrigger className='w-full sm:w-[130px]'><SelectValue placeholder='País' /></SelectTrigger>
               <SelectContent>
                 <SelectItem value='all'>Todos los países</SelectItem>
                 {countryTags.map((t: any) => <SelectItem key={t.id} value={String(t.id)}>{t.title}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterDietTag} onValueChange={v => { setFilterDietTag(v === 'all' ? '' : v ?? ''); setPage(1) }}>
-              <SelectTrigger className='w-[160px]'><SelectValue placeholder='Clasificación' /></SelectTrigger>
+              <SelectTrigger className='w-full sm:w-[160px]'><SelectValue placeholder='Clasificación' /></SelectTrigger>
               <SelectContent>
                 <SelectItem value='all'>Todas las etiquetas</SelectItem>
                 {dietTags.map((t: any) => <SelectItem key={t.id} value={String(t.id)}>{t.title}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input placeholder='Filtrar por ingrediente...' value={filterIngredient} onChange={e => { setFilterIngredient(e.target.value); setPage(1) }} className='w-40' />
+            <Input placeholder='Filtrar por ingrediente...' value={filterIngredient} onChange={e => { setFilterIngredient(e.target.value); setPage(1) }} className='w-full sm:w-40' />
             <Button onClick={openCreate}><PlusIcon className='size-4 mr-2' /> Añadir Receta</Button>
           </div>
         </CardHeader>

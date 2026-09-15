@@ -187,9 +187,9 @@ export default function ClientTagsView() {
   return (
     <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
       <Card className='lg:col-span-2'>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Etiquetas de clientes</CardTitle>
-          <div className='flex gap-2'>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
             <Button onClick={openCreateDialog}>
               <PlusIcon className='size-4 mr-2' /> Nueva etiqueta
             </Button>

@@ -779,7 +779,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
     <div className='min-h-screen'>
       {/* ═══ STICKY HEADER ═══ */}
       <div className='sticky top-0 z-40 bg-background border-b'>
-        <div className='flex items-center gap-4 px-6 h-16'>
+        <div className='flex items-center gap-2 sm:gap-4 px-3 sm:px-6 h-16'>
           <Button variant='ghost' size='icon' className='size-8 shrink-0' onClick={() => navigate('/users')}><ArrowLeftIcon className='size-4' /></Button>
           <div className='h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden'>
             {user.profile_image ? <img src={user.profile_image} alt='' className='w-full h-full object-cover' /> : `${user.first_name?.[0]}${user.last_name?.[0]}`}
@@ -801,7 +801,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
         </div>
       </div>
 
-      <div className='p-6 space-y-6'>
+      <div className='p-3 sm:p-6 space-y-6'>
         {/* ═══ OVERVIEW ═══ */}
         {activeTab === 'overview' && (
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
@@ -977,8 +977,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
           <Card className='h-fit'><CardContent className='p-2 space-y-1'>{([['calendar', 'Calendario', CalendarIcon], ['history', 'Historial de ejercicios', HistoryIcon], ['completed', 'Entrenamientos completados', TrophyIcon], ['adherence', 'Adherencia', FlameIcon], ['feedback', 'Feedback de sesión', MessageSquareIcon], ['volume', 'Volumen del entrenamiento', BarChart3Icon]] as const).map(([val, label, Icon]) => (<button key={val} type='button' onClick={() => setTrainingSubTab(val)} className={cn('w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors text-left', trainingSubTab === val ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground')}><Icon className='size-4' /> {label}</button>))}</CardContent></Card>
           <div className='space-y-4'>
             {trainingSubTab === 'calendar' && (<Card>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-3'><div className='flex items-center gap-3'><CalendarIcon className='size-5 text-muted-foreground' /><CardTitle className='text-base'>Calendario de entrenamiento</CardTitle>{calClipboard && <span className='text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1'><CopyIcon className='size-3' /> Copiado</span>}</div>
-                <div className='flex items-center gap-2'><Button variant='outline' size='sm' onClick={() => { setAssignDate(''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3.5 mr-1' /> Importar workout</Button><Button size='sm' onClick={() => { setImportStartDate(''); setImportProgramId(''); setImportDialogOpen(true) }}><DownloadIcon className='size-3.5 mr-1' /> Asignar programa</Button></div></CardHeader>
+              <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-3'><div className='flex items-center gap-3 flex-wrap'><CalendarIcon className='size-5 text-muted-foreground' /><CardTitle className='text-base'>Calendario de entrenamiento</CardTitle>{calClipboard && <span className='text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1'><CopyIcon className='size-3' /> Copiado</span>}</div>
+                <div className='flex items-center gap-2 flex-wrap'><Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => { setAssignDate(''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3.5 mr-1' /> Importar workout</Button><Button size='sm' className='flex-1 sm:flex-initial' onClick={() => { setImportStartDate(''); setImportProgramId(''); setImportDialogOpen(true) }}><DownloadIcon className='size-3.5 mr-1' /> Asignar programa</Button></div></CardHeader>
               <CardContent>
                 <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4'>
                   <div className='flex items-center gap-2'><Button variant='outline' size='sm' onClick={goToToday}>Hoy</Button><div className='flex items-center'><Button variant='outline' size='icon' className='rounded-r-none h-8 w-8' onClick={prevCal}><ChevronLeftIcon className='size-4' /></Button><div className='h-8 px-3 border-y flex items-center text-sm font-medium min-w-[100px] justify-center bg-background'>{calViewMode === 'week' ? formatWeekRange(calWeeks[calWeekIndex] || []) : `${MONTH_NAMES[calMonth - 1]} ${calYear}`}</div><Button variant='outline' size='icon' className='rounded-l-none h-8 w-8' onClick={nextCal}><ChevronRightIcon className='size-4' /></Button></div></div>
@@ -990,7 +990,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                 </div>
                 {calLoading ? <div className='flex items-center justify-center py-20'><div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div>
                 : calDays.length === 0 ? <div className='rounded-lg border border-dashed p-12 text-center'><DumbbellIcon className='size-10 mx-auto text-muted-foreground/40 mb-3' /><p className='text-sm text-muted-foreground'>No hay entrenamientos programados este mes.</p><Button size='sm' className='mt-3' onClick={() => { setAssignDate(calCells.find(Boolean) || ''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3 mr-1' /> Importar workout</Button></div>
-                : <div className='space-y-4'><div className='grid grid-cols-7 border-b'>{CAL_DAYS.map(d => <div key={d} className='py-2 text-center text-xs font-medium text-muted-foreground'>{d}</div>)}</div>{calViewMode === 'month' ? calWeeks.map((week, wi) => <div key={wi} className='rounded-lg border bg-card overflow-hidden'><div className='grid grid-cols-7 divide-x'>{week.map((ds, di) => renderCalendarDay(ds, `${wi}-${di}`))}</div></div>) : <div className='rounded-lg border bg-card overflow-hidden'><div className='grid grid-cols-7 divide-x'>{(calWeeks[calWeekIndex] || []).map((ds, di) => renderCalendarDay(ds, `week-${di}`))}</div></div>}</div>}
+                : <div className='overflow-x-auto'><div className='space-y-4 min-w-[700px]'><div className='grid grid-cols-7 border-b'>{CAL_DAYS.map(d => <div key={d} className='py-2 text-center text-xs font-medium text-muted-foreground'>{d}</div>)}</div>{calViewMode === 'month' ? calWeeks.map((week, wi) => <div key={wi} className='rounded-lg border bg-card overflow-hidden'><div className='grid grid-cols-7 divide-x'>{week.map((ds, di) => renderCalendarDay(ds, `${wi}-${di}`))}</div></div>) : <div className='rounded-lg border bg-card overflow-hidden'><div className='grid grid-cols-7 divide-x'>{(calWeeks[calWeekIndex] || []).map((ds, di) => renderCalendarDay(ds, `week-${di}`))}</div></div>}</div></div>}
               </CardContent>
             </Card>)}
             {trainingSubTab === 'history' && (

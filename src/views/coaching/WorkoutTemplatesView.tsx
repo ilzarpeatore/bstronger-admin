@@ -377,13 +377,11 @@ export default function WorkoutTemplatesView() {
   if (view === 'detail') {
     return (
       <Card className='h-[calc(100vh-140px)] flex flex-col'>
-        <CardHeader className='flex flex-row items-center justify-between shrink-0'>
-          <div className='flex items-center gap-3 min-w-0'>
-            <Button variant='ghost' size='sm' onClick={() => navigate('/workout-templates')}>
-              <ArrowLeftIcon className='size-4 mr-1' /> Volver
-            </Button>
-            <CardTitle className='truncate'>{detail?.title || 'Plantilla de entrenamiento'}</CardTitle>
-          </div>
+        <CardHeader className='flex flex-row items-center gap-3 shrink-0'>
+          <Button variant='ghost' size='sm' className='shrink-0' onClick={() => navigate('/workout-templates')}>
+            <ArrowLeftIcon className='size-4 mr-1' /> Volver
+          </Button>
+          <CardTitle className='truncate min-w-0'>{detail?.title || 'Plantilla de entrenamiento'}</CardTitle>
         </CardHeader>
         <CardContent className='flex-1 min-h-0 overflow-hidden'>
           {detailLoading ? (
@@ -466,7 +464,7 @@ export default function WorkoutTemplatesView() {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
           <div>
             <CardTitle>Plantillas de entrenamiento</CardTitle>
             <CardDescription>
@@ -474,8 +472,8 @@ export default function WorkoutTemplatesView() {
               (import o generador de semanas) se ven en su "Calendario del programa", en Programas de entrenamiento.
             </CardDescription>
           </div>
-          <div className='flex items-center gap-2'>
-            <Input placeholder='Buscar plantillas...' value={search} onChange={e => setSearch(e.target.value)} className='w-64' />
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Input placeholder='Buscar plantillas...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' />
             <Button onClick={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setDialogOpen(true) }}>
               <PlusIcon className='size-4 mr-2' /> Nueva plantilla
             </Button>

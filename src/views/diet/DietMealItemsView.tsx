@@ -120,11 +120,11 @@ export default function DietMealItemsView() {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <div className='flex items-center gap-4'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4'>
             <CardTitle>Elementos de comidas</CardTitle>
             <Select value={dietId} onValueChange={v => setDietId(v ?? '')}>
-              <SelectTrigger className='w-[280px]'>
+              <SelectTrigger className='w-full sm:w-[280px]'>
                 <SelectValue placeholder='Seleccionar dieta' />
               </SelectTrigger>
               <SelectContent>

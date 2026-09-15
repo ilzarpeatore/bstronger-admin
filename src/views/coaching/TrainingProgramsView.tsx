@@ -592,8 +592,8 @@ export default function TrainingProgramsView() {
     return (
       <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <div className='flex items-center gap-3'>
+        <CardHeader className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
+          <div className='flex flex-wrap items-center gap-3'>
             <Button
               variant='ghost'
               size='sm'
@@ -606,11 +606,11 @@ export default function TrainingProgramsView() {
               {selected.status || 'Activo'}
             </Badge>
           </div>
-          <div className='flex gap-2'>
-            <Button variant='outline' onClick={() => openAssignDialog(selected)}>
+          <div className='flex flex-wrap gap-2'>
+            <Button variant='outline' className='flex-1 sm:flex-initial' onClick={() => openAssignDialog(selected)}>
               <UsersIcon className='size-4 mr-2' /> Asignar clientes
             </Button>
-            <Button onClick={handleGenerateWeeks}>
+            <Button className='flex-1 sm:flex-initial' onClick={handleGenerateWeeks}>
               <RefreshCwIcon className='size-4 mr-2' /> Generar semanas
             </Button>
           </div>
@@ -636,8 +636,8 @@ export default function TrainingProgramsView() {
           </div>
 
           <div>
-            <div className='flex items-center justify-between mb-3'>
-              <div className='flex items-center gap-3'>
+            <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3'>
+              <div className='flex flex-wrap items-center gap-3'>
                 <h3 className='text-sm font-medium text-muted-foreground'>Calendario del programa</h3>
                 {clipboardAssignment && (
                   <span className='text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1'>
@@ -727,7 +727,8 @@ export default function TrainingProgramsView() {
                         </div>
                       </div>
 
-                      <div className='grid grid-cols-7 divide-x'>
+                      <div className='overflow-x-auto'>
+                      <div className='grid grid-cols-7 divide-x min-w-[700px]'>
                         {week.days.map((day: any) => {
                           dayCounter++
                           const workout = day.workouts?.[0]
@@ -801,6 +802,7 @@ export default function TrainingProgramsView() {
                           )
                         })}
                       </div>
+                      </div>
                     </div>
                   )
                 })}
@@ -814,8 +816,8 @@ export default function TrainingProgramsView() {
           open={isAssignDayOpen}
           onOpenChange={(open) => { if (!open) navigate(`/training-programs/${programId}`) }}
         >
-          <DialogContent className='w-[740px] h-[580px] flex flex-col overflow-hidden p-0'>
-            <div className='flex items-center justify-between px-6 py-4 border-b bg-muted/30'>
+          <DialogContent className='w-[95vw] sm:w-[740px] h-[90vh] sm:h-[580px] flex flex-col overflow-hidden p-0'>
+            <div className='flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b bg-muted/30'>
               <div className='flex items-center gap-2.5'>
                 <div className='flex items-center justify-center size-8 rounded-lg bg-primary/10'>
                   <DumbbellIcon className='size-4 text-primary' />
@@ -830,18 +832,18 @@ export default function TrainingProgramsView() {
                 if (!v) return
                 navigate(`/training-programs/${programId}/asignar-dia/${v}?week=${assignDayData?.week ?? 1}&day=${assignDayData?.day ?? 1}`)
               }}
-              className='flex-1 flex flex-col overflow-hidden px-6 pt-3'
+              className='flex-1 flex flex-col overflow-hidden px-4 pt-3 sm:px-6'
             >
-              <TabsList className='w-full justify-start gap-0 mb-0 rounded-b-none border-b bg-transparent h-auto p-0'>
-                <TabsTrigger value='create' className='text-xs px-4 py-2.5 rounded-none border-b-2 border-transparent data-[active]:border-primary'>Nuevo entrenamiento</TabsTrigger>
-                <TabsTrigger value='select' className='text-xs px-4 py-2.5 rounded-none border-b-2 border-transparent data-[active]:border-primary'>Biblioteca de entrenamientos</TabsTrigger>
-                <TabsTrigger value='ai' className='text-xs px-4 py-2.5 rounded-none border-b-2 border-transparent data-[active]:border-primary gap-1.5'>
+              <TabsList className='w-full justify-start gap-0 mb-0 rounded-b-none border-b bg-transparent h-auto p-0 overflow-x-auto'>
+                <TabsTrigger value='create' className='text-xs px-3 sm:px-4 py-2.5 rounded-none border-b-2 border-transparent data-[active]:border-primary whitespace-nowrap'>Nuevo entrenamiento</TabsTrigger>
+                <TabsTrigger value='select' className='text-xs px-3 sm:px-4 py-2.5 rounded-none border-b-2 border-transparent data-[active]:border-primary whitespace-nowrap'>Biblioteca de entrenamientos</TabsTrigger>
+                <TabsTrigger value='ai' className='text-xs px-3 sm:px-4 py-2.5 rounded-none border-b-2 border-transparent data-[active]:border-primary gap-1.5 whitespace-nowrap'>
                   Entrenador IA <SparklesIcon className='size-3 text-amber-500' />
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value='create' className='flex-1 overflow-y-auto mt-0 pt-4 space-y-4'>
-                <div className='flex gap-4'>
+                <div className='flex flex-col-reverse sm:flex-row gap-4'>
                   <div className='flex-1 space-y-3'>
                     <div className='space-y-1.5'>
                       <label className='text-sm font-medium'>
@@ -911,7 +913,7 @@ export default function TrainingProgramsView() {
                 </div>
 
                 <div className='flex-1 overflow-y-auto -mx-1 px-1'>
-                  <div className='grid grid-cols-2 gap-2'>
+                  <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
                     {workoutTemplates
                       .filter(w => !templateSearch || w.title?.toLowerCase().includes(templateSearch.toLowerCase()))
                       .map(w => (
@@ -995,7 +997,7 @@ export default function TrainingProgramsView() {
               </TabsContent>
             </Tabs>
 
-            <div className='flex items-center justify-end gap-2 px-6 py-3 border-t bg-muted/20'>
+            <div className='flex items-center justify-end gap-2 px-4 py-3 sm:px-6 border-t bg-muted/20'>
               <Button variant='outline' onClick={() => navigate(`/training-programs/${programId}`)}>Cerrar</Button>
               {assignDayMode === 'select' && (
                 <Button onClick={handleAssignDay} disabled={!assignDayTemplateId}>
@@ -1014,13 +1016,13 @@ export default function TrainingProgramsView() {
 
       {clipboardAssignment && (
         <div className='fixed bottom-0 left-0 right-0 z-50 bg-popover border-t shadow-lg'>
-          <div className='flex items-center justify-between px-4 py-3 max-w-screen-2xl mx-auto'>
-            <div className='flex items-center gap-2 text-sm'>
-              <CopyIcon className='size-4' />
-              <span className='font-medium'>Entrenamiento copiado: {clipboardAssignment.workout_title}</span>
-              <span className='text-muted-foreground'>— haz clic en una celda del día para pegar</span>
+          <div className='flex flex-col gap-2 sm:flex-row items-start sm:items-center justify-between px-4 py-3 max-w-screen-2xl mx-auto'>
+            <div className='flex items-center gap-2 text-sm min-w-0'>
+              <CopyIcon className='size-4 shrink-0' />
+              <span className='font-medium truncate'>Entrenamiento copiado: {clipboardAssignment.workout_title}</span>
+              <span className='text-muted-foreground hidden sm:inline'>— haz clic en una celda del día para pegar</span>
             </div>
-            <Button variant='outline' size='sm' onClick={() => setClipboardAssignment(null)}>
+            <Button variant='outline' size='sm' className='w-full sm:w-auto' onClick={() => setClipboardAssignment(null)}>
               Cancelar
             </Button>
           </div>
@@ -1040,14 +1042,14 @@ export default function TrainingProgramsView() {
   return (
     <Fragment>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Programas de entrenamiento</CardTitle>
-          <div className='flex items-center gap-2'>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
             <Input
               placeholder='Buscar programas...'
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className='w-64'
+              className='w-full sm:w-64'
             />
             <Button onClick={openCreateDialog}>
               <PlusIcon className='size-4 mr-2' /> Nuevo programa
@@ -1245,7 +1247,7 @@ export default function TrainingProgramsView() {
           </DialogHeader>
 
           <div className='space-y-4'>
-            <div className='grid grid-cols-[1fr_1fr_auto] gap-3 items-end'>
+            <div className='grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end'>
               <Field className='gap-2'>
                 <FieldLabel>Cliente</FieldLabel>
                 <Select value={assignClientId} onValueChange={(v) => setAssignClientId(v ?? '')}>
