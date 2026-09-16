@@ -110,9 +110,9 @@ const ReportedPostingView = () => {
 
   return (
     <Card>
-      <CardHeader className='flex flex-row items-center justify-between'>
+      <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
         <CardTitle>Publicaciones reportadas</CardTitle>
-        <Input placeholder='Buscar...' value={search} onChange={e => setSearch(e.target.value)} className='w-64' />
+        <Input placeholder='Buscar...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' />
       </CardHeader>
       <CardContent>
         <div className='rounded-md border'>

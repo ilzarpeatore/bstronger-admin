@@ -304,17 +304,17 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className='w-[90vw] h-[85vh] max-w-[1400px] p-0 flex flex-col overflow-hidden rounded-2xl'
-        style={{ width: '90vw', maxWidth: '1400px', height: '85vh' }}
+        className='w-[95vw] h-[92vh] max-w-[1400px] p-0 flex flex-col overflow-hidden rounded-2xl'
+        style={{ width: '95vw', maxWidth: '1400px', height: '92vh' }}
         showCloseButton={false}
       >
-        <DialogHeader className='px-6 py-4 border-b shrink-0'>
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-3'>
-              <DialogTitle className='text-base'>Vista previa del entrenamiento</DialogTitle>
-              <Badge variant='secondary' className='text-xs'>{detail?.blocks.length ?? 0} bloques</Badge>
+        <DialogHeader className='px-3 py-3 sm:px-6 sm:py-4 border-b shrink-0'>
+          <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div className='flex items-center gap-3 min-w-0'>
+              <DialogTitle className='text-base truncate'>Vista previa del entrenamiento</DialogTitle>
+              <Badge variant='secondary' className='text-xs shrink-0'>{detail?.blocks.length ?? 0} bloques</Badge>
             </div>
-            <div className='flex items-center gap-2'>
+            <div className='flex items-center gap-2 shrink-0'>
               {onEdit && (
                 <Button variant='outline' size='sm' onClick={() => { onEdit(workoutTemplateId); onOpenChange(false) }}>
                   <ExternalLinkIcon className='size-3 mr-1' /> Editar
@@ -327,7 +327,7 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
           </div>
         </DialogHeader>
 
-        <div className='flex-1 overflow-hidden p-6 min-h-0'>
+        <div className='flex-1 overflow-hidden p-3 sm:p-6 min-h-0'>
           {loading ? (
             <div className='flex items-center justify-center h-full'>
               <div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' />

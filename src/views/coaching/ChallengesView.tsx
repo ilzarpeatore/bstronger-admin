@@ -281,16 +281,16 @@ const ChallengesView = () => {
 
           <FieldGroup className='gap-3 pt-2 border-t'>
             <FieldLabel>Actualizar la puntuación de un cliente</FieldLabel>
-            <div className='flex gap-2'>
+            <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
               <Select value={scoreClientId} onValueChange={v => setScoreClientId(v ?? '')}>
-                <SelectTrigger className='flex-1'><SelectValue placeholder='Seleccionar cliente' /></SelectTrigger>
+                <SelectTrigger className='w-full sm:flex-1'><SelectValue placeholder='Seleccionar cliente' /></SelectTrigger>
                 <SelectContent>
                   {clients.map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Input type='number' placeholder='Valor' className='w-28' value={scoreValue} onChange={e => setScoreValue(e.target.value)} />
+              <Input type='number' placeholder='Valor' className='w-full sm:w-28' value={scoreValue} onChange={e => setScoreValue(e.target.value)} />
               <Button onClick={handleUpdateScore} disabled={savingScore}>
                 {savingScore ? 'Guardando...' : 'Guardar'}
               </Button>

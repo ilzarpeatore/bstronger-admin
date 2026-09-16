@@ -232,7 +232,7 @@ export default function SectionsView() {
     }
     return (
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <div className='flex items-center gap-3'>
             <Button variant='ghost' size='sm' onClick={() => navigate('/section-templates')}>
               <ArrowLeftIcon className='size-4 mr-1' /> Volver
@@ -334,10 +334,10 @@ export default function SectionsView() {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Plantillas de secciones</CardTitle>
-          <div className='flex items-center gap-2'>
-            <Input placeholder='Buscar secciones...' value={search} onChange={e => setSearch(e.target.value)} className='w-64' />
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Input placeholder='Buscar secciones...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' />
             <Button onClick={openCreate}><PlusIcon className='size-4 mr-2' /> Nueva sección</Button>
           </div>
         </CardHeader>

@@ -280,10 +280,10 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>{title}</CardTitle>
-          <div className='flex items-center gap-2'>
-            <Input placeholder='Buscar...' value={search} onChange={e => handleSearch(e.target.value)} className='w-64' />
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Input placeholder='Buscar...' value={search} onChange={e => handleSearch(e.target.value)} className='w-full sm:w-64' />
             <Button onClick={openCreate}>
               <PlusIcon className='size-4 mr-2' /> Añadir nuevo
             </Button>
@@ -362,7 +362,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
             </Table>
           </div>
           {paginated && pagination && (
-            <div className='flex items-center justify-between mt-4'>
+            <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4'>
               <div className='flex items-center gap-2'>
                 <span className='text-sm text-muted-foreground'>
                   Mostrando {((pagination.currentPage - 1) * pagination.per_page) + 1} a{' '}
@@ -370,7 +370,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
                   {pagination.total_items.toLocaleString()} registros
                 </span>
               </div>
-              <div className='flex items-center gap-2'>
+              <div className='flex items-center gap-2 flex-wrap'>
                 <Select value={String(perPage)} onValueChange={v => { setPerPage(Number(v)); setPage(1) }}>
                   <SelectTrigger className='w-20 h-8'>
                     <SelectValue />

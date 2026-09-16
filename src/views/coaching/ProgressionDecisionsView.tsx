@@ -167,9 +167,9 @@ const ProgressionDecisionsView = () => {
               — aplicado automáticamente, pendiente de aprobación o rechazado. Solo lectura.
             </CardDescription>
           </div>
-          <div className='flex items-center gap-2'>
+          <div className='flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center'>
             <Select value={coachId} onValueChange={v => setCoachId(v ?? '')}>
-              <SelectTrigger className='w-64'><SelectValue placeholder='Seleccionar coach' /></SelectTrigger>
+              <SelectTrigger className='w-full sm:w-64'><SelectValue placeholder='Seleccionar coach' /></SelectTrigger>
               <SelectContent>
                 {coaches.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
               </SelectContent>
