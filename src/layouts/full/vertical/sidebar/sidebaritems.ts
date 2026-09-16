@@ -90,6 +90,12 @@ const SidebarContent: MenuItem[] = [
       },
       {
         id: uniqueId(),
+        name: "Tareas",
+        icon: CheckSquare,
+        url: "/tasks",
+      },
+      {
+        id: uniqueId(),
         name: "Informes",
         icon: BarChart3,
         url: "/reports",
