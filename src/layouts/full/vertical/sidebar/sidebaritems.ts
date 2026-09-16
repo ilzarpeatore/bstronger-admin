@@ -44,7 +44,6 @@ import {
   Users,
   PenTool,
   FileText,
-  Ticket,
   Link as LinkIcon,
   CalendarDays,
   Tag,
