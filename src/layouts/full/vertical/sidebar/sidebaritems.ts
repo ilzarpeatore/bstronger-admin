@@ -284,6 +284,7 @@ const SidebarContent: MenuItem[] = [
         items: [
           { id: uniqueId(), name: "Publicaciones", url: "/postings" },
           { id: uniqueId(), name: "Publicaciones reportadas", url: "/reported-postings" },
+          { id: uniqueId(), name: "Comentarios reportados", url: "/reported-comments" },
           { id: uniqueId(), name: "Feedback de la app", url: "/app-feedback" },
         ],
       },
