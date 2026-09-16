@@ -101,6 +101,7 @@ const BannerSliders = Loadable(lazy(() => import('../views/content/BannerSliderV
 const PushNotifications = Loadable(lazy(() => import('../views/content/PushNotificationView')));
 const Postings = Loadable(lazy(() => import('../views/community/PostingView')));
 const ReportedPostings = Loadable(lazy(() => import('../views/community/ReportedPostingView')));
+const ReportedComments = Loadable(lazy(() => import('../views/community/ReportedCommentView')));
 const AppFeedback = Loadable(lazy(() => import('../views/community/AppFeedbackView')));
 const Languages = Loadable(lazy(() => import('../views/languages/LanguageView')));
 const LanguageKeywords = Loadable(lazy(() => import('../views/languages/LanguageKeywordView')));
@@ -278,6 +279,7 @@ const Router = [
       { path: '/push-notifications', element: <PushNotifications /> },
       { path: '/postings', element: <Postings /> },
       { path: '/reported-postings', element: <ReportedPostings /> },
+      { path: '/reported-comments', element: <ReportedComments /> },
       { path: '/app-feedback', element: <AppFeedback /> },
       { path: '/languages', element: <Languages /> },
       { path: '/language-keywords', element: <LanguageKeywords /> },
