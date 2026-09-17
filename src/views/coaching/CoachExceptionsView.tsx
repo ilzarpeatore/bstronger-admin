@@ -112,19 +112,21 @@ const CoachExceptionsView = () => {
               pendientes, readiness bajo sostenido, semanas adaptativas por aprobar e inactividad reciente.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center">
             <Select value={coachId} onValueChange={v => setCoachId(v ?? '')}>
-              <SelectTrigger className="w-64"><SelectValue placeholder="Seleccionar coach" /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Seleccionar coach" /></SelectTrigger>
               <SelectContent>
                 {coaches.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" onClick={fetchItems} disabled={loading} title="Actualizar">
-              <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-            </Button>
-            <Button variant="outline" size="icon" onClick={() => setRiskSettingsOpen(true)} disabled={!coachId} title="Configurar riesgo de abandono">
-              <Settings2 className="size-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={fetchItems} disabled={loading} title="Actualizar">
+                <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+              </Button>
+              <Button variant="outline" size="icon" onClick={() => setRiskSettingsOpen(true)} disabled={!coachId} title="Configurar riesgo de abandono">
+                <Settings2 className="size-4" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

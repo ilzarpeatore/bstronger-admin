@@ -869,19 +869,21 @@ const ProgressionRulesView = () => {
               según cómo le fue en la sesión.
             </CardDescription>
           </div>
-          <div className='flex items-center gap-2'>
+          <div className='flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center'>
             <Select value={coachId} onValueChange={v => setCoachId(v ?? '')}>
-              <SelectTrigger className='w-64'><SelectValue placeholder='Seleccionar coach' /></SelectTrigger>
+              <SelectTrigger className='w-full sm:w-64'><SelectValue placeholder='Seleccionar coach' /></SelectTrigger>
               <SelectContent>
                 {coaches.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant='outline' size='icon' onClick={fetchRules} disabled={loading} title='Actualizar'>
-              <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-            </Button>
-            <Button onClick={openCreate} disabled={!coachId}>
-              <Plus className='size-4 mr-1' /> Nueva regla
-            </Button>
+            <div className='flex gap-2'>
+              <Button variant='outline' size='icon' onClick={fetchRules} disabled={loading} title='Actualizar'>
+                <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+              </Button>
+              <Button className='flex-1 sm:flex-initial' onClick={openCreate} disabled={!coachId}>
+                <Plus className='size-4 mr-1' /> Nueva regla
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1196,7 +1198,7 @@ const ProgressionRulesView = () => {
                               </Select>
                             </Field>
                           </div>
-                          <div className='grid grid-cols-3 gap-2.5'>
+                          <div className='grid grid-cols-2 sm:grid-cols-3 gap-2.5'>
                             {c.operator === 'between' ? (
                               <>
                                 <Field className='gap-1.5'>

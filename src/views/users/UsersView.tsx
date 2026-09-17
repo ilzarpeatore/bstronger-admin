@@ -157,10 +157,10 @@ const UsersView = () => {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Usuarios</CardTitle>
-          <div className='flex items-center gap-2'>
-            <Input placeholder='Buscar usuarios...' value={search} onChange={e => setSearch(e.target.value)} className='w-64' disabled={selectedTagIds.length > 0} />
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Input placeholder='Buscar usuarios...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' disabled={selectedTagIds.length > 0} />
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={

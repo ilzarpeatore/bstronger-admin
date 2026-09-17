@@ -19,6 +19,7 @@ import {
   X,
   PencilIcon,
   RefreshCwIcon,
+  PanelLeftIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
@@ -300,8 +302,8 @@ function PrescribedEditor({
   const lastPerformanceText = formatLastPerformance(exercise.last_performance)
 
   return (
-    <div className='overflow-x-auto pb-1'>
-      <div className='min-w-[520px]'>
+    <div>
+      <div>
         {lastPerformanceText && (
           <div className='flex items-center gap-1.5 mb-2 text-[11px] text-blue-600'>
             <ClockIcon className='size-3 shrink-0' />
@@ -309,8 +311,8 @@ function PrescribedEditor({
             <span className='truncate'>{lastPerformanceText}</span>
           </div>
         )}
-        {/* Header row: Series/Reps/Carga fijos, toggle RIR|RPE fijo, y hasta 2 selectores libres (descanso/tempo/...) */}
-        <div className='grid grid-cols-6 gap-2 mb-1'>
+        {/* Header row: Series/Reps/Carga fijos, toggle RIR|RPE fijo, y hasta 2 selectores libres (descanso/tempo/...) -- 3 columnas en móvil (2 filas), 6 a partir de sm para que quepan en una sola fila */}
+        <div className='grid grid-cols-3 sm:grid-cols-6 gap-2 mb-1'>
           <div className='flex flex-col gap-1'>
             <span className='text-[10px] uppercase tracking-wider text-muted-foreground text-center'>Series</span>
           </div>
@@ -336,7 +338,7 @@ function PrescribedEditor({
         </div>
 
         {/* Values row */}
-        <div className='grid grid-cols-6 gap-2'>
+        <div className='grid grid-cols-3 sm:grid-cols-6 gap-2'>
           {(['series', 'reps', 'carga'] as const).map(key => (
             <div key={key} className='flex flex-col gap-1'>
               {readOnly ? (
@@ -430,6 +432,7 @@ export default function WorkoutTemplateViewer({
   onLoadSuggestionReject,
 }: WorkoutTemplateViewerProps) {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+  const [mobileLibraryOpen, setMobileLibraryOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [exerciseSearch, setExerciseSearch] = useState('')
   const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(() => new Set(blocks.map(b => b.id)))
@@ -501,6 +504,7 @@ export default function WorkoutTemplateViewer({
     if (block && !expandedBlocks.has(block.id)) {
       setExpandedBlocks(prev => new Set(prev).add(block.id))
     }
+    setMobileLibraryOpen(false)
     setTimeout(() => {
       exerciseRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 50)
@@ -539,6 +543,7 @@ export default function WorkoutTemplateViewer({
       return
     }
     onAddExercise?.(target, ex)
+    setMobileLibraryOpen(false)
   }
 
   const handleDragStart = (e: React.DragEvent, ex: WorkoutViewerExercise) => {
@@ -567,6 +572,79 @@ export default function WorkoutTemplateViewer({
     }
   }
 
+  const libraryPanelContent = mode === 'library' ? (
+    <>
+      <div className='flex items-center justify-between px-1'>
+        <span className='text-xs font-semibold text-muted-foreground uppercase tracking-wider'>Biblioteca de ejercicios</span>
+        <span className='text-[10px] text-muted-foreground'>{availableExercises.length}</span>
+      </div>
+      <div className='relative'>
+        <SearchIcon className='absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground' />
+        <Input
+          placeholder='Buscar en la base de datos de ejercicios...'
+          className='h-8 pl-7 text-xs'
+          value={exerciseSearch}
+          onChange={e => setExerciseSearch(e.target.value)}
+        />
+      </div>
+      {targetBlockId && (
+        <div className='text-[10px] text-muted-foreground bg-muted/50 rounded-lg p-2'>
+          Añadiendo a: <span className='font-medium text-foreground'>{blocks.find(b => b.id === targetBlockId)?.title || 'Bloque'}</span>
+          <button onClick={() => setTargetBlockId(null)} className='ml-1 text-destructive hover:underline'>Limpiar</button>
+        </div>
+      )}
+      {availableExercisesLoading ? (
+        <p className='text-xs text-muted-foreground text-center py-4'>Cargando ejercicios...</p>
+      ) : availableExercises.length === 0 ? (
+        <p className='text-xs text-muted-foreground text-center py-4'>No se encontraron ejercicios.</p>
+      ) : viewMode === 'grid' ? (
+        <div className='grid grid-cols-2 gap-2'>
+          {availableExercises.map(ex => (
+            <button
+              key={ex.id}
+              type='button'
+              draggable
+              onDragStart={e => handleDragStart(e, ex)}
+              onClick={() => handleLibraryExerciseClick(ex)}
+              className='group flex flex-col items-stretch gap-1.5 rounded-xl border p-1.5 text-left transition-colors hover:bg-muted/50 hover:border-primary cursor-grab active:cursor-grabbing'
+            >
+              <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='aspect-square w-full rounded-md' />
+              <span className='line-clamp-2 text-[11px] font-medium leading-tight'>{ex.title}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        availableExercises.map(ex => (
+          <button
+            key={ex.id}
+            type='button'
+            draggable
+            onDragStart={e => handleDragStart(e, ex)}
+            onClick={() => handleLibraryExerciseClick(ex)}
+            className='group flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors hover:bg-muted/50 hover:border-primary cursor-grab active:cursor-grabbing'
+          >
+            <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='size-11 rounded-md' />
+            <span className='line-clamp-2 text-xs font-medium leading-tight flex-1'>{ex.title}</span>
+            <PlusIcon className='size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0' />
+          </button>
+        ))
+      )}
+    </>
+  ) : (
+    allRoutineExercises.map(ex => (
+      <button
+        key={ex.id}
+        type='button'
+        onClick={() => scrollToExercise(ex.id)}
+        className='group flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors hover:bg-muted/50'
+      >
+        <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='size-11 rounded-md' />
+        <span className='line-clamp-2 text-xs font-medium leading-tight flex-1'>{ex.title}</span>
+        <GripVerticalIcon className='size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0' />
+      </button>
+    ))
+  )
+
   return (
     <div className='flex flex-col h-full min-h-0'>
       {/* Header bar */}
@@ -584,6 +662,14 @@ export default function WorkoutTemplateViewer({
             </div>
           </div>
           <div className='flex items-center gap-2 shrink-0 flex-wrap'>
+            <Button
+              size='sm'
+              variant='outline'
+              className='h-8 text-xs gap-1 lg:hidden'
+              onClick={() => setMobileLibraryOpen(true)}
+            >
+              <PanelLeftIcon className='size-3.5' /> {mode === 'library' ? 'Ejercicios' : 'Índice'}
+            </Button>
             {headerExtras}
             {mode === 'library' && (
               <div className='flex items-center rounded-lg border p-0.5'>
@@ -611,11 +697,11 @@ export default function WorkoutTemplateViewer({
                 </button>
               </div>
             )}
-            <div className='relative hidden sm:block'>
+            <div className='relative w-full sm:w-44 lg:w-56'>
               <SearchIcon className='absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground' />
               <Input
                 placeholder={mode === 'library' ? 'Filtrar este entrenamiento' : 'Buscar ejercicio'}
-                className='h-8 pl-7 text-xs w-44 lg:w-56'
+                className='h-8 pl-7 text-xs w-full'
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -631,80 +717,9 @@ export default function WorkoutTemplateViewer({
 
       {/* Two-column body */}
       <div className='flex flex-1 gap-5 min-h-0 overflow-hidden'>
-        {/* Left panel */}
+        {/* Left panel (desktop / tablet landscape) */}
         <div className='hidden lg:flex w-60 flex-col gap-2 border-r pr-4 overflow-y-auto shrink-0'>
-          {mode === 'library' ? (
-            <>
-              <div className='flex items-center justify-between px-1'>
-                <span className='text-xs font-semibold text-muted-foreground uppercase tracking-wider'>Biblioteca de ejercicios</span>
-                <span className='text-[10px] text-muted-foreground'>{availableExercises.length}</span>
-              </div>
-              <div className='relative'>
-                <SearchIcon className='absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground' />
-                <Input
-                  placeholder='Buscar en la base de datos de ejercicios...'
-                  className='h-8 pl-7 text-xs'
-                  value={exerciseSearch}
-                  onChange={e => setExerciseSearch(e.target.value)}
-                />
-              </div>
-              {targetBlockId && (
-                <div className='text-[10px] text-muted-foreground bg-muted/50 rounded-lg p-2'>
-                  Añadiendo a: <span className='font-medium text-foreground'>{blocks.find(b => b.id === targetBlockId)?.title || 'Bloque'}</span>
-                  <button onClick={() => setTargetBlockId(null)} className='ml-1 text-destructive hover:underline'>Limpiar</button>
-                </div>
-              )}
-              {availableExercisesLoading ? (
-                <p className='text-xs text-muted-foreground text-center py-4'>Cargando ejercicios...</p>
-              ) : availableExercises.length === 0 ? (
-                <p className='text-xs text-muted-foreground text-center py-4'>No se encontraron ejercicios.</p>
-              ) : viewMode === 'grid' ? (
-                <div className='grid grid-cols-2 gap-2'>
-                  {availableExercises.map(ex => (
-                    <button
-                      key={ex.id}
-                      type='button'
-                      draggable
-                      onDragStart={e => handleDragStart(e, ex)}
-                      onClick={() => handleLibraryExerciseClick(ex)}
-                      className='group flex flex-col items-stretch gap-1.5 rounded-xl border p-1.5 text-left transition-colors hover:bg-muted/50 hover:border-primary cursor-grab active:cursor-grabbing'
-                    >
-                      <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='aspect-square w-full rounded-md' />
-                      <span className='line-clamp-2 text-[11px] font-medium leading-tight'>{ex.title}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                availableExercises.map(ex => (
-                  <button
-                    key={ex.id}
-                    type='button'
-                    draggable
-                    onDragStart={e => handleDragStart(e, ex)}
-                    onClick={() => handleLibraryExerciseClick(ex)}
-                    className='group flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors hover:bg-muted/50 hover:border-primary cursor-grab active:cursor-grabbing'
-                  >
-                    <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='size-11 rounded-md' />
-                    <span className='line-clamp-2 text-xs font-medium leading-tight flex-1'>{ex.title}</span>
-                    <PlusIcon className='size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0' />
-                  </button>
-                ))
-              )}
-            </>
-          ) : (
-            allRoutineExercises.map(ex => (
-              <button
-                key={ex.id}
-                type='button'
-                onClick={() => scrollToExercise(ex.id)}
-                className='group flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors hover:bg-muted/50'
-              >
-                <ExerciseThumbnail src={ex.exercise_image || DEFAULT_THUMBNAIL} alt={ex.title} className='size-11 rounded-md' />
-                <span className='line-clamp-2 text-xs font-medium leading-tight flex-1'>{ex.title}</span>
-                <GripVerticalIcon className='size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0' />
-              </button>
-            ))
-          )}
+          {libraryPanelContent}
         </div>
 
         {/* Right workout detail */}
@@ -932,6 +947,18 @@ export default function WorkoutTemplateViewer({
           )}
         </div>
       </div>
+
+      {/* Panel de biblioteca / índice de ejercicios, colapsado a hoja lateral por debajo de lg */}
+      <Sheet open={mobileLibraryOpen} onOpenChange={setMobileLibraryOpen}>
+        <SheetContent side='left' className='w-[85vw] sm:w-80 p-0'>
+          <SheetHeader className='border-b pb-3'>
+            <SheetTitle>{mode === 'library' ? 'Biblioteca de ejercicios' : 'Índice de ejercicios'}</SheetTitle>
+          </SheetHeader>
+          <div className='flex flex-col gap-2 overflow-y-auto px-4 pb-4'>
+            {libraryPanelContent}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Add Section Dialog */}
       <Dialog open={addSectionOpen} onOpenChange={setAddSectionOpen}>

@@ -195,12 +195,12 @@ export default function ExerciseView() {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Ejercicios</CardTitle>
-          <div className='flex items-center gap-2'>
-            <div className='relative'>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <div className='relative w-full sm:w-72'>
               <SearchIcon className='absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground' />
-              <Input placeholder='Buscar ejercicios...' value={search} onChange={e => setSearch(e.target.value)} className='w-72 pl-9' />
+              <Input placeholder='Buscar ejercicios...' value={search} onChange={e => setSearch(e.target.value)} className='w-full pl-9' />
             </div>
             <Button onClick={openCreate}>
               <PlusIcon className='size-4 mr-2' /> Añadir Ejercicio

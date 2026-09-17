@@ -1,76 +1,79 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import { TrashIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 
-const PostingView = () => {
+// Mismo patrón que ReportedPostingView.tsx -- item 11 del roadmap (ver
+// docs/PENDIENTE_BACKEND_ADMIN.md en el repo bsa). A diferencia de Posting,
+// Comment no tiene columna `status` (sin active/inactive/banned) -- la
+// única acción de moderación real que expone el backend es borrar
+// (Admin\PostingController::destroyComment(), ya existía desde antes de
+// esta ronda, solo faltaba esta pantalla para llegar a él desde comentarios
+// reportados en vez de por ID a mano).
+const ReportedCommentView = () => {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [actingId, setActingId] = useState<number | null>(null)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ per_page: '100' })
-      if (search) params.set('search', search)
-      const res = await api.get(`/admin/postings?${params}`)
+      const res = await api.get('/admin/reported-comments?per_page=100')
       setItems(res.data || [])
     } catch {
-      toast.error('No se pudieron cargar los datos')
+      toast.error('No se pudieron cargar los comentarios reportados')
     } finally {
       setLoading(false)
     }
-  }, [search])
+  }, [])
 
   useEffect(() => { fetchItems() }, [fetchItems])
 
-  const toggleStatus = async (item: any) => {
-    const newStatus = item.status === 'active' ? 'inactive' : 'active'
-    setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: newStatus } : p))
+  const handleDelete = async (item: any) => {
+    if (!confirm(`¿Eliminar definitivamente este comentario (ID ${item.id})? Esta acción no se puede deshacer.`)) return
+    setActingId(item.id)
     try {
-      await api.post(`/admin/postings/${item.id}/status`, { status: newStatus })
-      toast.success('Estado actualizado')
-    } catch {
-      setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: item.status } : p))
-      toast.error('No se pudo actualizar el estado')
+      await api.post(`/admin/postings/comments/${item.id}`, {})
+      setItems(prev => prev.filter(c => c.id !== item.id))
+      toast.success('Comentario eliminado')
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo eliminar el comentario')
+    } finally {
+      setActingId(null)
     }
   }
 
-  const truncate = (str: string, len = 50) => str && str.length > len ? str.slice(0, len) + '...' : str
+  const truncate = (str: string, len = 60) => (str && str.length > len ? str.slice(0, len) + '...' : str)
 
   const columns: ColumnDef<any, any>[] = [
     { id: 'id', header: 'ID', accessorKey: 'id' },
-    { id: 'user', header: 'Usuario', cell: ({ row }) => row.original.user?.name || row.original.user_id },
+    { id: 'user', header: 'Autor', cell: ({ row }) => row.original.users?.first_name || row.original.user_id },
+    { id: 'comment', header: 'Comentario', cell: ({ row }) => truncate(row.original.comment || '') },
+    { id: 'posting_id', header: 'Post', accessorKey: 'posting_id' },
+    { id: 'created_at', header: 'Fecha', accessorKey: 'created_at' },
     {
-      id: 'description',
-      header: 'Descripción',
-      cell: ({ row }) => truncate(row.original.description || row.original.content || ''),
+      id: 'actions',
+      header: 'Acciones',
+      cell: ({ row }) => {
+        const item = row.original
+        const busy = actingId === item.id
+        return (
+          <Button variant='destructive' size='sm' disabled={busy} onClick={() => handleDelete(item)} title='Eliminar comentario permanentemente'>
+            <TrashIcon className='size-3.5' />
+          </Button>
+        )
+      },
     },
-    {
-      id: 'status',
-      header: 'Estado',
-      cell: ({ row }) => (
-        <Badge
-          variant={row.original.status === 'active' ? 'default' : 'secondary'}
-          className='cursor-pointer'
-          onClick={() => toggleStatus(row.original)}
-        >
-          {row.original.status}
-        </Badge>
-      ),
-    },
-    { id: 'created_at', header: 'Creado el', accessorKey: 'created_at' },
   ]
 
   return (
     <Card>
-      <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-        <CardTitle>Publicaciones</CardTitle>
-        <Input placeholder='Buscar...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' />
+      <CardHeader>
+        <CardTitle>Comentarios reportados</CardTitle>
       </CardHeader>
       <CardContent>
         <div className='rounded-md border'>
@@ -119,4 +122,4 @@ const PostingView = () => {
   )
 }
 
-export default PostingView
+export default ReportedCommentView

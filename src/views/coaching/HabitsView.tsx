@@ -256,13 +256,13 @@ const HabitsView = () => {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Hábitos y progreso por cliente</CardTitle>
             <CardDescription>Hábitos asignados directamente + progreso real (incluye los de biblioteca y personales)</CardDescription>
           </div>
           <Select value={clientId} onValueChange={v => setClientId(v ?? '')}>
-            <SelectTrigger className="w-72"><SelectValue placeholder="Seleccionar un cliente" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder="Seleccionar un cliente" /></SelectTrigger>
             <SelectContent>
               {clients.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.label}</SelectItem>)}
             </SelectContent>

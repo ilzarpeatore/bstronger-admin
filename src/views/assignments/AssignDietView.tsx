@@ -106,10 +106,10 @@ const AssignDietView = () => {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Asignar dieta a usuarios</CardTitle>
-          <div className='flex items-center gap-2'>
-            <Input placeholder='Filtrar por ID de usuario...' value={search} onChange={e => setSearch(e.target.value)} className='w-48' />
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Input placeholder='Filtrar por ID de usuario...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-48' />
             <Button variant='outline' size='sm' onClick={fetchItems}><RefreshCwIcon className='size-4' /></Button>
             <Button onClick={handleOpenCreate}><PlusIcon className='size-4 mr-2' /> Asignar dieta</Button>
           </div>

@@ -288,12 +288,12 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <div className='flex items-center gap-4'>
+        <CardHeader className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4'>
             {!fixedClientId && <CardTitle>Calendario de comidas del cliente</CardTitle>}
             {!fixedClientId && (
               <Select value={clientId} onValueChange={v => setClientId(v ?? '')}>
-                <SelectTrigger className='w-[280px]'>
+                <SelectTrigger className='w-full sm:w-[280px]'>
                   <SelectValue placeholder='Seleccionar cliente' />
                 </SelectTrigger>
                 <SelectContent>
@@ -305,7 +305,7 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                 </SelectContent>
               </Select>
             )}
-            <div className='flex items-center gap-2 text-xs text-muted-foreground ml-2'>
+            <div className='flex items-center gap-3 text-xs text-muted-foreground sm:ml-2'>
               <span className='flex items-center gap-1'>
                 <span className='inline-block h-3 w-3 rounded bg-orange-100 border border-orange-300' />
                 Asignado por el coach
@@ -317,9 +317,9 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
             </div>
           </div>
           {clientId && (
-            <div className='flex items-center gap-2'>
-              <Button variant='outline' size='sm' onClick={openImportTemplateDialog}>Importar plantilla</Button>
-              <Button variant='outline' size='sm' onClick={openExportDialog}>Guardar como plantilla</Button>
+            <div className='flex items-center gap-2 flex-wrap'>
+              <Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={openImportTemplateDialog}>Importar plantilla</Button>
+              <Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={openExportDialog}>Guardar como plantilla</Button>
             </div>
           )}
         </CardHeader>
@@ -345,7 +345,8 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                 </Button>
               </div>
 
-              <div className='grid grid-cols-7 border-t border-l'>
+              <div className='overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0'>
+              <div className='grid grid-cols-7 border-t border-l min-w-[700px] sm:min-w-0'>
                 {DAYS.map(d => (
                   <div key={d} className='border-r border-b bg-muted/50 px-2 py-1.5 text-center text-xs font-medium text-muted-foreground'>
                     {d}
@@ -424,6 +425,7 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                     </div>
                   )
                 })}
+              </div>
               </div>
             </>
           )}

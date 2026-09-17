@@ -106,12 +106,14 @@ const AssignWorkoutView = () => {
   return (
     <>
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <CardTitle>Asignar entrenamiento a usuarios</CardTitle>
-          <div className='flex items-center gap-2'>
-            <Input placeholder='Filtrar por ID de usuario...' value={search} onChange={e => setSearch(e.target.value)} className='w-48' />
-            <Button variant='outline' size='sm' onClick={fetchItems}><RefreshCwIcon className='size-4' /></Button>
-            <Button onClick={handleOpenCreate}><PlusIcon className='size-4 mr-2' /> Asignar entrenamiento</Button>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Input placeholder='Filtrar por ID de usuario...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-48' />
+            <div className='flex gap-2'>
+              <Button variant='outline' size='sm' onClick={fetchItems}><RefreshCwIcon className='size-4' /></Button>
+              <Button className='flex-1 sm:flex-initial' onClick={handleOpenCreate}><PlusIcon className='size-4 mr-2' /> Asignar entrenamiento</Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

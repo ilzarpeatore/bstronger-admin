@@ -44,7 +44,6 @@ import {
   Users,
   PenTool,
   FileText,
-  Ticket,
   Link as LinkIcon,
   CalendarDays,
   Tag,
@@ -88,6 +87,12 @@ const SidebarContent: MenuItem[] = [
         name: "Panel de control",
         icon: LayoutDashboard,
         url: "/dashboard",
+      },
+      {
+        id: uniqueId(),
+        name: "Tareas",
+        icon: CheckSquare,
+        url: "/tasks",
       },
       {
         id: uniqueId(),
@@ -284,6 +289,7 @@ const SidebarContent: MenuItem[] = [
         items: [
           { id: uniqueId(), name: "Publicaciones", url: "/postings" },
           { id: uniqueId(), name: "Publicaciones reportadas", url: "/reported-postings" },
+          { id: uniqueId(), name: "Comentarios reportados", url: "/reported-comments" },
           { id: uniqueId(), name: "Feedback de la app", url: "/app-feedback" },
         ],
       },

@@ -194,19 +194,21 @@ const ExerciseSubstitutionsView = () => {
               estancamiento o fatiga en un ejercicio concreto.
             </CardDescription>
           </div>
-          <div className='flex items-center gap-2'>
+          <div className='flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center'>
             <Select value={coachId} onValueChange={v => setCoachId(v ?? '')}>
-              <SelectTrigger className='w-64'><SelectValue placeholder='Seleccionar coach' /></SelectTrigger>
+              <SelectTrigger className='w-full sm:w-64'><SelectValue placeholder='Seleccionar coach' /></SelectTrigger>
               <SelectContent>
                 {coaches.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant='outline' size='icon' onClick={fetchSubstitutions} disabled={loading} title='Actualizar'>
-              <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
-            </Button>
-            <Button onClick={openCreate} disabled={!coachId}>
-              <Plus className='size-4 mr-1' /> Nueva sustitución
-            </Button>
+            <div className='flex gap-2'>
+              <Button variant='outline' size='icon' onClick={fetchSubstitutions} disabled={loading} title='Actualizar'>
+                <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+              </Button>
+              <Button className='flex-1 sm:flex-initial' onClick={openCreate} disabled={!coachId}>
+                <Plus className='size-4 mr-1' /> Nueva sustitución
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
