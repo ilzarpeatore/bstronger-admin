@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { SessionDetailModal } from '@/views/coaching/SessionDetailView'
+import { useProgramAssignment } from '@/hooks/useProgramAssignment'
 
 type CalendarAssignment = {
   id: number
@@ -104,6 +105,8 @@ export default function ClientCalendarView() {
   const [sessionDetailClientId, setSessionDetailClientId] = useState<number>(0)
 
   const today = useMemo(() => getTodayString(), [])
+
+  const { assignDirect, importProgram } = useProgramAssignment()
 
   const fetchClients = useCallback(async () => {
     try {
@@ -214,38 +217,32 @@ export default function ClientCalendarView() {
 
   const handleAssignDirect = useCallback(async () => {
     if (!clientId || !assignDate || !assignTemplateId) return
-    try {
-      await api.post('/admin/client-calendar-assign-direct', {
-        client_id: Number(clientId),
-        date: assignDate,
-        workout_template_id: Number(assignTemplateId)
-      })
-      toast.success('Entrenamiento asignado')
+    const ok = await assignDirect({
+      clientId: Number(clientId),
+      date: assignDate,
+      workoutTemplateId: Number(assignTemplateId),
+    })
+    if (ok) {
       setAssignDialogOpen(false)
       setAssignTemplateId('')
       fetchCalendar()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Error al asignar')
     }
-  }, [clientId, assignDate, assignTemplateId, fetchCalendar])
+  }, [clientId, assignDate, assignTemplateId, assignDirect, fetchCalendar])
 
   const handleImportProgram = useCallback(async () => {
     if (!clientId || !importProgramId || !importStartDate) return
-    try {
-      await api.post('/admin/client-calendar-import-program', {
-        client_id: Number(clientId),
-        training_program_id: Number(importProgramId),
-        start_date: importStartDate
-      })
-      toast.success('Programa importado correctamente')
+    const ok = await importProgram({
+      clientId: Number(clientId),
+      trainingProgramId: Number(importProgramId),
+      startDate: importStartDate,
+    })
+    if (ok) {
       setImportDialogOpen(false)
       setImportProgramId('')
       setImportStartDate('')
       fetchCalendar()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Error al importar el programa')
     }
-  }, [clientId, importProgramId, importStartDate, fetchCalendar])
+  }, [clientId, importProgramId, importStartDate, importProgram, fetchCalendar])
 
   const handleRemoveAssignment = useCallback(async (assignmentId: number) => {
     try {

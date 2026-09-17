@@ -17,6 +17,7 @@ import {
   SparklesIcon,
   DumbbellIcon,
   MoonIcon,
+  AlertTriangleIcon,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -31,6 +32,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
@@ -636,6 +638,17 @@ export default function TrainingProgramsView() {
           </div>
 
           <div>
+            {getClientAssignmentCount(selected) > 0 && (
+              <Alert variant='destructive' className='mb-4'>
+                <AlertTriangleIcon />
+                <AlertTitle>
+                  Este programa ya está asignado a {getClientAssignmentCount(selected)} cliente{getClientAssignmentCount(selected) === 1 ? '' : 's'}
+                </AlertTitle>
+                <AlertDescription>
+                  Los cambios que hagas aquí modifican la plantilla compartida. Para editar la sesión de un cliente concreto sin afectar a los demás, hazlo desde su calendario individual.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3'>
               <div className='flex flex-wrap items-center gap-3'>
                 <h3 className='text-sm font-medium text-muted-foreground'>Calendario del programa</h3>

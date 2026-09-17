@@ -28,6 +28,7 @@ import HabitProgressPanel, { type HabitProgressItem } from '@/components/coachin
 import ClientMealCalendarView from '@/views/coaching/ClientMealCalendarView'
 import { DetailSkeleton } from '@/components/shared/skeletons'
 import CoachExceptionsCard from '@/components/dashboard/CoachExceptionsCard'
+import { useProgramAssignment } from '@/hooks/useProgramAssignment'
 
 const BodyMetricChart = lazy(() => import('@/components/charts/body-metric-chart'))
 const ExerciseHistoryChart = lazy(() => import('@/components/charts/exercise-history-chart'))
@@ -199,6 +200,7 @@ function getCalendarWeeks(year: number, month: number): (string | null)[][] { co
 
 export default function UserDetailView({ userId, tab }: { userId: string; tab?: string }) {
   const navigate = useNavigate()
+  const { assignDirect, importProgram } = useProgramAssignment()
   const [user, setUser] = useState<UserDetail | null>(null)
   const [tags, setTags] = useState<Tag[]>([])
   const [diets, setDiets] = useState<DietAssignment[]>([])
@@ -456,8 +458,28 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setPhotoUploading(true); try { const fd = new FormData(); fd.append('client_id', userId); fd.append('photo', file); if (photoName.trim()) fd.append('name', photoName.trim()); const res = await api.upload('/admin/progress-photo-store', fd); setPhotos(prev => [res.data?.data || res.data, ...prev]); setPhotoName(''); toast.success('Foto subida') } catch { toast.error('No se pudo subir') } finally { setPhotoUploading(false); e.target.value = '' } }
   const handleDeletePhoto = async (photoId: number) => { if (!confirm('¿Eliminar esta foto de progreso?')) return; try { await api.post('/admin/progress-photo-delete', { client_id: Number(userId), photo_id: photoId }); setPhotos(prev => prev.filter(p => p.id !== photoId)); toast.success('Eliminado') } catch { toast.error('Error') } }
 
-  const handleAssignDirect = async () => { if (!assignDate || !assignTemplateId) return; try { await api.post('/admin/client-calendar-assign-direct', { client_id: Number(userId), date: assignDate, workout_template_id: Number(assignTemplateId) }); toast.success('Entrenamiento importado'); setAssignDialogOpen(false); fetchCalendar() } catch (err: any) { toast.error(err?.message || 'Error') } }
-  const handleImportProgram = async () => { if (!importProgramId || !importStartDate) return; try { await api.post('/admin/client-calendar-import-program', { client_id: Number(userId), training_program_id: Number(importProgramId), start_date: importStartDate }); toast.success('Programa asignado'); setImportDialogOpen(false); fetchCalendar() } catch (err: any) { toast.error(err?.message || 'Error') } }
+  const handleAssignDirect = async () => {
+    if (!assignDate || !assignTemplateId) return
+    const ok = await assignDirect({
+      clientId: Number(userId),
+      date: assignDate,
+      workoutTemplateId: Number(assignTemplateId),
+      successMessage: 'Entrenamiento importado',
+      errorMessage: 'Error',
+    })
+    if (ok) { setAssignDialogOpen(false); fetchCalendar() }
+  }
+  const handleImportProgram = async () => {
+    if (!importProgramId || !importStartDate) return
+    const ok = await importProgram({
+      clientId: Number(userId),
+      trainingProgramId: Number(importProgramId),
+      startDate: importStartDate,
+      successMessage: 'Programa asignado',
+      errorMessage: 'Error',
+    })
+    if (ok) { setImportDialogOpen(false); fetchCalendar() }
+  }
   const handleAssignDiet = async () => { if (!assignDietId || !assignDietStartDate) return; setAssigningDiet(true); try { await api.post('/admin/assign-diet', { user_id: Number(userId), diet_id: Number(assignDietId), start_date: assignDietStartDate }); toast.success('Dieta asignada'); setAssignDietDialogOpen(false); setAssignDietId(''); setAssignDietStartDate(''); const res = await api.get('/admin/assign-diet?per_page=500').catch(() => ({ data: { data: [] } })); setDiets((res.data?.data || res.data || []).filter((d: any) => String(d.user_id) === userId)) } catch (err: any) { toast.error(err?.message || 'Error') } finally { setAssigningDiet(false) } }
   const handleRemoveAssignment = async (id: number) => { if (!confirm('¿Quitar este entrenamiento del calendario del cliente?')) return; try { await api.post('/admin/client-calendar-remove', { assignment_id: id }); toast.success('Eliminado'); fetchCalendar() } catch { toast.error('Error') } }
   const handleCalCopy = (id: number, title: string) => { setCalClipboard({ assignment_id: id, workout_title: title }); toast.info('Copiado — haz clic en un día para pegar') }
