@@ -79,7 +79,9 @@ const UsersView = () => {
 
   const openCreate = () => {
     setEditingItem(null)
-    setFormData({ is_personal_client: false })
+    // Decisión de negocio (2026-09-17): por defecto 1:1, no Free -- el coach
+    // desmarca a mano para los que correspondan.
+    setFormData({ is_personal_client: true })
     setDialogOpen(true)
   }
 
