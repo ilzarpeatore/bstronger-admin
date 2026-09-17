@@ -10,6 +10,7 @@ import { HabitHandlers } from 'src/api/habits/habits-data';
 import { ReportsHandlers } from 'src/api/reports/reports-data';
 import { CommerceHandlers } from 'src/api/commerce/commerce-data';
 import { ExerciseHandlers } from 'src/api/exercises/exercise-data';
+import { SubscriptionPaymentsHandlers } from 'src/api/subscription-payments/subscription-payments-data';
 
 
 export const mockHandlers = [
@@ -23,4 +24,5 @@ export const mockHandlers = [
   ...ReportsHandlers,
   ...CommerceHandlers,
   ...ExerciseHandlers,
+  ...SubscriptionPaymentsHandlers,
 ];
