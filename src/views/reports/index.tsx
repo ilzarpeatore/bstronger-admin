@@ -3,8 +3,9 @@ import { format, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale/es'
 import {
   Download, CalendarDays, Users, Dumbbell, CreditCard, MessageSquare, Wallet,
-  BarChart3, Table,
+  BarChart3, Table, ClipboardCheck,
 } from 'lucide-react'
+import SubscriptionPaymentTracking from './subscription-payment-tracking'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -21,7 +22,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 type SummaryRow = { label: string; value: number }
 type SummaryPayload = { period_label: string; data: SummaryRow[]; total: number }
 
-type ReportType = 'users' | 'sessions' | 'subscriptions' | 'payments' | 'checkins'
+type ReportType = 'users' | 'sessions' | 'subscriptions' | 'payments' | 'checkins' | 'payment-tracking'
 
 const reportTabs: { value: ReportType; label: string; icon: typeof Users }[] = [
   { value: 'users', label: 'Usuarios', icon: Users },
@@ -29,6 +30,7 @@ const reportTabs: { value: ReportType; label: string; icon: typeof Users }[] = [
   { value: 'subscriptions', label: 'Suscripciones', icon: CreditCard },
   { value: 'payments', label: 'Pagos', icon: Wallet },
   { value: 'checkins', label: 'Check-ins', icon: MessageSquare },
+  { value: 'payment-tracking', label: 'Seguimiento de pagos', icon: ClipboardCheck },
 ]
 
 const chartConfig = {
@@ -80,6 +82,7 @@ export default function ReportsView() {
   }, [dateRange, coachFilter, groupBy])
 
   const fetchReport = useCallback(async () => {
+    if (activeTab === 'payment-tracking') return
     setLoading(true)
     try {
       const endpoint =
@@ -118,61 +121,65 @@ export default function ReportsView() {
           <h2 className="text-xl font-semibold">Informes</h2>
           <p className="text-sm text-muted-foreground">Análisis detallado de usuarios, sesiones, suscripciones y pagos</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger render={
-              <Button variant="outline" className="gap-2 cursor-pointer">
-                <CalendarDays size={16} />
-                <span>
-                  {format(dateRange.from, 'dd MMM yy', { locale: es })} - {format(dateRange.to, 'dd MMM yy', { locale: es })}
-                </span>
-              </Button>
-            } />
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="range"
-                selected={{ from: dateRange.from, to: dateRange.to }}
-                onSelect={(range) => {
-                  if (range?.from && range?.to) {
-                    setDateRange({ from: range.from, to: range.to })
-                  }
-                }}
-                locale={es}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
+        {activeTab !== 'payment-tracking' && (
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger render={
+                <Button variant="outline" className="gap-2 cursor-pointer">
+                  <CalendarDays size={16} />
+                  <span>
+                    {format(dateRange.from, 'dd MMM yy', { locale: es })} - {format(dateRange.to, 'dd MMM yy', { locale: es })}
+                  </span>
+                </Button>
+              } />
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="range"
+                  selected={{ from: dateRange.from, to: dateRange.to }}
+                  onSelect={(range) => {
+                    if (range?.from && range?.to) {
+                      setDateRange({ from: range.from, to: range.to })
+                    }
+                  }}
+                  locale={es}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
 
-          <Button variant="outline" onClick={handleExport} className="gap-2 cursor-pointer">
-            <Download size={16} />
-            CSV
-          </Button>
+            <Button variant="outline" onClick={handleExport} className="gap-2 cursor-pointer">
+              <Download size={16} />
+              CSV
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {activeTab !== 'payment-tracking' && (
+        <div className="flex flex-wrap gap-3 items-center">
+          <Select value={coachFilter} onValueChange={(v) => v && setCoachFilter(v)}>
+            <SelectTrigger className="w-[180px] cursor-pointer">
+              <SelectValue placeholder="Coach" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los coaches</SelectItem>
+              {coaches.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={groupBy} onValueChange={(v) => v && setGroupBy(v)}>
+            <SelectTrigger className="w-[140px] cursor-pointer">
+              <SelectValue placeholder="Agrupar por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="month">Por mes</SelectItem>
+              <SelectItem value="day">Por día</SelectItem>
+              <SelectItem value="plan">Por plan</SelectItem>
+              <SelectItem value="type">Por tipo</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 items-center">
-        <Select value={coachFilter} onValueChange={(v) => v && setCoachFilter(v)}>
-          <SelectTrigger className="w-[180px] cursor-pointer">
-            <SelectValue placeholder="Coach" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los coaches</SelectItem>
-            {coaches.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={groupBy} onValueChange={(v) => v && setGroupBy(v)}>
-          <SelectTrigger className="w-[140px] cursor-pointer">
-            <SelectValue placeholder="Agrupar por" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="month">Por mes</SelectItem>
-            <SelectItem value="day">Por día</SelectItem>
-            <SelectItem value="plan">Por plan</SelectItem>
-            <SelectItem value="type">Por tipo</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ReportType)}>
         <TabsList>
@@ -186,7 +193,9 @@ export default function ReportsView() {
 
         {reportTabs.map((tab) => (
           <TabsContent key={tab.value} value={tab.value} className="mt-4 flex flex-col gap-4">
-            {loading ? (
+            {tab.value === 'payment-tracking' ? (
+              <SubscriptionPaymentTracking />
+            ) : loading ? (
               <div className="h-[300px] rounded-none bg-muted/50 animate-pulse flex items-center justify-center">
                 <span className="text-sm text-muted-foreground">Cargando...</span>
               </div>
