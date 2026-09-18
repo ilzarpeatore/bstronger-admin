@@ -52,7 +52,13 @@ type LoadSuggestion = {
 
 type SessionExercise = {
   exercise_id: number
-  workout_template_exercise_id: number
+  // AISLAMIENTO (auditoría 2026-09-18): null cuando es un ejercicio añadido
+  // solo para este cliente (client_exercise_override_id presente en su
+  // lugar) -- ya no existe como WorkoutTemplateExercise real, ver
+  // SessionDetailController::addExercise en el backend.
+  workout_template_exercise_id: number | null
+  client_exercise_override_id?: number | null
+  is_addition?: boolean
   title: string
   exercise_image?: string | null
   video_url?: string | null
@@ -69,7 +75,11 @@ type SessionExercise = {
 }
 
 type SessionBlock = {
-  block_id: number
+  // AISLAMIENTO (auditoría 2026-09-18): null cuando es un bloque añadido
+  // solo para este cliente (client_block_override_id presente en su lugar).
+  block_id: number | null
+  client_block_override_id?: number | null
+  is_addition?: boolean
   title: string | null
   instructions?: string | null
   exercises: SessionExercise[]
@@ -148,12 +158,19 @@ function mapSessionToViewer(sessionData: SessionData): {
   totalSets: number
 } {
   return {
+    // AISLAMIENTO (auditoría 2026-09-18): bloques/ejercicios "añadidos solo
+    // para este cliente" no tienen block_id/workout_template_exercise_id
+    // real (son null) -- se usa -client_*_override_id como id sintético
+    // (nunca colisiona con un id real, siempre positivo) solo para que esta
+    // vista tenga una key/identificador estable; NO se puede mandar de
+    // vuelta a los endpoints que esperan el id real (notas, overrides por
+    // lote) hasta que se cablee soporte explícito para ellos.
     blocks: sessionData.blocks.map(b => ({
-      id: b.block_id,
+      id: b.block_id ?? -(b.client_block_override_id || 0),
       title: b.title,
       instructions: b.instructions,
       exercises: b.exercises.map(e => ({
-        id: e.workout_template_exercise_id,
+        id: e.workout_template_exercise_id ?? -(e.client_exercise_override_id || 0),
         exercise_id: e.exercise_id,
         title: e.title,
         exercise_image: getThumbnail(e),
@@ -323,13 +340,13 @@ function CompletedView({
       </div>
 
       {sessionData.blocks.map(block => (
-        <div key={block.block_id} className='rounded-2xl border overflow-hidden'>
+        <div key={block.block_id ?? -(block.client_block_override_id || 0)} className='rounded-2xl border overflow-hidden'>
           <div className='bg-muted/40 px-4 py-3'>
             <p className='font-semibold text-sm'>{block.title || `Bloque #${block.block_id}`}</p>
           </div>
           <div className='divide-y'>
             {block.exercises.map(ex => (
-              <div key={ex.workout_template_exercise_id} className='p-4'>
+              <div key={ex.workout_template_exercise_id ?? -(ex.client_exercise_override_id || 0)} className='p-4'>
                 <div className='flex items-start gap-3 mb-3'>
                   <ExerciseThumbnail src={getThumbnail(ex)} alt={ex.title} className='size-14' />
                   <div className='flex-1 min-w-0'>
@@ -425,7 +442,7 @@ function SessionContent({
     const map = new Map<number, SessionExercise>()
     for (const b of sessionData.blocks) {
       for (const e of b.exercises) {
-        map.set(e.workout_template_exercise_id, e)
+        map.set(e.workout_template_exercise_id ?? -(e.client_exercise_override_id || 0), e)
       }
     }
     return map
@@ -616,6 +633,7 @@ function SessionContent({
     try {
       await api.post('/admin/session-detail-add-block', {
         program_day_assignment_id: Number(programDayAssignmentId),
+        client_id: Number(clientId),
         title,
       })
       toast.success('Sección añadida')
@@ -630,6 +648,7 @@ function SessionContent({
     try {
       await api.post('/admin/session-detail-add-exercise', {
         program_day_assignment_id: Number(programDayAssignmentId),
+        client_id: Number(clientId),
         workout_template_block_id: blockId,
         exercise_id: exercise.id,
       })
