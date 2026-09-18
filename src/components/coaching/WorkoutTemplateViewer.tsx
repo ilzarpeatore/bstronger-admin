@@ -22,6 +22,7 @@ import {
   PanelLeftIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -66,6 +67,12 @@ export type WorkoutViewerExercise = {
     resolved_at: string | null
     rule_name: string | null
   } | null
+  // AISLAMIENTO (auditoría 2026-09-18): true si el coach añadió este
+  // ejercicio solo para este cliente (no vive en la plantilla compartida) --
+  // solo presente cuando el detalle viene de una sesión de cliente
+  // (SessionDetailController::getSessionDetail), nunca al editar una
+  // plantilla del catálogo.
+  is_addition?: boolean
 }
 
 export type WorkoutViewerBlock = {
@@ -73,6 +80,9 @@ export type WorkoutViewerBlock = {
   title: string | null
   instructions?: string | null
   exercises: WorkoutViewerExercise[]
+  // AISLAMIENTO (auditoría 2026-09-18): true si el bloque entero lo añadió
+  // el coach solo para este cliente (client_block_overrides).
+  is_addition?: boolean
 }
 
 export type WorkoutTemplateViewerProps = {
@@ -772,6 +782,10 @@ export default function WorkoutTemplateViewer({
                     ) : (
                       <span className='font-semibold text-sm truncate'>{block.title || `Bloque #${block.id}`}</span>
                     )}
+                    {/* AISLAMIENTO (auditoría 2026-09-18): bloque que este cliente añadió, no vive en la plantilla compartida. */}
+                    {block.is_addition && (
+                      <Badge variant='secondary' className='text-[10px] px-1.5 py-0 h-4 shrink-0'>Personalizado</Badge>
+                    )}
                   </CollapsibleTrigger>
                   <div className='flex items-center gap-2 shrink-0'>
                     <span className='text-xs text-muted-foreground'>{block.exercises.length} ejercicios</span>
@@ -832,7 +846,13 @@ export default function WorkoutTemplateViewer({
                           <div className='flex-1 min-w-0 space-y-2.5 w-full'>
                             <div className='flex items-start justify-between gap-2'>
                               <div className='min-w-0'>
-                                <p className='font-medium text-sm leading-tight'>{ex.title}</p>
+                                <p className='font-medium text-sm leading-tight flex items-center gap-1.5'>
+                                  {ex.title}
+                                  {/* AISLAMIENTO (auditoría 2026-09-18): ejercicio que este cliente añadió, no vive en la plantilla compartida. */}
+                                  {ex.is_addition && (
+                                    <Badge variant='secondary' className='text-[10px] px-1.5 py-0 h-4 shrink-0'>Personalizado</Badge>
+                                  )}
+                                </p>
                                 {ex.notes && <p className='text-xs text-muted-foreground mt-1'>Note: {ex.notes}</p>}
                                 {ex.client_note && <p className='text-xs text-blue-600 mt-1 flex items-start gap-1'><MessageSquareTextIcon className='size-3 shrink-0 mt-0.5' /> Feedback del cliente: {ex.client_note}</p>}
                               </div>

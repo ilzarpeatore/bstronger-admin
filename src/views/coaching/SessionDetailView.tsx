@@ -126,6 +126,24 @@ function buildSessionDetailQuery(params: { programDayAssignmentId?: number | nul
 
 const DEFAULT_THUMBNAIL = 'https://app.hubfit.com/media/workout-thumbnails/default.jpg'
 
+// AISLAMIENTO (auditoría 2026-09-18): id estable para un ejercicio/bloque de
+// sesión sea cual sea su origen -- real de la plantilla (positivo) o
+// "adición" de este cliente (client_exercise_override_id/
+// client_block_override_id, sin id real, se usa negado). Centralizado aquí
+// para no repetir `?? -(x || 0)` en cada sitio que necesita una key estable.
+function sessionExerciseKey(e: SessionExercise): number {
+  return e.workout_template_exercise_id ?? -(e.client_exercise_override_id || 0)
+}
+
+function sessionBlockKey(b: SessionBlock): number {
+  return b.block_id ?? -(b.client_block_override_id || 0)
+}
+
+/** Payload correcto para los endpoints de override según el id (ver sessionExerciseKey): positivo = ejercicio real, negativo = adición propia. */
+function overrideIdentity(id: number): { workout_template_exercise_id?: number; client_exercise_override_id?: number } {
+  return id < 0 ? { client_exercise_override_id: -id } : { workout_template_exercise_id: id }
+}
+
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
@@ -161,16 +179,16 @@ function mapSessionToViewer(sessionData: SessionData): {
     // AISLAMIENTO (auditoría 2026-09-18): bloques/ejercicios "añadidos solo
     // para este cliente" no tienen block_id/workout_template_exercise_id
     // real (son null) -- se usa -client_*_override_id como id sintético
-    // (nunca colisiona con un id real, siempre positivo) solo para que esta
-    // vista tenga una key/identificador estable; NO se puede mandar de
-    // vuelta a los endpoints que esperan el id real (notas, overrides por
-    // lote) hasta que se cablee soporte explícito para ellos.
+    // (nunca colisiona con un id real, siempre positivo). overrideIdentity()
+    // sabe deshacer esto al mandar la petición de vuelta al backend (ver
+    // handleOverrideField/handleSaveNotes/flushBatch/handleRemoveExercise).
     blocks: sessionData.blocks.map(b => ({
-      id: b.block_id ?? -(b.client_block_override_id || 0),
+      id: sessionBlockKey(b),
       title: b.title,
       instructions: b.instructions,
+      is_addition: b.is_addition,
       exercises: b.exercises.map(e => ({
-        id: e.workout_template_exercise_id ?? -(e.client_exercise_override_id || 0),
+        id: sessionExerciseKey(e),
         exercise_id: e.exercise_id,
         title: e.title,
         exercise_image: getThumbnail(e),
@@ -185,6 +203,7 @@ function mapSessionToViewer(sessionData: SessionData): {
         exercise_volume: e.exercise_volume,
         load_suggestion: e.load_suggestion,
         last_performance: e.last_performance,
+        is_addition: e.is_addition,
       })),
     })),
     totalExercises: countExercises(sessionData),
@@ -340,18 +359,22 @@ function CompletedView({
       </div>
 
       {sessionData.blocks.map(block => (
-        <div key={block.block_id ?? -(block.client_block_override_id || 0)} className='rounded-2xl border overflow-hidden'>
-          <div className='bg-muted/40 px-4 py-3'>
+        <div key={sessionBlockKey(block)} className='rounded-2xl border overflow-hidden'>
+          <div className='bg-muted/40 px-4 py-3 flex items-center gap-2'>
             <p className='font-semibold text-sm'>{block.title || `Bloque #${block.block_id}`}</p>
+            {block.is_addition && <Badge variant='secondary' className='text-[10px] px-1.5 py-0 h-4'>Personalizado</Badge>}
           </div>
           <div className='divide-y'>
             {block.exercises.map(ex => (
-              <div key={ex.workout_template_exercise_id ?? -(ex.client_exercise_override_id || 0)} className='p-4'>
+              <div key={sessionExerciseKey(ex)} className='p-4'>
                 <div className='flex items-start gap-3 mb-3'>
                   <ExerciseThumbnail src={getThumbnail(ex)} alt={ex.title} className='size-14' />
                   <div className='flex-1 min-w-0'>
                     <div className='flex items-start justify-between gap-2'>
-                      <p className='font-medium text-sm'>{ex.title}</p>
+                      <p className='font-medium text-sm flex items-center gap-1.5'>
+                        {ex.title}
+                        {ex.is_addition && <Badge variant='secondary' className='text-[10px] px-1.5 py-0 h-4'>Personalizado</Badge>}
+                      </p>
                       {onNotes && (
                         <Button variant='ghost' size='icon' className='size-7 shrink-0' onClick={() => onNotes(ex)}>
                           <MessageSquareTextIcon className='size-3.5' />
@@ -442,7 +465,7 @@ function SessionContent({
     const map = new Map<number, SessionExercise>()
     for (const b of sessionData.blocks) {
       for (const e of b.exercises) {
-        map.set(e.workout_template_exercise_id ?? -(e.client_exercise_override_id || 0), e)
+        map.set(sessionExerciseKey(e), e)
       }
     }
     return map
@@ -527,7 +550,7 @@ function SessionContent({
         await api.post('/admin/session-detail-batch-update-overrides', {
           program_day_assignment_id: Number(programDayAssignmentId),
           client_id: Number(clientId),
-          workout_template_exercise_id: exerciseId,
+          ...overrideIdentity(exerciseId),
           ...data,
         })
       } catch (err: any) {
@@ -554,7 +577,7 @@ function SessionContent({
   const handleOverrideField = (exercise: WorkoutViewerExercise, _blockId: number, field: string, value: string) => {
     const original = sessionData.blocks
       .flatMap(b => b.exercises)
-      .find(e => e.workout_template_exercise_id === exercise.id)
+      .find(e => sessionExerciseKey(e) === exercise.id)
     if (!original) return
     const current = original.prescribed?.[field]
     if (current === value || (current == null && value === '')) return
@@ -564,7 +587,7 @@ function SessionContent({
       blocks: sessionData.blocks.map(b => ({
         ...b,
         exercises: b.exercises.map(e =>
-          e.workout_template_exercise_id === exercise.id
+          sessionExerciseKey(e) === exercise.id
             ? { ...e, prescribed: { ...e.prescribed, [field]: value || null } }
             : e
         ),
@@ -586,11 +609,12 @@ function SessionContent({
 
   const handleSaveNotes = async () => {
     if (!notesDialogExercise) return
+    const targetKey = sessionExerciseKey(notesDialogExercise)
     try {
       await api.post('/admin/session-detail-update-override-notes', {
         program_day_assignment_id: Number(programDayAssignmentId),
         client_id: Number(clientId),
-        workout_template_exercise_id: notesDialogExercise.workout_template_exercise_id,
+        ...overrideIdentity(targetKey),
         notes: notesValue || null,
       })
       toast.success('Notas guardadas')
@@ -599,7 +623,7 @@ function SessionContent({
         blocks: sessionData.blocks.map(b => ({
           ...b,
           exercises: b.exercises.map(e =>
-            e.workout_template_exercise_id === notesDialogExercise.workout_template_exercise_id
+            sessionExerciseKey(e) === targetKey
               ? { ...e, notes: notesValue || null }
               : e
           ),
@@ -664,7 +688,8 @@ function SessionContent({
     try {
       await api.post('/admin/session-detail-remove-exercise', {
         program_day_assignment_id: Number(programDayAssignmentId),
-        workout_template_exercise_id: exerciseId,
+        client_id: Number(clientId),
+        ...overrideIdentity(exerciseId),
       })
       toast.success('Ejercicio eliminado')
       const res = await api.get(`/admin/session-detail?program_day_assignment_id=${programDayAssignmentId}&client_id=${clientId}`)
