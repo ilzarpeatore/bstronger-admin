@@ -60,6 +60,7 @@ type WorkoutTemplateListItem = {
   title: string
   description: string | null
   is_exclusive?: boolean
+  is_public?: boolean
   exercise_count?: number
 }
 
@@ -89,6 +90,12 @@ export default function WorkoutTemplatesView() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [isExclusive, setIsExclusive] = useState(false)
+  // Bug real de privacidad (2026-09-18): el catálogo público de la app
+  // (Home > Entrenamientos) listaba TODOS los workouts, incluidos los
+  // personalizados de un cliente concreto -- ahora nacen privados
+  // (is_public=false por defecto en el backend) y el coach marca a mano
+  // los que quiere abrir al público, igual que ya hacía con "Exclusivo".
+  const [isPublic, setIsPublic] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Detalle: mismo componente y mismos endpoints que "Vista previa del
@@ -180,10 +187,10 @@ export default function WorkoutTemplatesView() {
     setSubmitting(true)
     try {
       if (editingItem) {
-        await api.post('/admin/workout-template-update', { id: editingItem.id, title, description, is_exclusive: isExclusive })
+        await api.post('/admin/workout-template-update', { id: editingItem.id, title, description, is_exclusive: isExclusive, is_public: isPublic })
         toast.success('Plantilla de entrenamiento actualizada')
       } else {
-        await api.post('/admin/workout-template-store', { title, description, is_exclusive: isExclusive })
+        await api.post('/admin/workout-template-store', { title, description, is_exclusive: isExclusive, is_public: isPublic })
         toast.success('Plantilla de entrenamiento creada')
       }
       setDialogOpen(false)
@@ -474,7 +481,7 @@ export default function WorkoutTemplatesView() {
           </div>
           <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
             <Input placeholder='Buscar plantillas...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' />
-            <Button onClick={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setDialogOpen(true) }}>
+            <Button onClick={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setIsPublic(false); setDialogOpen(true) }}>
               <PlusIcon className='size-4 mr-2' /> Nueva plantilla
             </Button>
           </div>
@@ -489,13 +496,14 @@ export default function WorkoutTemplatesView() {
                   <TableHead>Descripción</TableHead>
                   <TableHead>Ejercicios</TableHead>
                   <TableHead>Exclusivo</TableHead>
+                  <TableHead>Público</TableHead>
                   <TableHead className='w-[120px]'>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className='h-24 text-center'>
+                    <TableCell colSpan={7} className='h-24 text-center'>
                       <div className='flex justify-center'>
                         <div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' />
                       </div>
@@ -509,10 +517,11 @@ export default function WorkoutTemplatesView() {
                       <TableCell className='text-muted-foreground truncate max-w-[200px]'>{item.description || '—'}</TableCell>
                       <TableCell><Badge variant='outline'>{item.exercise_count ?? 0}</Badge></TableCell>
                       <TableCell>{item.is_exclusive ? <Badge variant='default'>Exclusivo</Badge> : <Badge variant='outline'>Gratuito</Badge>}</TableCell>
+                      <TableCell>{item.is_public ? <Badge variant='default'>Público</Badge> : <Badge variant='outline'>Privado</Badge>}</TableCell>
                       <TableCell onClick={e => e.stopPropagation()}>
                         <div className='flex gap-2'>
                           <Button variant='outline' size='sm' onClick={() => {
-                            setEditingItem(item); setTitle(item.title); setDescription(item.description || ''); setIsExclusive(!!item.is_exclusive); setDialogOpen(true)
+                            setEditingItem(item); setTitle(item.title); setDescription(item.description || ''); setIsExclusive(!!item.is_exclusive); setIsPublic(!!item.is_public); setDialogOpen(true)
                           }}>Editar</Button>
                           <Button variant='destructive' size='sm' onClick={() => { setDeletingItem(item); setDeleteDialogOpen(true) }}>
                             <TrashIcon className='size-3' />
@@ -523,7 +532,7 @@ export default function WorkoutTemplatesView() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className='h-24 text-center'>No se encontraron plantillas de entrenamiento.</TableCell>
+                    <TableCell colSpan={7} className='h-24 text-center'>No se encontraron plantillas de entrenamiento.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -554,6 +563,10 @@ export default function WorkoutTemplatesView() {
             <Field className='flex-row items-center justify-between gap-2'>
               <FieldLabel>Exclusivo (solo para programas, requiere un paquete con acceso completo a entrenamientos)</FieldLabel>
               <Switch checked={isExclusive} onCheckedChange={setIsExclusive} />
+            </Field>
+            <Field className='flex-row items-center justify-between gap-2'>
+              <FieldLabel>Público (visible para todos los clientes en Inicio y el catálogo de Entrenamientos de la app; desactivado por defecto)</FieldLabel>
+              <Switch checked={isPublic} onCheckedChange={setIsPublic} />
             </Field>
           </FieldGroup>
           <DialogFooter>
