@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { PlusIcon, TrashIcon, ArrowLeftIcon, DownloadIcon } from 'lucide-react'
+import { PlusIcon, TrashIcon, ArrowLeftIcon, DownloadIcon, ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -62,6 +62,7 @@ type WorkoutTemplateListItem = {
   is_exclusive?: boolean
   is_public?: boolean
   exercise_count?: number
+  thumbnail?: string | null
 }
 
 type SectionTemplate = {
@@ -97,6 +98,12 @@ export default function WorkoutTemplatesView() {
   // los que quiere abrir al público, igual que ya hacía con "Exclusivo".
   const [isPublic, setIsPublic] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // AÑADIDO (pedido explícito 2026-09-18): foto de la plantilla -- antes no
+  // existía forma de ponerla/cambiarla desde el panel, así que el calendario
+  // del cliente (ClientCalendarController::getMyMonth) nunca tenía un
+  // thumbnail real y caía siempre en el fallback genérico de stock.
+  const [image, setImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
 
   // Detalle: mismo componente y mismos endpoints que "Vista previa del
   // entrenamiento" (WorkoutPreviewModal) - antes esta pagina tenia su
@@ -186,11 +193,19 @@ export default function WorkoutTemplatesView() {
     if (!title.trim()) { toast.error('El título es obligatorio'); return }
     setSubmitting(true)
     try {
+      const fd = new FormData()
+      fd.append('title', title)
+      fd.append('description', description || '')
+      fd.append('is_exclusive', isExclusive ? '1' : '0')
+      fd.append('is_public', isPublic ? '1' : '0')
+      if (image) fd.append('image', image)
+
       if (editingItem) {
-        await api.post('/admin/workout-template-update', { id: editingItem.id, title, description, is_exclusive: isExclusive, is_public: isPublic })
+        fd.append('id', String(editingItem.id))
+        await api.upload('/admin/workout-template-update', fd)
         toast.success('Plantilla de entrenamiento actualizada')
       } else {
-        await api.post('/admin/workout-template-store', { title, description, is_exclusive: isExclusive, is_public: isPublic })
+        await api.upload('/admin/workout-template-store', fd)
         toast.success('Plantilla de entrenamiento creada')
       }
       setDialogOpen(false)
@@ -481,7 +496,7 @@ export default function WorkoutTemplatesView() {
           </div>
           <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
             <Input placeholder='Buscar plantillas...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' />
-            <Button onClick={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setIsPublic(false); setDialogOpen(true) }}>
+            <Button onClick={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setIsPublic(false); setImage(null); setImagePreview(null); setDialogOpen(true) }}>
               <PlusIcon className='size-4 mr-2' /> Nueva plantilla
             </Button>
           </div>
@@ -521,7 +536,9 @@ export default function WorkoutTemplatesView() {
                       <TableCell onClick={e => e.stopPropagation()}>
                         <div className='flex gap-2'>
                           <Button variant='outline' size='sm' onClick={() => {
-                            setEditingItem(item); setTitle(item.title); setDescription(item.description || ''); setIsExclusive(!!item.is_exclusive); setIsPublic(!!item.is_public); setDialogOpen(true)
+                            setEditingItem(item); setTitle(item.title); setDescription(item.description || ''); setIsExclusive(!!item.is_exclusive); setIsPublic(!!item.is_public)
+                            setImage(null); setImagePreview(item.thumbnail || null)
+                            setDialogOpen(true)
                           }}>Editar</Button>
                           <Button variant='destructive' size='sm' onClick={() => { setDeletingItem(item); setDeleteDialogOpen(true) }}>
                             <TrashIcon className='size-3' />
@@ -547,6 +564,30 @@ export default function WorkoutTemplatesView() {
             <DialogTitle>{editingItem ? 'Editar plantilla de entrenamiento' : 'Nueva plantilla de entrenamiento'}</DialogTitle>
           </DialogHeader>
           <FieldGroup className='gap-4'>
+            <Field className='gap-2'>
+              <FieldLabel>Foto (se muestra en el calendario del cliente)</FieldLabel>
+              <label className='block w-fit'>
+                <input
+                  type='file'
+                  accept='image/*'
+                  className='hidden'
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file) { setImage(file); setImagePreview(URL.createObjectURL(file)) }
+                  }}
+                />
+                <div className='w-24 h-24 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 cursor-pointer overflow-hidden transition-colors flex items-center justify-center bg-muted/20'>
+                  {imagePreview ? (
+                    <img src={imagePreview} alt='Vista previa' className='w-full h-full object-cover' />
+                  ) : (
+                    <div className='flex flex-col items-center gap-1 text-muted-foreground'>
+                      <ImageIcon className='size-5' />
+                      <span className='text-[10px]'>Elegir imagen</span>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </Field>
             <Field className='gap-2'>
               <FieldLabel>Título</FieldLabel>
               <Input value={title} onChange={e => setTitle(e.target.value)} placeholder='Título de la plantilla' />
