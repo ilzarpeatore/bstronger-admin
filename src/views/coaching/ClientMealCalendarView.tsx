@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 
@@ -22,9 +23,13 @@ const MEAL_TYPES: { key: MealType; label: string }[] = [
 
 type AssignedMeal = {
   id: number
-  recipe_id: number
+  recipe_id: number | null
+  fatsecret_recipe_id: number | null
   calories: number
-  recipe?: { id: number; title: string; recipe_image: string | null }
+  // Mismo shape para ambos orígenes -- ver DailyPlanRecipeResource::resolveRecipePreview()
+  // en el backend (Bckbs). `title`/`recipe_image` pueden venir null si el
+  // cache de FatSecret todavía no se ha rellenado para esa receta.
+  recipe?: { id: number; title: string | null; recipe_image: string | null; source?: 'fatsecret' }
   is_coach_assigned: boolean
   assigned_by?: { id: number; name: string }
 }
@@ -37,6 +42,12 @@ type CalendarDay = {
 
 type User = { id: number; name?: string; first_name?: string; last_name?: string; email: string }
 type RecipeOption = { id: number; title: string; calories?: number; recipe_image?: string | null }
+// Receta de FatSecret (2026-09-19, ver docs/FATSECRET_INTEGRATION.md en el
+// repo Bckbs) -- selección unificada con RecipeOption vía RecipeSelection,
+// nunca se guarda nada de esto de forma permanente, solo el id al asignar.
+type FatSecretRecipeOption = { fatsecret_recipe_id: number; name: string; image_url: string | null; calories: number }
+type RecipeSource = 'local' | 'fatsecret'
+type RecipeSelection = { source: RecipeSource; id: number; title: string; calories?: number; image_url?: string | null }
 
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTH_NAMES = [
@@ -94,10 +105,12 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assignDate, setAssignDate] = useState('')
   const [assignMealType, setAssignMealType] = useState<MealType>('breakfast')
+  const [recipeSource, setRecipeSource] = useState<RecipeSource>('local')
   const [recipeSearch, setRecipeSearch] = useState('')
   const [recipeResults, setRecipeResults] = useState<RecipeOption[]>([])
+  const [fatSecretResults, setFatSecretResults] = useState<FatSecretRecipeOption[]>([])
   const [recipeSearchLoading, setRecipeSearchLoading] = useState(false)
-  const [selectedRecipe, setSelectedRecipe] = useState<RecipeOption | null>(null)
+  const [selectedRecipe, setSelectedRecipe] = useState<RecipeSelection | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -163,13 +176,26 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
 
   const cells = useMemo(() => getCalendarCells(year, month), [year, month])
 
-  const searchRecipes = useCallback(async (query: string) => {
+  const searchRecipes = useCallback(async (query: string, source: RecipeSource) => {
+    if (source === 'fatsecret' && query.trim().length < 2) {
+      setFatSecretResults([])
+      return
+    }
     setRecipeSearchLoading(true)
     try {
-      const res = await api.get(`/admin/recipes?search=${encodeURIComponent(query)}&per_page=15`)
-      setRecipeResults(res.data?.data || res.data || [])
-    } catch {
-      setRecipeResults([])
+      if (source === 'local') {
+        const res = await api.get(`/admin/recipes?search=${encodeURIComponent(query)}&per_page=15`)
+        setRecipeResults(res.data?.data || res.data || [])
+      } else {
+        const res = await api.get(`/admin/fatsecret/recipes/search?q=${encodeURIComponent(query)}`)
+        setFatSecretResults(res.data?.results || [])
+      }
+    } catch (err: any) {
+      if (source === 'local') setRecipeResults([])
+      else {
+        setFatSecretResults([])
+        toast.error('No se pudo buscar en FatSecret', { description: err?.data?.message })
+      }
     } finally {
       setRecipeSearchLoading(false)
     }
@@ -178,9 +204,9 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   useEffect(() => {
     if (!assignDialogOpen) return
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch), 350)
+    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch, recipeSource), 350)
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
-  }, [recipeSearch, assignDialogOpen, searchRecipes])
+  }, [recipeSearch, recipeSource, assignDialogOpen, searchRecipes])
 
   const openAssignDialog = useCallback((dateStr: string, mealType: MealType) => {
     if (!clientId) {
@@ -189,11 +215,13 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
     }
     setAssignDate(dateStr)
     setAssignMealType(mealType)
+    setRecipeSource('local')
     setRecipeSearch('')
     setRecipeResults([])
+    setFatSecretResults([])
     setSelectedRecipe(null)
     setAssignDialogOpen(true)
-    searchRecipes('')
+    searchRecipes('', 'local')
   }, [clientId, searchRecipes])
 
   const handleAssign = useCallback(async () => {
@@ -204,7 +232,9 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
         user_id: Number(clientId),
         date: assignDate,
         meal_type: assignMealType,
-        recipe_id: selectedRecipe.id,
+        ...(selectedRecipe.source === 'fatsecret'
+          ? { fatsecret_recipe_id: selectedRecipe.id }
+          : { recipe_id: selectedRecipe.id }),
       })
       toast.success('Comida asignada')
       setAssignDialogOpen(false)
@@ -391,9 +421,11 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                                                 ? 'bg-orange-100 text-orange-800 border border-orange-200'
                                                 : 'bg-gray-100 text-gray-700 border border-gray-200'
                                             }`}
-                                            title={m.recipe?.title}
+                                            title={m.recipe?.title ?? undefined}
                                           >
-                                            <span className='truncate'>{m.recipe?.title ?? `Receta #${m.recipe_id}`}</span>
+                                            <span className='truncate'>
+                                              {m.recipe?.title ?? (m.fatsecret_recipe_id ? 'Receta de FatSecret' : `Receta #${m.recipe_id}`)}
+                                            </span>
                                             <button
                                               className='shrink-0 opacity-0 group-hover:opacity-100 hover:text-red-600'
                                               onClick={() => {
@@ -453,11 +485,37 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
             </Field>
             <Field className='gap-2'>
               <FieldLabel>Receta</FieldLabel>
+              <div className='flex gap-2'>
+                <Button
+                  type='button'
+                  variant={recipeSource === 'local' ? 'default' : 'outline'}
+                  size='sm'
+                  onClick={() => {
+                    setRecipeSource('local')
+                    setSelectedRecipe(null)
+                    searchRecipes(recipeSearch, 'local')
+                  }}
+                >
+                  Mis recetas
+                </Button>
+                <Button
+                  type='button'
+                  variant={recipeSource === 'fatsecret' ? 'default' : 'outline'}
+                  size='sm'
+                  onClick={() => {
+                    setRecipeSource('fatsecret')
+                    setSelectedRecipe(null)
+                    searchRecipes(recipeSearch, 'fatsecret')
+                  }}
+                >
+                  FatSecret
+                </Button>
+              </div>
               <div className='relative'>
                 <Search className='absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground' />
                 <Input
                   className='pl-8'
-                  placeholder='Buscar recetas...'
+                  placeholder={recipeSource === 'local' ? 'Buscar en tus recetas...' : 'Buscar en FatSecret (en inglés)...'}
                   value={recipeSearch}
                   onChange={e => {
                     setRecipeSearch(e.target.value)
@@ -468,25 +526,50 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
               <div className='max-h-56 overflow-y-auto border rounded-md divide-y'>
                 {recipeSearchLoading ? (
                   <div className='p-3 text-sm text-muted-foreground text-center'>Buscando…</div>
-                ) : recipeResults.length === 0 ? (
-                  <div className='p-3 text-sm text-muted-foreground text-center'>No se encontraron recetas</div>
+                ) : recipeSource === 'local' ? (
+                  recipeResults.length === 0 ? (
+                    <div className='p-3 text-sm text-muted-foreground text-center'>No se encontraron recetas</div>
+                  ) : (
+                    recipeResults.map(r => (
+                      <button
+                        key={r.id}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center justify-between ${
+                          selectedRecipe?.source === 'local' && selectedRecipe.id === r.id ? 'bg-muted' : ''
+                        }`}
+                        onClick={() => setSelectedRecipe({ source: 'local', id: r.id, title: r.title, calories: r.calories, image_url: r.recipe_image })}
+                      >
+                        <span className='truncate'>{r.title}</span>
+                        {r.calories != null && <span className='text-xs text-muted-foreground shrink-0 ml-2'>{r.calories} kcal</span>}
+                      </button>
+                    ))
+                  )
+                ) : fatSecretResults.length === 0 ? (
+                  <div className='p-3 text-sm text-muted-foreground text-center'>
+                    {recipeSearch.trim().length < 2 ? 'Escribe al menos 2 letras para buscar' : 'No se encontraron recetas'}
+                  </div>
                 ) : (
-                  recipeResults.map(r => (
+                  fatSecretResults.map(r => (
                     <button
-                      key={r.id}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center justify-between ${
-                        selectedRecipe?.id === r.id ? 'bg-muted' : ''
+                      key={r.fatsecret_recipe_id}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 ${
+                        selectedRecipe?.source === 'fatsecret' && selectedRecipe.id === r.fatsecret_recipe_id ? 'bg-muted' : ''
                       }`}
-                      onClick={() => setSelectedRecipe(r)}
+                      onClick={() => setSelectedRecipe({ source: 'fatsecret', id: r.fatsecret_recipe_id, title: r.name, calories: r.calories, image_url: r.image_url })}
                     >
-                      <span className='truncate'>{r.title}</span>
-                      {r.calories != null && <span className='text-xs text-muted-foreground shrink-0 ml-2'>{r.calories} kcal</span>}
+                      {r.image_url && (
+                        <img src={r.image_url} alt='' className='size-8 rounded object-cover shrink-0' />
+                      )}
+                      <span className='truncate flex-1'>{r.name}</span>
+                      <span className='text-xs text-muted-foreground shrink-0'>{Math.round(r.calories)} kcal</span>
                     </button>
                   ))
                 )}
               </div>
               {selectedRecipe && (
-                <div className='text-xs text-muted-foreground'>Seleccionado: <span className='font-medium text-foreground'>{selectedRecipe.title}</span></div>
+                <div className='text-xs text-muted-foreground flex items-center gap-1.5'>
+                  Seleccionado: <span className='font-medium text-foreground'>{selectedRecipe.title}</span>
+                  {selectedRecipe.source === 'fatsecret' && <Badge variant='outline' className='text-[10px] py-0'>FatSecret</Badge>}
+                </div>
               )}
             </Field>
           </FieldGroup>
