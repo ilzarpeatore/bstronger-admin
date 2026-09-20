@@ -282,7 +282,11 @@ export default function TrainingProgramsView() {
     try {
       const fd = new FormData()
       fd.append('file', importFile)
-      fd.append('dry_run', 'true')
+      // Laravel valida 'dry_run' con la regla `boolean`, que solo acepta
+      // 1/0/true/false reales o los strings "1"/"0" -- NO "true"/"false"
+      // (FormData solo puede enviar strings, y "true" literal falla esa
+      // regla con "The dry run field must be true or false").
+      fd.append('dry_run', '1')
       const res: any = await api.upload('/admin/program-import', fd)
       if (res?.ok === false) {
         setImportError(res.error || 'El archivo no se pudo analizar')
@@ -303,8 +307,8 @@ export default function TrainingProgramsView() {
     try {
       const fd = new FormData()
       fd.append('file', importFile)
-      fd.append('dry_run', 'false')
-      if (force) fd.append('force', 'true')
+      fd.append('dry_run', '0')
+      if (force) fd.append('force', '1')
       const res: any = await api.upload('/admin/program-import', fd)
       if (res?.ok === false) {
         setImportError(res.error || 'No se pudo importar el programa')
