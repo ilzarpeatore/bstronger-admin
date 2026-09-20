@@ -17,6 +17,10 @@ import {
   SparklesIcon,
   DumbbellIcon,
   MoonIcon,
+  UploadIcon,
+  FileSpreadsheetIcon,
+  CheckCircle2Icon,
+  AlertTriangleIcon,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -55,6 +59,21 @@ export default function TrainingProgramsView() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Importación de programa desde Excel (formato de
+  // AgenticdesignBS/agentes/programacion-entrenamiento/formato-salida/formato-excel.md,
+  // idéntico a database/data/programs/EXCEL_FORMAT.md en Bckbs).
+  // POST /admin/program-import — dry_run=true primero (preview + review_required),
+  // el coach confirma, dry_run=false importa de verdad. Nunca asigna a un cliente:
+  // eso sigue siendo manual desde "Asignar clientes", igual que documenta
+  // docs/AGENTE_IMPORTADOR.md (Bckbs).
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importAnalyzing, setImportAnalyzing] = useState(false)
+  const [importImporting, setImportImporting] = useState(false)
+  const [importPreview, setImportPreview] = useState<any | null>(null)
+  const [importDone, setImportDone] = useState<any | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
 
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [workoutTemplates, setWorkoutTemplates] = useState<Workout[]>([])
@@ -238,6 +257,70 @@ export default function TrainingProgramsView() {
       toast.error(err?.response?.data?.message || err?.message || 'Error al eliminar')
     }
   }
+
+  const openImportDialog = () => {
+    setImportFile(null)
+    setImportPreview(null)
+    setImportDone(null)
+    setImportError(null)
+    setImportAnalyzing(false)
+    setImportImporting(false)
+    setImportDialogOpen(true)
+  }
+
+  const handleImportFileChange = (file: File | null) => {
+    setImportFile(file)
+    setImportPreview(null)
+    setImportDone(null)
+    setImportError(null)
+  }
+
+  const handleAnalyzeImport = async () => {
+    if (!importFile) return
+    setImportAnalyzing(true)
+    setImportError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', importFile)
+      fd.append('dry_run', 'true')
+      const res: any = await api.upload('/admin/program-import', fd)
+      if (res?.ok === false) {
+        setImportError(res.error || 'El archivo no se pudo analizar')
+      } else {
+        setImportPreview(res)
+      }
+    } catch (err: any) {
+      setImportError(err?.data?.error || err?.response?.data?.message || err?.message || 'Error al analizar el archivo')
+    } finally {
+      setImportAnalyzing(false)
+    }
+  }
+
+  const handleConfirmImport = async (force = false) => {
+    if (!importFile) return
+    setImportImporting(true)
+    setImportError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', importFile)
+      fd.append('dry_run', 'false')
+      if (force) fd.append('force', 'true')
+      const res: any = await api.upload('/admin/program-import', fd)
+      if (res?.ok === false) {
+        setImportError(res.error || 'No se pudo importar el programa')
+      } else {
+        setImportDone(res)
+        toast.success('Programa importado a la biblioteca')
+        fetchItems()
+      }
+    } catch (err: any) {
+      setImportError(err?.data?.error || err?.response?.data?.message || err?.message || 'Error al importar el programa')
+    } finally {
+      setImportImporting(false)
+    }
+  }
+
+  const importIsDuplicate = !!importError && /existe|duplicad/i.test(importError)
 
   const reloadDetail = useCallback(async (id: number) => {
     const res = await api.get(`/admin/training-program-detail?id=${id}`)
@@ -1051,6 +1134,9 @@ export default function TrainingProgramsView() {
               onChange={(e) => setSearch(e.target.value)}
               className='w-full sm:w-64'
             />
+            <Button variant='outline' onClick={openImportDialog}>
+              <UploadIcon className='size-4 mr-2' /> Importar Excel
+            </Button>
             <Button onClick={openCreateDialog}>
               <PlusIcon className='size-4 mr-2' /> Nuevo programa
             </Button>
@@ -1341,6 +1427,161 @@ export default function TrainingProgramsView() {
             <Button variant='outline' onClick={() => setAssignDialogOpen(false)}>
               Cerrar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className='max-w-2xl max-h-[85vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle>Importar programa desde Excel</DialogTitle>
+          </DialogHeader>
+
+          <div className='space-y-4'>
+            <p className='text-sm text-muted-foreground'>
+              Sube el <code>.xlsx</code> con el formato de dos hojas (<code>Programa</code> +{' '}
+              <code>Programación</code>). Primero se analiza sin escribir nada en la base de datos
+              (vista previa); solo se importa de verdad cuando lo confirmes. El programa se crea en
+              la biblioteca sin asignar a ningún cliente — eso se hace después desde
+              &quot;Asignar clientes&quot;.
+            </p>
+
+            {!importFile ? (
+              <label className='block'>
+                <input
+                  type='file'
+                  accept='.xlsx'
+                  className='hidden'
+                  onChange={(e) => handleImportFileChange(e.target.files?.[0] || null)}
+                />
+                <div className='rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 py-10 bg-muted/20'>
+                  <FileSpreadsheetIcon className='size-8 text-muted-foreground/50' />
+                  <span className='text-sm font-medium'>Elegir archivo .xlsx</span>
+                </div>
+              </label>
+            ) : (
+              <div className='flex items-center justify-between rounded-lg border px-3 py-2'>
+                <div className='flex items-center gap-2 min-w-0'>
+                  <FileSpreadsheetIcon className='size-4 text-muted-foreground shrink-0' />
+                  <span className='text-sm font-medium truncate'>{importFile.name}</span>
+                </div>
+                {!importDone && (
+                  <Button variant='ghost' size='sm' onClick={() => handleImportFileChange(null)}>
+                    <XIcon className='size-3.5' />
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {importError && (
+              <div className='rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive flex items-start gap-2'>
+                <AlertTriangleIcon className='size-4 shrink-0 mt-0.5' />
+                <div className='space-y-2'>
+                  <p>{importError}</p>
+                  {importIsDuplicate && (
+                    <Button
+                      size='sm'
+                      variant='outline'
+                      onClick={() => handleConfirmImport(true)}
+                      disabled={importImporting}
+                    >
+                      {importImporting ? 'Reimportando...' : 'Forzar reimportación'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {importPreview && !importDone && (
+              <div className='space-y-3'>
+                <div className='rounded-lg border px-3 py-2.5 text-sm space-y-1'>
+                  <p>
+                    <span className='text-muted-foreground'>Programas detectados: </span>
+                    <span className='font-medium'>{importPreview.programs_detected ?? '—'}</span>
+                  </p>
+                  {Array.isArray(importPreview.results) && importPreview.results.map((r: any, i: number) => (
+                    <p key={i} className='text-muted-foreground'>
+                      {r.title || r.program?.title || `Programa ${i + 1}`}
+                      {r.preview?.weeks && ` — ${r.preview.weeks.length} semana(s)`}
+                    </p>
+                  ))}
+                </div>
+
+                {Array.isArray(importPreview.review_required) && importPreview.review_required.length > 0 ? (
+                  <div>
+                    <h4 className='text-sm font-medium mb-2 flex items-center gap-1.5'>
+                      <AlertTriangleIcon className='size-3.5 text-amber-500' />
+                      {importPreview.review_required.length} ejercicio(s) para revisar
+                    </h4>
+                    <div className='rounded-md border max-h-[240px] overflow-y-auto'>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Ejercicio origen</TableHead>
+                            <TableHead className='w-[70px]'>Nivel</TableHead>
+                            <TableHead>Match sugerido</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importPreview.review_required.map((r: any, i: number) => (
+                            <TableRow key={i}>
+                              <TableCell className='text-xs'>{r.source_exercise}</TableCell>
+                              <TableCell>
+                                <Badge variant={r.level === 'created' ? 'secondary' : 'outline'} className='text-[10px]'>
+                                  {r.level === 'created' ? 'Nuevo' : r.level}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className='text-xs text-muted-foreground'>
+                                {r.matched_title ? `${r.matched_title} (${Math.round((r.confidence || 0) * 100)}%)` : 'Se creará nuevo'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <p className='text-xs text-muted-foreground mt-1.5'>
+                      No bloquean el import — puedes revisarlos aquí o en el panel después de importar.
+                    </p>
+                  </div>
+                ) : (
+                  <p className='text-sm text-green-600 flex items-center gap-1.5'>
+                    <CheckCircle2Icon className='size-4' /> Todos los ejercicios coinciden con el catálogo (nivel A/B).
+                  </p>
+                )}
+              </div>
+            )}
+
+            {importDone && (
+              <div className='rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-3 text-sm space-y-1'>
+                <p className='font-medium text-green-700 dark:text-green-400 flex items-center gap-1.5'>
+                  <CheckCircle2Icon className='size-4' /> Programa importado a la biblioteca
+                </p>
+                {Array.isArray(importDone.results) && importDone.results.map((r: any, i: number) => (
+                  <p key={i} className='text-muted-foreground text-xs'>
+                    ID: {r.training_program_id ?? '—'} — {r.title || r.program?.title || ''}
+                  </p>
+                ))}
+                <p className='text-xs text-muted-foreground pt-1'>
+                  Todavía no está asignado a ningún cliente. Ciérralo y usa &quot;Asignar clientes&quot; desde la lista.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setImportDialogOpen(false)}>
+              {importDone ? 'Cerrar' : 'Cancelar'}
+            </Button>
+            {!importDone && !importPreview && (
+              <Button onClick={handleAnalyzeImport} disabled={!importFile || importAnalyzing}>
+                {importAnalyzing ? 'Analizando...' : 'Analizar (vista previa)'}
+              </Button>
+            )}
+            {!importDone && importPreview && (
+              <Button onClick={() => handleConfirmImport(false)} disabled={importImporting}>
+                {importImporting ? 'Importando...' : 'Confirmar e importar'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
