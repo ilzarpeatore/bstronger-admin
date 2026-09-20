@@ -142,6 +142,17 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
     } : prev)
   }
 
+  const handleUpdateTitle = async (title: string) => {
+    setDetail(prev => prev ? { ...prev, title } : prev)
+    try {
+      await api.post('/admin/workout-template-update', { id: workoutTemplateId, title })
+      toast.success('Nombre actualizado')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.data?.message || 'No se pudo renombrar el entrenamiento')
+      fetchDetail()
+    }
+  }
+
   const handleAddBlock = async (title: string) => {
     try {
       await api.post('/admin/workout-template-block-store', {
@@ -343,6 +354,7 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
               mode='library'
               availableExercises={availableExercises}
               availableExercisesLoading={availableLoading}
+              onUpdateTitle={handleUpdateTitle}
               onAddBlock={handleAddBlock}
               onRenameBlock={handleRenameBlock}
               onRemoveBlock={handleRemoveBlock}

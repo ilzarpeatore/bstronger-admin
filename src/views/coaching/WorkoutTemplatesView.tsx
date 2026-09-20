@@ -248,6 +248,20 @@ export default function WorkoutTemplatesView() {
     } : prev)
   }
 
+  const handleUpdateTitle = async (newTitle: string) => {
+    if (!detail) return
+    const id = detail.id
+    setDetail(prev => prev ? { ...prev, title: newTitle } : prev)
+    try {
+      await api.post('/admin/workout-template-update', { id, title: newTitle })
+      toast.success('Nombre actualizado')
+      fetchItems()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.data?.message || 'No se pudo renombrar el entrenamiento')
+      fetchDetail(id)
+    }
+  }
+
   const handleAddBlock = async (blockTitle: string) => {
     if (!detail) return
     try {
@@ -421,6 +435,7 @@ export default function WorkoutTemplatesView() {
               mode='library'
               availableExercises={availableExercises}
               availableExercisesLoading={availableLoading}
+              onUpdateTitle={handleUpdateTitle}
               onAddBlock={handleAddBlock}
               onRenameBlock={handleRenameBlock}
               onRemoveBlock={handleRemoveBlock}

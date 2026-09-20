@@ -96,6 +96,14 @@ export type WorkoutTemplateViewerProps = {
   headerExtras?: React.ReactNode
   availableExercises?: WorkoutViewerExercise[]
   availableExercisesLoading?: boolean
+  // BUG REAL (reportado 2026-09-20): no existía ninguna forma de renombrar
+  // el workout/plantilla desde este visor (ni desde "Vista previa del
+  // entrenamiento" en training-programs, ni desde el detalle de
+  // /workout-templates/{id}) -- el título se pintaba como texto estático
+  // (<h3>{title}</h3>), la única vía real era volver a la lista plana de
+  // /workout-templates y usar el lápiz de esa fila. Mismo patrón de
+  // click-para-renombrar que ya existe para los bloques (onRenameBlock).
+  onUpdateTitle?: (title: string) => void
   onAddBlock?: (title: string) => void
   onRenameBlock?: (blockId: number, title: string) => void
   onRemoveBlock?: (blockId: number) => void
@@ -424,6 +432,7 @@ export default function WorkoutTemplateViewer({
   headerExtras,
   availableExercises = [],
   availableExercisesLoading = false,
+  onUpdateTitle,
   onAddBlock,
   onRenameBlock,
   onRemoveBlock,
@@ -443,6 +452,15 @@ export default function WorkoutTemplateViewer({
 }: WorkoutTemplateViewerProps) {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
   const [mobileLibraryOpen, setMobileLibraryOpen] = useState(false)
+  const [renamingTitle, setRenamingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(title)
+  useEffect(() => { setTitleDraft(title) }, [title])
+  const commitRenameTitle = () => {
+    const next = titleDraft.trim()
+    if (next && next !== title) onUpdateTitle?.(next)
+    else setTitleDraft(title)
+    setRenamingTitle(false)
+  }
   const [search, setSearch] = useState('')
   const [exerciseSearch, setExerciseSearch] = useState('')
   const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(() => new Set(blocks.map(b => b.id)))
@@ -663,7 +681,24 @@ export default function WorkoutTemplateViewer({
           <div className='flex items-center gap-3 min-w-0'>
             <ExerciseThumbnail src={thumbnail || DEFAULT_THUMBNAIL} alt={title} className='size-12 rounded-xl' />
             <div className='min-w-0'>
-              <h3 className='text-base font-semibold truncate'>{title}</h3>
+              {renamingTitle ? (
+                <input
+                  className='h-7 w-full max-w-xs rounded border bg-background px-1.5 text-base font-semibold'
+                  value={titleDraft}
+                  onChange={e => setTitleDraft(e.target.value)}
+                  onBlur={commitRenameTitle}
+                  onKeyDown={e => { if (e.key === 'Enter') commitRenameTitle(); if (e.key === 'Escape') { setTitleDraft(title); setRenamingTitle(false) } }}
+                  autoFocus
+                />
+              ) : (
+                <h3
+                  className={cn('text-base font-semibold truncate', !readOnly && onUpdateTitle && 'cursor-pointer hover:underline decoration-dotted')}
+                  title={!readOnly && onUpdateTitle ? 'Clic para renombrar' : undefined}
+                  onClick={() => { if (!readOnly && onUpdateTitle) setRenamingTitle(true) }}
+                >
+                  {title}
+                </h3>
+              )}
               <div className='flex items-center gap-2 text-xs text-muted-foreground flex-wrap'>
                 <span>{allRoutineExercises.length} ejercicios</span>
                 <span>• {blocks.length} bloques</span>

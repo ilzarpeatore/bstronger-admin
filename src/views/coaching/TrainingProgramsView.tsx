@@ -198,7 +198,18 @@ export default function TrainingProgramsView() {
   }
 
   const handleSaveCreateEdit = async () => {
-    if (!formWorkoutId) {
+    // BUG REAL (reportado 2026-09-20): este campo es un resto de la
+    // arquitectura legacy Workout/WorkoutDay -- verificado que las 13 filas
+    // reales de training_programs tienen workout_id=null (todas usan
+    // program_day_assignments/workout_templates hoy). Al editar un programa
+    // existente, formWorkoutId siempre viene vacío (no hay nada que
+    // preseleccionar), así que este bloqueo impedía guardar SOLO el título
+    // sin llegar nunca a llamar al backend -- que además ni siquiera usa
+    // workout_id en training-program-update (ver TrainingProgramController::
+    // update(), solo acepta title/num_weeks/fecha_inicio/fecha_fin/activo).
+    // Sigue siendo obligatorio al CREAR porque training-program-store sí lo
+    // valida como required.
+    if (!editingProgram && !formWorkoutId) {
       toast.error('El entrenamiento es obligatorio')
 
       return
@@ -211,7 +222,6 @@ export default function TrainingProgramsView() {
         await api.post('/admin/training-program-update', {
           id: editingProgram.id,
           title: formTitle || null,
-          workout_id: Number(formWorkoutId),
           num_weeks: Number(formNumWeeks),
           fecha_inicio: formStartDate || null,
         })
@@ -1279,21 +1289,28 @@ export default function TrainingProgramsView() {
                 placeholder='Nombre del programa'
               />
             </Field>
-            <Field className='gap-2'>
-              <FieldLabel>Entrenamiento</FieldLabel>
-              <Select value={formWorkoutId} onValueChange={(v) => setFormWorkoutId(v ?? '')}>
-                <SelectTrigger>
-                  <SelectValue placeholder='Seleccionar entrenamiento' />
-                </SelectTrigger>
-                <SelectContent>
-                  {workouts.map((w) => (
-                    <SelectItem key={w.id} value={String(w.id)}>
-                      {w.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            {/* Campo legacy (Workout/WorkoutDay) -- solo aplica al crear un
+                programa nuevo por esa vía antigua. Los programas reales de
+                hoy (importados, duplicados) usan program_day_assignments y
+                no tienen workout_id, así que este campo no tiene sentido ni
+                se guarda al editar uno existente (ver handleSaveCreateEdit). */}
+            {!editingProgram && (
+              <Field className='gap-2'>
+                <FieldLabel>Entrenamiento</FieldLabel>
+                <Select value={formWorkoutId} onValueChange={(v) => setFormWorkoutId(v ?? '')}>
+                  <SelectTrigger>
+                    <SelectValue placeholder='Seleccionar entrenamiento' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workouts.map((w) => (
+                      <SelectItem key={w.id} value={String(w.id)}>
+                        {w.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <div className='grid grid-cols-2 gap-4'>
               <Field className='gap-2'>
                 <FieldLabel>Número de semanas</FieldLabel>
