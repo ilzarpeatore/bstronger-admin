@@ -49,6 +49,28 @@ type FatSecretRecipeOption = { fatsecret_recipe_id: number; name: string; image_
 type RecipeSource = 'local' | 'fatsecret'
 type RecipeSelection = { source: RecipeSource; id: number; title: string; calories?: number; image_url?: string | null }
 
+type LocalRecipeDetail = {
+  id: number; title: string; description?: string | null; preparation_time?: string | null
+  calories: number; protein: number; fats: number; carbs: number; recipe_image?: string | null
+}
+type RecipeIngredientRow = {
+  id: number; ingredient_id: number; ingredient_title: string
+  measurement_unit_id: number | null; measurement_unit_title: string | null
+  quantity: number; quantity_grams: number; quantity_display: string
+  calories: number; protein: number; fats: number; carbs: number
+}
+type FatSecretIngredientLine = { description: string | null; food_id: number | null; number_of_units: number | null; measurement_description: string | null }
+// Contenido en vivo de FatSecret (recipe.get.v2) para asignaciones
+// antiguas al calendario que se hicieron ANTES del fix de 2026-09-20
+// (ClientMealPlanController::assignRecipe() ahora siempre importa a la
+// biblioteca) -- sin recipe_id local no hay nada editable, solo lectura.
+type FatSecretRecipeDetail = {
+  fatsecret_recipe_id: number; name: string; image_url: string | null
+  calories: number; protein: number; fat: number; carbs: number
+  directions: string[]; ingredients: FatSecretIngredientLine[]
+}
+type SimpleOption = { id: number; title: string }
+
 const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -127,6 +149,21 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   const [importTemplateStartDate, setImportTemplateStartDate] = useState('')
   const [importTemplateWeeks, setImportTemplateWeeks] = useState('1')
   const [importingTemplate, setImportingTemplate] = useState(false)
+
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [detailMeal, setDetailMeal] = useState<AssignedMeal | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailRecipe, setDetailRecipe] = useState<LocalRecipeDetail | null>(null)
+  const [detailFsRecipe, setDetailFsRecipe] = useState<FatSecretRecipeDetail | null>(null)
+  const [detailIngredients, setDetailIngredients] = useState<RecipeIngredientRow[]>([])
+  const [detailEditing, setDetailEditing] = useState(false)
+  const [detailForm, setDetailForm] = useState<Record<string, any>>({})
+  const [detailSaving, setDetailSaving] = useState(false)
+  const [allIngredients, setAllIngredients] = useState<SimpleOption[]>([])
+  const [allUnits, setAllUnits] = useState<SimpleOption[]>([])
+  const [addIngOpen, setAddIngOpen] = useState(false)
+  const [addIngForm, setAddIngForm] = useState<Record<string, any>>({ ingredient_id: '', measurement_unit_id: '', quantity: 1, quantity_grams: '' })
+  const [savingIng, setSavingIng] = useState(false)
 
   const today = useMemo(() => getTodayString(), [])
 
@@ -315,6 +352,125 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
     }
   }
 
+  const loadIngredientPickerData = useCallback(() => {
+    if (allIngredients.length > 0) return
+    Promise.all([
+      api.get('/admin/ingredients?per_page=-1').catch(() => ({ data: { data: [] } })),
+      api.get('/admin/measurement-units?per_page=-1').catch(() => ({ data: { data: [] } })),
+    ]).then(([ingRes, unitRes]) => {
+      setAllIngredients(ingRes.data?.data || ingRes.data || [])
+      setAllUnits(unitRes.data?.data || unitRes.data || [])
+    })
+  }, [allIngredients.length])
+
+  const loadDetailIngredients = useCallback(async (recipeId: number) => {
+    try {
+      const res = await api.get(`/admin/recipe-ingredients?recipe_id=${recipeId}`)
+      setDetailIngredients(res.data || [])
+    } catch {
+      setDetailIngredients([])
+    }
+  }, [])
+
+  const openMealDetail = useCallback(async (meal: AssignedMeal) => {
+    setDetailMeal(meal)
+    setDetailDialogOpen(true)
+    setDetailEditing(false)
+    setDetailRecipe(null)
+    setDetailFsRecipe(null)
+    setDetailIngredients([])
+    setDetailLoading(true)
+    try {
+      if (meal.recipe_id) {
+        const [recRes] = await Promise.all([
+          api.get(`/admin/recipes/${meal.recipe_id}`),
+          loadDetailIngredients(meal.recipe_id),
+        ])
+        const rec = recRes.data?.data || recRes.data
+        setDetailRecipe(rec)
+        setDetailForm({ title: rec.title, calories: rec.calories, protein: rec.protein, fats: rec.fats, carbs: rec.carbs })
+      } else if (meal.fatsecret_recipe_id) {
+        const res = await api.get(`/admin/fatsecret/recipes/${meal.fatsecret_recipe_id}`)
+        setDetailFsRecipe(res.data?.data || res.data)
+      }
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'No se pudo cargar el contenido de la receta')
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [loadDetailIngredients])
+
+  const handleSaveDetailRecipe = async () => {
+    if (!detailRecipe) return
+    if (!detailForm.title?.trim()) { toast.error('El título es obligatorio'); return }
+    setDetailSaving(true)
+    try {
+      const res = await api.put(`/admin/recipes/${detailRecipe.id}`, {
+        title: detailForm.title.trim(),
+        calories: Number(detailForm.calories) || 0,
+        protein: Number(detailForm.protein) || 0,
+        fats: Number(detailForm.fats) || 0,
+        carbs: Number(detailForm.carbs) || 0,
+      })
+      const updated = res.data?.data || res.data
+      setDetailRecipe(updated)
+      toast.success('Receta actualizada')
+      setDetailEditing(false)
+      fetchCalendar()
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Error al actualizar la receta')
+    } finally {
+      setDetailSaving(false)
+    }
+  }
+
+  const openAddDetailIngredient = () => {
+    loadIngredientPickerData()
+    setAddIngForm({ ingredient_id: '', measurement_unit_id: '', quantity: 1, quantity_grams: '' })
+    setAddIngOpen(true)
+  }
+
+  const handleAddDetailIngredient = async () => {
+    if (!detailRecipe) return
+    if (!addIngForm.ingredient_id) { toast.error('Selecciona un ingrediente'); return }
+    if (!addIngForm.quantity || Number(addIngForm.quantity) <= 0) { toast.error('La cantidad debe ser > 0'); return }
+    setSavingIng(true)
+    try {
+      await api.post('/admin/recipe-ingredients-save', {
+        recipe_id: detailRecipe.id,
+        ingredients: [{
+          recipe_ingredient_id: null,
+          ingredient_id: Number(addIngForm.ingredient_id),
+          measurement_unit_id: addIngForm.measurement_unit_id ? Number(addIngForm.measurement_unit_id) : null,
+          quantity: Number(addIngForm.quantity),
+          quantity_grams: addIngForm.quantity_grams ? Number(addIngForm.quantity_grams) : 0,
+        }],
+      })
+      toast.success('Ingrediente añadido')
+      setAddIngOpen(false)
+      await loadDetailIngredients(detailRecipe.id)
+      const recRes = await api.get(`/admin/recipes/${detailRecipe.id}`)
+      setDetailRecipe(recRes.data?.data || recRes.data)
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Error al añadir el ingrediente')
+    } finally {
+      setSavingIng(false)
+    }
+  }
+
+  const handleRemoveDetailIngredient = async (ing: RecipeIngredientRow) => {
+    if (!detailRecipe) return
+    try {
+      await api.post('/admin/recipe-ingredients-delete', { id: ing.id, recipe_id: detailRecipe.id })
+      toast.success('Ingrediente eliminado')
+      await loadDetailIngredients(detailRecipe.id)
+      const recRes = await api.get(`/admin/recipes/${detailRecipe.id}`)
+      setDetailRecipe(recRes.data?.data || recRes.data)
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Error al eliminar el ingrediente')
+    }
+  }
+
   return (
     <>
       <Card>
@@ -416,19 +572,21 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                                         meals.map(m => (
                                           <div
                                             key={m.id}
-                                            className={`text-[9px] leading-tight px-1 py-0.5 rounded flex items-center justify-between gap-0.5 ${
+                                            className={`text-[9px] leading-tight px-1 py-0.5 rounded flex items-center justify-between gap-0.5 cursor-pointer hover:brightness-95 ${
                                               m.is_coach_assigned
                                                 ? 'bg-orange-100 text-orange-800 border border-orange-200'
                                                 : 'bg-gray-100 text-gray-700 border border-gray-200'
                                             }`}
                                             title={m.recipe?.title ?? undefined}
+                                            onClick={() => openMealDetail(m)}
                                           >
                                             <span className='truncate'>
                                               {m.recipe?.title ?? (m.fatsecret_recipe_id ? 'Receta de FatSecret' : `Receta #${m.recipe_id}`)}
                                             </span>
                                             <button
                                               className='shrink-0 opacity-0 group-hover:opacity-100 hover:text-red-600'
-                                              onClick={() => {
+                                              onClick={(e) => {
+                                                e.stopPropagation()
                                                 if (window.confirm('¿Eliminar esta comida?')) handleRemove(m.id)
                                               }}
                                             >
@@ -655,6 +813,169 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
             <Button onClick={handleImportTemplate} disabled={!importTemplateId || !importTemplateStartDate || importingTemplate}>
               {importingTemplate ? 'Importando…' : 'Importar'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className='max-w-lg max-h-[85vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle>
+              {detailRecipe?.title || detailFsRecipe?.name || 'Contenido de la receta'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <div className='flex justify-center py-12'><div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div>
+          ) : detailRecipe ? (
+            <div className='space-y-4'>
+              {detailRecipe.recipe_image && (
+                <img src={detailRecipe.recipe_image} alt='' className='w-full h-40 object-cover rounded-md' />
+              )}
+
+              {detailEditing ? (
+                <FieldGroup className='gap-3'>
+                  <Field className='gap-2'>
+                    <FieldLabel>Título</FieldLabel>
+                    <Input value={detailForm.title ?? ''} onChange={e => setDetailForm((p: any) => ({ ...p, title: e.target.value }))} />
+                  </Field>
+                  <div className='grid grid-cols-4 gap-2'>
+                    <Field className='gap-2'>
+                      <FieldLabel>Kcal</FieldLabel>
+                      <Input type='number' value={detailForm.calories ?? ''} onChange={e => setDetailForm((p: any) => ({ ...p, calories: e.target.value }))} />
+                    </Field>
+                    <Field className='gap-2'>
+                      <FieldLabel>Prot (g)</FieldLabel>
+                      <Input type='number' value={detailForm.protein ?? ''} onChange={e => setDetailForm((p: any) => ({ ...p, protein: e.target.value }))} />
+                    </Field>
+                    <Field className='gap-2'>
+                      <FieldLabel>Grasa (g)</FieldLabel>
+                      <Input type='number' value={detailForm.fats ?? ''} onChange={e => setDetailForm((p: any) => ({ ...p, fats: e.target.value }))} />
+                    </Field>
+                    <Field className='gap-2'>
+                      <FieldLabel>Carb (g)</FieldLabel>
+                      <Input type='number' value={detailForm.carbs ?? ''} onChange={e => setDetailForm((p: any) => ({ ...p, carbs: e.target.value }))} />
+                    </Field>
+                  </div>
+                  <div className='flex gap-2 justify-end'>
+                    <Button variant='outline' size='sm' onClick={() => setDetailEditing(false)}>Cancelar</Button>
+                    <Button size='sm' onClick={handleSaveDetailRecipe} disabled={detailSaving}>{detailSaving ? 'Guardando…' : 'Guardar cambios'}</Button>
+                  </div>
+                </FieldGroup>
+              ) : (
+                <div className='flex items-center justify-between'>
+                  <div className='flex gap-3 text-sm'>
+                    <span><b>{Math.round(detailRecipe.calories)}</b> kcal</span>
+                    <span><b>{Math.round(detailRecipe.protein)}</b>g pro</span>
+                    <span><b>{Math.round(detailRecipe.fats)}</b>g grasa</span>
+                    <span><b>{Math.round(detailRecipe.carbs)}</b>g carb</span>
+                  </div>
+                  <Button variant='outline' size='sm' onClick={() => setDetailEditing(true)}>Editar</Button>
+                </div>
+              )}
+
+              <div>
+                <div className='flex items-center justify-between mb-2'>
+                  <h4 className='text-sm font-medium'>Ingredientes</h4>
+                  <Button variant='outline' size='sm' onClick={openAddDetailIngredient}>
+                    <Plus className='size-3 mr-1' /> Añadir
+                  </Button>
+                </div>
+                {detailIngredients.length > 0 ? (
+                  <div className='space-y-1'>
+                    {detailIngredients.map(ing => (
+                      <div key={ing.id} className='flex items-center justify-between gap-2 text-xs border rounded-md px-2 py-1.5'>
+                        <span className='truncate'>{ing.ingredient_title} — {ing.quantity_display}</span>
+                        <div className='flex items-center gap-2 shrink-0'>
+                          <span className='text-muted-foreground'>{Math.round(ing.calories)} kcal</span>
+                          <button className='text-red-600 hover:text-red-800' onClick={() => handleRemoveDetailIngredient(ing)}>
+                            <X className='size-3' />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className='text-center text-xs text-muted-foreground py-4'>Sin ingredientes registrados</p>
+                )}
+              </div>
+            </div>
+          ) : detailFsRecipe ? (
+            <div className='space-y-4'>
+              <div className='rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800'>
+                Esta comida se asignó antes de que las recetas de FatSecret se guardaran en la biblioteca —
+                aquí solo puedes verla, no editarla. Quítala y vuelve a asignarla para poder editarla.
+              </div>
+              {detailFsRecipe.image_url && (
+                <img src={detailFsRecipe.image_url} alt='' className='w-full h-40 object-cover rounded-md' />
+              )}
+              <div className='flex gap-3 text-sm'>
+                <span><b>{Math.round(detailFsRecipe.calories)}</b> kcal</span>
+                <span><b>{Math.round(detailFsRecipe.protein)}</b>g pro</span>
+                <span><b>{Math.round(detailFsRecipe.fat)}</b>g grasa</span>
+                <span><b>{Math.round(detailFsRecipe.carbs)}</b>g carb</span>
+              </div>
+              {detailFsRecipe.ingredients.length > 0 && (
+                <div>
+                  <h4 className='text-sm font-medium mb-2'>Ingredientes</h4>
+                  <ul className='list-disc list-inside space-y-0.5 text-xs'>
+                    {detailFsRecipe.ingredients.map((ing, i) => (
+                      <li key={i}>{ing.description}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {detailFsRecipe.directions.length > 0 && (
+                <div>
+                  <h4 className='text-sm font-medium mb-2'>Preparación</h4>
+                  <ol className='list-decimal list-inside space-y-0.5 text-xs'>
+                    {detailFsRecipe.directions.map((d, i) => <li key={i}>{d}</li>)}
+                  </ol>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className='text-center text-sm text-muted-foreground py-8'>No se pudo cargar esta receta</p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addIngOpen} onOpenChange={setAddIngOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Añadir ingrediente</DialogTitle></DialogHeader>
+          <FieldGroup className='gap-4'>
+            <Field className='gap-2'>
+              <FieldLabel>Ingrediente</FieldLabel>
+              <Select value={addIngForm.ingredient_id || ''} onValueChange={v => setAddIngForm((p: any) => ({ ...p, ingredient_id: v }))}>
+                <SelectTrigger><SelectValue placeholder='Seleccionar ingrediente' /></SelectTrigger>
+                <SelectContent>
+                  {allIngredients.map(i => <SelectItem key={i.id} value={String(i.id)}>{i.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field className='gap-2'>
+              <FieldLabel>Unidad de medida</FieldLabel>
+              <Select value={addIngForm.measurement_unit_id || ''} onValueChange={v => setAddIngForm((p: any) => ({ ...p, measurement_unit_id: v }))}>
+                <SelectTrigger><SelectValue placeholder='Opcional' /></SelectTrigger>
+                <SelectContent>
+                  {allUnits.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className='grid grid-cols-2 gap-3'>
+              <Field className='gap-2'>
+                <FieldLabel>Cantidad</FieldLabel>
+                <Input type='number' step='0.01' value={addIngForm.quantity ?? ''} onChange={e => setAddIngForm((p: any) => ({ ...p, quantity: e.target.value }))} />
+              </Field>
+              <Field className='gap-2'>
+                <FieldLabel>Gramos</FieldLabel>
+                <Input type='number' step='0.01' value={addIngForm.quantity_grams ?? ''} onChange={e => setAddIngForm((p: any) => ({ ...p, quantity_grams: e.target.value }))} placeholder='Calculado automáticamente' />
+              </Field>
+            </div>
+          </FieldGroup>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setAddIngOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddDetailIngredient} disabled={savingIng}>{savingIng ? 'Guardando…' : 'Añadir'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

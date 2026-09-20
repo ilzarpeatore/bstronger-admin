@@ -43,7 +43,6 @@ const Workouts = Loadable(lazy(() => import('../views/fitness/WorkoutView')));
 const Tags = Loadable(lazy(() => import('../views/fitness/TagsView')));
 
 // mightyfitness diet/recipes
-const Diets = Loadable(lazy(() => import('../views/diet/DietView')));
 const DietMealItems = Loadable(lazy(() => import('../views/diet/DietMealItemsView')));
 const DietCategories = Loadable(lazy(() => import('../views/diet/CategoryDietView')));
 const Recipes = Loadable(lazy(() => import('../views/recipes/RecipeView')));
@@ -218,7 +217,7 @@ const Router = [
       { path: '/workouts', element: <Workouts /> },
       { path: '/tags', element: <Tags /> },
 
-      { path: '/diets', element: <Diets /> },
+      { path: '/diets', element: <MealPlanTemplates /> },
       { path: '/diet-meal-items', element: <DietMealItems /> },
       { path: '/diet-categories', element: <DietCategories /> },
       { path: '/recipes', element: <Recipes /> },
