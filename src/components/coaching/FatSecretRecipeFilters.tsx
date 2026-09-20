@@ -62,7 +62,12 @@ export function fatSecretFiltersToParams(f: FatSecretRecipeFilterValues): Record
   if (f.fatTo) params.fat_percentage_to = f.fatTo
   if (f.prepTimeFrom) params.prep_time_from = f.prepTimeFrom
   if (f.prepTimeTo) params.prep_time_to = f.prepTimeTo
-  if (f.mustHaveImages) params.must_have_images = 'true'
+  // Laravel valida esto como `boolean` (acepta 1/0/true/false REALES, no el
+  // string literal "true" que exige FatSecret) -- el backend hace esa
+  // conversión FatSecret-específica internamente
+  // (FatSecretRecipeService::buildSearchFilterParams()), aquí solo hay que
+  // mandar algo que la VALIDACIÓN de Laravel acepte.
+  if (f.mustHaveImages) params.must_have_images = '1'
   if (f.sortBy) params.sort_by = f.sortBy
   return params
 }
