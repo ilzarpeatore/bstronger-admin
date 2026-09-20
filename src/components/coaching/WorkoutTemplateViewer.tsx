@@ -34,7 +34,27 @@ import {
 } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+
+// Filtros de la Biblioteca de ejercicios (pedido explícito 2026-09-20) --
+// bodypartId/equipmentId/levelId son ids reales (bodypart-list/equipment-list/
+// level-list, ya existían para otras pantallas del panel), exerciseType es el
+// enum fijo de Exercise::EXERCISE_TYPES en el backend (Bckbs).
+export type ExerciseLibraryFilters = {
+  bodypartId?: number
+  equipmentId?: number
+  levelId?: number
+  exerciseType?: string
+}
+
+const EXERCISE_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'fuerza', label: 'Fuerza' },
+  { value: 'movilidad', label: 'Movilidad' },
+  { value: 'pliometria', label: 'Pliometría' },
+  { value: 'metabolico', label: 'Metabólico' },
+  { value: 'cardio', label: 'Cardio' },
+]
 
 export type WorkoutViewerExercise = {
   id: number
@@ -117,7 +137,10 @@ export type WorkoutTemplateViewerProps = {
   // solo cambia exercise_id) -- conserva prescribed/enabled_metrics/notes,
   // a diferencia de "eliminar + añadir desde la biblioteca" que los perdía.
   onSubstituteExercise?: (exercise: WorkoutViewerExercise, blockId: number, newExercise: WorkoutViewerExercise) => void
-  onSearchExercises?: (query: string) => void
+  // Filtros de la Biblioteca de ejercicios (pedido explícito 2026-09-20) --
+  // el segundo argumento siempre viaja, aunque esté vacío ({}), para que
+  // quien implemente onSearchExercises no tenga que comprobar `undefined`.
+  onSearchExercises?: (query: string, filters: ExerciseLibraryFilters) => void
   prescribedReadOnly?: boolean
   metricsReadOnly?: boolean
   // Motor de Auto-Regulación de Carga: acciones sobre exercise.load_suggestion
@@ -474,6 +497,12 @@ export default function WorkoutTemplateViewer({
   const [substituteTarget, setSubstituteTarget] = useState<{ blockId: number; exercise: WorkoutViewerExercise } | null>(null)
   const [substituteSearch, setSubstituteSearch] = useState('')
   const [renamingBlockTitle, setRenamingBlockTitle] = useState('')
+  const [libraryFilters, setLibraryFilters] = useState<ExerciseLibraryFilters>({})
+  const [libraryFiltersOpen, setLibraryFiltersOpen] = useState(false)
+  const [bodyparts, setBodyparts] = useState<{ id: number; title: string }[]>([])
+  const [equipmentOptions, setEquipmentOptions] = useState<{ id: number; title: string }[]>([])
+  const [levelOptions, setLevelOptions] = useState<{ id: number; title: string }[]>([])
+  const hasActiveLibraryFilters = Object.values(libraryFilters).some(v => v !== undefined && v !== '')
   const exerciseRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   const allRoutineExercises = useMemo(() => blocks.flatMap(b => b.exercises), [blocks])
@@ -496,28 +525,40 @@ export default function WorkoutTemplateViewer({
     })
   }, [blocks])
 
+  // Opciones de los filtros (pedido explícito 2026-09-20) -- listas de
+  // referencia casi estáticas, se piden una sola vez al montar en modo
+  // 'library'. bodypart-list/equipment-list/level-list ya existían para
+  // otras pantallas del panel, no son endpoints nuevos.
+  useEffect(() => {
+    if (mode !== 'library') return
+    api.get('/bodypart-list?per_page=-1').then(res => setBodyparts(res.data?.data || res.data || [])).catch(() => {})
+    api.get('/equipment-list?per_page=-1').then(res => setEquipmentOptions(res.data?.data || res.data || [])).catch(() => {})
+    api.get('/level-list?per_page=-1').then(res => setLevelOptions(res.data?.data || res.data || [])).catch(() => {})
+  }, [mode])
+
   useEffect(() => {
     if (mode !== 'library') return
     const timer = setTimeout(() => {
-      onSearchExercises?.(exerciseSearch)
+      onSearchExercises?.(exerciseSearch, libraryFilters)
     }, 250)
     return () => clearTimeout(timer)
-  }, [exerciseSearch, mode, onSearchExercises])
+  }, [exerciseSearch, libraryFilters, mode, onSearchExercises])
 
   // Mismo catalogo (availableExercises) que la biblioteca del panel
   // izquierdo, con su propio termino de busqueda -- el dialogo de
   // sustitucion reusa el fetch existente en vez de duplicar la logica.
+  // Sin filtros propios (fuera del alcance pedido) -- siempre manda {}.
   useEffect(() => {
     if (!substituteTarget) return
     const timer = setTimeout(() => {
-      onSearchExercises?.(substituteSearch)
+      onSearchExercises?.(substituteSearch, {})
     }, 250)
     return () => clearTimeout(timer)
   }, [substituteSearch, substituteTarget, onSearchExercises])
 
   const openSubstitute = (blockId: number, exercise: WorkoutViewerExercise) => {
     setSubstituteSearch('')
-    onSearchExercises?.('')
+    onSearchExercises?.('', {})
     setSubstituteTarget({ blockId, exercise })
   }
 
@@ -615,6 +656,75 @@ export default function WorkoutTemplateViewer({
           onChange={e => setExerciseSearch(e.target.value)}
         />
       </div>
+
+      {/* Filtros de la Biblioteca de ejercicios (pedido explícito 2026-09-20) --
+          músculo/equipo/nivel/tipo, combinables entre sí y con el buscador de
+          texto. Colapsados por defecto para no ocupar espacio permanente en
+          un panel ya estrecho. */}
+      <button
+        type='button'
+        className='flex items-center justify-between rounded-md border px-2 py-1.5 text-[11px] hover:bg-muted/50 transition-colors'
+        onClick={() => setLibraryFiltersOpen(v => !v)}
+      >
+        <span className='flex items-center gap-1'>
+          Filtros {hasActiveLibraryFilters && <span className='text-primary font-medium'>(activos)</span>}
+        </span>
+        <ChevronDownIcon className={cn('size-3 transition-transform', libraryFiltersOpen && 'rotate-180')} />
+      </button>
+      {libraryFiltersOpen && (
+        <div className='grid grid-cols-2 gap-1.5 rounded-md border p-2'>
+          <Select
+            value={libraryFilters.bodypartId ? String(libraryFilters.bodypartId) : '__any__'}
+            onValueChange={v => setLibraryFilters(f => ({ ...f, bodypartId: v === '__any__' ? undefined : Number(v) }))}
+          >
+            <SelectTrigger className='h-7 text-[11px]'><SelectValue placeholder='Músculo' /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value='__any__'>Cualquier músculo</SelectItem>
+              {bodyparts.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select
+            value={libraryFilters.equipmentId ? String(libraryFilters.equipmentId) : '__any__'}
+            onValueChange={v => setLibraryFilters(f => ({ ...f, equipmentId: v === '__any__' ? undefined : Number(v) }))}
+          >
+            <SelectTrigger className='h-7 text-[11px]'><SelectValue placeholder='Equipo/Máquina' /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value='__any__'>Cualquier equipo</SelectItem>
+              {equipmentOptions.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select
+            value={libraryFilters.levelId ? String(libraryFilters.levelId) : '__any__'}
+            onValueChange={v => setLibraryFilters(f => ({ ...f, levelId: v === '__any__' ? undefined : Number(v) }))}
+          >
+            <SelectTrigger className='h-7 text-[11px]'><SelectValue placeholder='Nivel' /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value='__any__'>Cualquier nivel</SelectItem>
+              {levelOptions.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select
+            value={libraryFilters.exerciseType || '__any__'}
+            onValueChange={v => setLibraryFilters(f => ({ ...f, exerciseType: (v && v !== '__any__') ? v : undefined }))}
+          >
+            <SelectTrigger className='h-7 text-[11px]'><SelectValue placeholder='Tipo' /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value='__any__'>Cualquier tipo</SelectItem>
+              {EXERCISE_TYPE_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {hasActiveLibraryFilters && (
+            <button
+              type='button'
+              className='col-span-2 text-[10px] text-muted-foreground hover:text-destructive text-center py-0.5'
+              onClick={() => setLibraryFilters({})}
+            >
+              Quitar filtros
+            </button>
+          )}
+        </div>
+      )}
+
       {targetBlockId && (
         <div className='text-[10px] text-muted-foreground bg-muted/50 rounded-lg p-2'>
           Añadiendo a: <span className='font-medium text-foreground'>{blocks.find(b => b.id === targetBlockId)?.title || 'Bloque'}</span>

@@ -16,6 +16,7 @@ import { api } from '@/lib/api'
 import WorkoutTemplateViewer, {
   type WorkoutViewerBlock,
   type WorkoutViewerExercise,
+  type ExerciseLibraryFilters,
 } from '@/components/coaching/WorkoutTemplateViewer'
 
 const DEFAULT_THUMBNAIL = 'https://app.hubfit.com/media/workout-thumbnails/default.jpg'
@@ -150,10 +151,15 @@ export default function WorkoutTemplatesView() {
     }
   }, [])
 
-  const fetchAvailableExercises = useCallback(async (searchTerm: string) => {
+  const fetchAvailableExercises = useCallback(async (searchTerm: string, filters: ExerciseLibraryFilters = {}) => {
     setAvailableLoading(true)
     try {
-      const res = await api.get(`/admin/exercises?search=${encodeURIComponent(searchTerm)}&per_page=500`)
+      const params = new URLSearchParams({ search: searchTerm, per_page: '500' })
+      if (filters.bodypartId) params.set('bodypart_id', String(filters.bodypartId))
+      if (filters.equipmentId) params.set('equipment_id', String(filters.equipmentId))
+      if (filters.levelId) params.set('level_id', String(filters.levelId))
+      if (filters.exerciseType) params.set('exercise_type', filters.exerciseType)
+      const res = await api.get(`/admin/exercises?${params.toString()}`)
       const exercisesData: ApiExercise[] = res.data?.data || res.data || []
       setAvailableExercises(exercisesData.map(e => ({
         id: e.id,
