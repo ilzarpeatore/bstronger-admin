@@ -46,8 +46,13 @@ const ChartFallback = ({ height = 200 }: { height?: number }) => (
 type UserDetail = {
   id: number; first_name: string; last_name: string; email: string; username: string
   phone_number: string | null; gender: string | null; status: string; profile_image: string | null
-  created_at: string; last_active_at: string | null; weight?: number | null; height?: number | null; age?: number | null
-  timezone?: string | null; user_profile?: { goal?: string | null; activity?: string | null; macro_type?: string | null } | null
+  created_at: string; last_active_at: string | null
+  // weight/height/age viven en user_profiles (onboarding), UserResource los
+  // expone anidados bajo user_profile -- nunca en el propio User (esas
+  // columnas no existen en `users`). BUG (2026-09-20): esta vista los leía
+  // como user.weight/user.height/user.age, que nunca existen -> Peso/Altura/
+  // BMI/BMR salían siempre en blanco aunque el dato sí estaba guardado.
+  timezone?: string | null; user_profile?: { goal?: string | null; activity?: string | null; macro_type?: string | null; weight?: number | null; height?: number | null; age?: number | null } | null
   is_personal_client?: boolean
 }
 type Tag = { id: number; title: string; color: string }
@@ -734,8 +739,11 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   if (loading) return <DetailSkeleton />
   if (!user) return <div className='text-center py-20 text-muted-foreground'>Usuario no encontrado</div>
 
-  const bmi = user.weight && user.height ? (user.weight / ((user.height / 100) ** 2)).toFixed(1) : null
-  const bmr = user.weight && user.height && user.age ? (10 * user.weight + 6.25 * user.height - 5 * user.age + 5).toFixed(0) : null
+  const profileWeight = user.user_profile?.weight ?? null
+  const profileHeight = user.user_profile?.height ?? null
+  const profileAge = user.user_profile?.age ?? null
+  const bmi = profileWeight && profileHeight ? (profileWeight / ((profileHeight / 100) ** 2)).toFixed(1) : null
+  const bmr = profileWeight && profileHeight && profileAge ? (10 * profileWeight + 6.25 * profileHeight - 5 * profileAge + 5).toFixed(0) : null
   const memberSince = new Date(user.created_at)
   const activeGoals = goals.filter(g => g.status === 'active')
   const activeLimitations = limitations.filter(l => l.status === 'active')
@@ -863,8 +871,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                     <div><p className='text-muted-foreground'>Teléfono</p><p className='font-medium'>{user.phone_number || '—'}</p></div>
                     <div><p className='text-muted-foreground'>Género</p><p className='font-medium capitalize'>{user.gender || '—'}</p></div>
                     <div><p className='text-muted-foreground'>Registrado</p><p className='font-medium'>{memberSince.toLocaleDateString()}</p></div>
-                    <div><p className='text-muted-foreground'>Peso</p><p className='font-medium'>{user.weight ?? '—'} kg</p></div>
-                    <div><p className='text-muted-foreground'>Altura</p><p className='font-medium'>{user.height ?? '—'} cm</p></div>
+                    <div><p className='text-muted-foreground'>Peso</p><p className='font-medium'>{profileWeight ?? '—'} kg</p></div>
+                    <div><p className='text-muted-foreground'>Altura</p><p className='font-medium'>{profileHeight ?? '—'} cm</p></div>
                   </div>
                 </CardContent>
               </Card>
