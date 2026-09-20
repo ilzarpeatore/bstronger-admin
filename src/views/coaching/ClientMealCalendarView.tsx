@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import FatSecretRecipeFilters, { EMPTY_FATSECRET_FILTERS, fatSecretFiltersToParams, fatSecretFiltersToRecipeTypesQuery, type FatSecretRecipeFilterValues } from '@/components/coaching/FatSecretRecipeFilters'
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks'
 type TemplateType = 'sequential' | 'weekday'
@@ -134,6 +135,7 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   const [recipeSearchLoading, setRecipeSearchLoading] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeSelection | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [fsFilters, setFsFilters] = useState<FatSecretRecipeFilterValues>(EMPTY_FATSECRET_FILTERS)
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
@@ -213,7 +215,7 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
 
   const cells = useMemo(() => getCalendarCells(year, month), [year, month])
 
-  const searchRecipes = useCallback(async (query: string, source: RecipeSource) => {
+  const searchRecipes = useCallback(async (query: string, source: RecipeSource, filters: FatSecretRecipeFilterValues) => {
     if (source === 'fatsecret' && query.trim().length < 2) {
       setFatSecretResults([])
       return
@@ -224,7 +226,8 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
         const res = await api.get(`/admin/recipes?search=${encodeURIComponent(query)}&per_page=15`)
         setRecipeResults(res.data?.data || res.data || [])
       } else {
-        const res = await api.get(`/admin/fatsecret/recipes/search?q=${encodeURIComponent(query)}`)
+        const params = new URLSearchParams({ q: query, ...fatSecretFiltersToParams(filters) })
+        const res = await api.get(`/admin/fatsecret/recipes/search?${params.toString()}${fatSecretFiltersToRecipeTypesQuery(filters)}`)
         setFatSecretResults(res.data?.results || [])
       }
     } catch (err: any) {
@@ -241,9 +244,9 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   useEffect(() => {
     if (!assignDialogOpen) return
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch, recipeSource), 350)
+    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch, recipeSource, fsFilters), 350)
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
-  }, [recipeSearch, recipeSource, assignDialogOpen, searchRecipes])
+  }, [recipeSearch, recipeSource, fsFilters, assignDialogOpen, searchRecipes])
 
   const openAssignDialog = useCallback((dateStr: string, mealType: MealType) => {
     if (!clientId) {
@@ -257,8 +260,9 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
     setRecipeResults([])
     setFatSecretResults([])
     setSelectedRecipe(null)
+    setFsFilters(EMPTY_FATSECRET_FILTERS)
     setAssignDialogOpen(true)
-    searchRecipes('', 'local')
+    searchRecipes('', 'local', EMPTY_FATSECRET_FILTERS)
   }, [clientId, searchRecipes])
 
   const handleAssign = useCallback(async () => {
@@ -651,7 +655,7 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                   onClick={() => {
                     setRecipeSource('local')
                     setSelectedRecipe(null)
-                    searchRecipes(recipeSearch, 'local')
+                    searchRecipes(recipeSearch, 'local', fsFilters)
                   }}
                 >
                   Mis recetas
@@ -663,7 +667,7 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                   onClick={() => {
                     setRecipeSource('fatsecret')
                     setSelectedRecipe(null)
-                    searchRecipes(recipeSearch, 'fatsecret')
+                    searchRecipes(recipeSearch, 'fatsecret', fsFilters)
                   }}
                 >
                   FatSecret
@@ -681,6 +685,9 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
                   }}
                 />
               </div>
+              {recipeSource === 'fatsecret' && (
+                <FatSecretRecipeFilters value={fsFilters} onChange={setFsFilters} endpoint='/admin/fatsecret/recipe-types' />
+              )}
               <div className='max-h-56 overflow-y-auto border rounded-md divide-y'>
                 {recipeSearchLoading ? (
                   <div className='p-3 text-sm text-muted-foreground text-center'>Buscando…</div>

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import FatSecretRecipeFilters, { EMPTY_FATSECRET_FILTERS, fatSecretFiltersToParams, fatSecretFiltersToRecipeTypesQuery, type FatSecretRecipeFilterValues } from '@/components/coaching/FatSecretRecipeFilters'
 
 // FatSecret (2026-09-20, ver docs/FATSECRET_INTEGRATION.md en Bckbs) --
 // mismo patron ya usado en ClientMealCalendarView.tsx.
@@ -74,6 +75,7 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
   const [recipeLoading, setRecipeLoading] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeSelection | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [fsFilters, setFsFilters] = useState<FatSecretRecipeFilterValues>(EMPTY_FATSECRET_FILTERS)
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [importOpen, setImportOpen] = useState(false)
@@ -119,7 +121,7 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
     return Array.from({ length: sequentialDayCount }, (_, i) => ({ key: String(i), label: `Día ${i + 1}` }))
   }, [template, sequentialDayCount])
 
-  const searchRecipes = useCallback(async (query: string, source: RecipeSource) => {
+  const searchRecipes = useCallback(async (query: string, source: RecipeSource, filters: FatSecretRecipeFilterValues) => {
     if (source === 'fatsecret' && query.trim().length < 2) {
       setFatSecretResults([])
       return
@@ -130,7 +132,8 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
         const res = await api.get(`/admin/recipes?search=${encodeURIComponent(query)}&per_page=15`)
         setRecipeResults(res.data?.data || res.data || [])
       } else {
-        const res = await api.get(`/admin/fatsecret/recipes/search?q=${encodeURIComponent(query)}`)
+        const params = new URLSearchParams({ q: query, ...fatSecretFiltersToParams(filters) })
+        const res = await api.get(`/admin/fatsecret/recipes/search?${params.toString()}${fatSecretFiltersToRecipeTypesQuery(filters)}`)
         setFatSecretResults(res.data?.results || [])
       }
     } catch (err: any) {
@@ -147,9 +150,9 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
   useEffect(() => {
     if (!assignOpen) return
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch, recipeSource), 350)
+    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch, recipeSource, fsFilters), 350)
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
-  }, [recipeSearch, recipeSource, assignOpen, searchRecipes])
+  }, [recipeSearch, recipeSource, fsFilters, assignOpen, searchRecipes])
 
   const openAssign = (dayKey: string, mealType: MealType) => {
     setAssignDayKey(dayKey)
@@ -159,8 +162,9 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
     setRecipeResults([])
     setFatSecretResults([])
     setSelectedRecipe(null)
+    setFsFilters(EMPTY_FATSECRET_FILTERS)
     setAssignOpen(true)
-    searchRecipes('', 'local')
+    searchRecipes('', 'local', EMPTY_FATSECRET_FILTERS)
   }
 
   const handleAddItem = async () => {
@@ -316,7 +320,7 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
                   type='button'
                   variant={recipeSource === 'local' ? 'default' : 'outline'}
                   size='sm'
-                  onClick={() => { setRecipeSource('local'); setSelectedRecipe(null); searchRecipes(recipeSearch, 'local') }}
+                  onClick={() => { setRecipeSource('local'); setSelectedRecipe(null); searchRecipes(recipeSearch, 'local', fsFilters) }}
                 >
                   Mis recetas
                 </Button>
@@ -324,7 +328,7 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
                   type='button'
                   variant={recipeSource === 'fatsecret' ? 'default' : 'outline'}
                   size='sm'
-                  onClick={() => { setRecipeSource('fatsecret'); setSelectedRecipe(null); searchRecipes(recipeSearch, 'fatsecret') }}
+                  onClick={() => { setRecipeSource('fatsecret'); setSelectedRecipe(null); searchRecipes(recipeSearch, 'fatsecret', fsFilters) }}
                 >
                   FatSecret
                 </Button>
@@ -338,6 +342,9 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
                   onChange={e => { setRecipeSearch(e.target.value); setSelectedRecipe(null) }}
                 />
               </div>
+              {recipeSource === 'fatsecret' && (
+                <FatSecretRecipeFilters value={fsFilters} onChange={setFsFilters} endpoint='/admin/fatsecret/recipe-types' />
+              )}
               <div className='max-h-56 overflow-y-auto border rounded-md divide-y'>
                 {recipeLoading ? (
                   <div className='p-3 text-sm text-muted-foreground text-center'>Buscando…</div>

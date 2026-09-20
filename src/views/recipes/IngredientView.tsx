@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 
-type FoodSearchResult = { food_id: number; food_name: string; food_type: string; brand_name: string | null }
+type NutritionPreview = { serving_description: string; calories: number; protein: number; fat: number; carbs: number }
+type FoodSearchResult = { food_id: number; food_name: string; food_type: string; brand_name: string | null; nutrition_preview: NutritionPreview | null }
 type FoodDetail = {
   food_id: number
   food_name_en: string
@@ -162,11 +163,12 @@ const FatSecretImportCard = ({ onImported }: { onImported: () => void }) => {
                   <TableHead className='w-[40px]' />
                   <TableHead>Nombre</TableHead>
                   <TableHead className='w-[100px]'>Tipo</TableHead>
+                  <TableHead className='w-[220px]'>Nutrición (preview)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {searching ? (
-                  <TableRow><TableCell colSpan={3} className='h-16 text-center text-sm text-muted-foreground'>Buscando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={4} className='h-16 text-center text-sm text-muted-foreground'>Buscando...</TableCell></TableRow>
                 ) : (
                   results.map(food => (
                     <TableRow
@@ -181,6 +183,16 @@ const FatSecretImportCard = ({ onImported }: { onImported: () => void }) => {
                       </TableCell>
                       <TableCell>
                         <Badge variant={food.food_type === 'Generic' ? 'default' : 'secondary'}>{food.food_type}</Badge>
+                      </TableCell>
+                      <TableCell className='text-xs text-muted-foreground'>
+                        {food.nutrition_preview ? (
+                          <>
+                            {food.nutrition_preview.calories} kcal · P {food.nutrition_preview.protein}g · G {food.nutrition_preview.fat}g · C {food.nutrition_preview.carbs}g
+                            <span className='block'>por {food.nutrition_preview.serving_description}</span>
+                          </>
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
