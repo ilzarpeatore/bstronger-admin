@@ -93,6 +93,7 @@ export default function TrainingProgramsView() {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingItem, setDeletingItem] = useState<TrainingProgram | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<number | null>(null)
 
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assigningProgram, setAssigningProgram] = useState<TrainingProgram | null>(null)
@@ -255,6 +256,24 @@ export default function TrainingProgramsView() {
       fetchItems()
     } catch (err: any) {
       toast.error(err?.response?.data?.message || err?.message || 'Error al eliminar')
+    }
+  }
+
+  // Duplica el programa como una fila 100% independiente en la BD (clona
+  // tambien cada workout_template/bloque/ejercicio, no solo reapunta a los
+  // mismos ids) -- editar la copia nunca debe mutar el original. El
+  // duplicado nace sin clientes asignados, igual que un programa recien
+  // importado. Ver TrainingProgramController::duplicate() en Bckbs.
+  const handleDuplicate = async (program: TrainingProgram) => {
+    setDuplicatingId(program.id)
+    try {
+      const res: any = await api.post('/admin/training-program-duplicate', { id: program.id })
+      toast.success(res?.message || res?.data?.message || 'Programa duplicado')
+      fetchItems()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.data?.message || err?.message || 'Error al duplicar el programa')
+    } finally {
+      setDuplicatingId(null)
     }
   }
 
@@ -1209,6 +1228,15 @@ export default function TrainingProgramsView() {
                             title='Asignar clientes'
                           >
                             <UsersIcon className='size-3' />
+                          </Button>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() => handleDuplicate(item)}
+                            disabled={duplicatingId === item.id}
+                            title='Duplicar (copia 100% independiente, sin clientes asignados)'
+                          >
+                            <CopyIcon className='size-3' />
                           </Button>
                           <Button
                             variant='destructive'
