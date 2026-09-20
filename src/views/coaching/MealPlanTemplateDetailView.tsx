@@ -11,6 +11,12 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 
+// FatSecret (2026-09-20, ver docs/FATSECRET_INTEGRATION.md en Bckbs) --
+// mismo patron ya usado en ClientMealCalendarView.tsx.
+type FatSecretRecipeOption = { fatsecret_recipe_id: number; name: string; image_url: string | null; calories: number }
+type RecipeSource = 'local' | 'fatsecret'
+type RecipeSelection = { source: RecipeSource; id: number; title: string; calories?: number }
+
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks'
 type TemplateType = 'sequential' | 'weekday'
 
@@ -35,9 +41,10 @@ type TemplateItem = {
   id: number
   day_key: string
   meal_type: MealType
-  recipe_id: number
+  recipe_id: number | null
+  fatsecret_recipe_id: number | null
   calories: number
-  recipe?: { id: number; title: string; recipe_image: string | null }
+  recipe?: { id: number; title: string | null; recipe_image: string | null; source?: 'fatsecret' }
 }
 
 type TemplateDetail = {
@@ -60,10 +67,12 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignDayKey, setAssignDayKey] = useState('')
   const [assignMealType, setAssignMealType] = useState<MealType>('breakfast')
+  const [recipeSource, setRecipeSource] = useState<RecipeSource>('local')
   const [recipeSearch, setRecipeSearch] = useState('')
   const [recipeResults, setRecipeResults] = useState<RecipeOption[]>([])
+  const [fatSecretResults, setFatSecretResults] = useState<FatSecretRecipeOption[]>([])
   const [recipeLoading, setRecipeLoading] = useState(false)
-  const [selectedRecipe, setSelectedRecipe] = useState<RecipeOption | null>(null)
+  const [selectedRecipe, setSelectedRecipe] = useState<RecipeSelection | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -110,13 +119,26 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
     return Array.from({ length: sequentialDayCount }, (_, i) => ({ key: String(i), label: `Día ${i + 1}` }))
   }, [template, sequentialDayCount])
 
-  const searchRecipes = useCallback(async (query: string) => {
+  const searchRecipes = useCallback(async (query: string, source: RecipeSource) => {
+    if (source === 'fatsecret' && query.trim().length < 2) {
+      setFatSecretResults([])
+      return
+    }
     setRecipeLoading(true)
     try {
-      const res = await api.get(`/admin/recipes?search=${encodeURIComponent(query)}&per_page=15`)
-      setRecipeResults(res.data?.data || res.data || [])
-    } catch {
-      setRecipeResults([])
+      if (source === 'local') {
+        const res = await api.get(`/admin/recipes?search=${encodeURIComponent(query)}&per_page=15`)
+        setRecipeResults(res.data?.data || res.data || [])
+      } else {
+        const res = await api.get(`/admin/fatsecret/recipes/search?q=${encodeURIComponent(query)}`)
+        setFatSecretResults(res.data?.results || [])
+      }
+    } catch (err: any) {
+      if (source === 'local') setRecipeResults([])
+      else {
+        setFatSecretResults([])
+        toast.error('No se pudo buscar en FatSecret', { description: err?.data?.message })
+      }
     } finally {
       setRecipeLoading(false)
     }
@@ -125,18 +147,20 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
   useEffect(() => {
     if (!assignOpen) return
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch), 350)
+    searchDebounce.current = setTimeout(() => searchRecipes(recipeSearch, recipeSource), 350)
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current) }
-  }, [recipeSearch, assignOpen, searchRecipes])
+  }, [recipeSearch, recipeSource, assignOpen, searchRecipes])
 
   const openAssign = (dayKey: string, mealType: MealType) => {
     setAssignDayKey(dayKey)
     setAssignMealType(mealType)
+    setRecipeSource('local')
     setRecipeSearch('')
     setRecipeResults([])
+    setFatSecretResults([])
     setSelectedRecipe(null)
     setAssignOpen(true)
-    searchRecipes('')
+    searchRecipes('', 'local')
   }
 
   const handleAddItem = async () => {
@@ -146,7 +170,9 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
       await api.post(`/admin/meal-plan-templates/${templateId}/items`, {
         day_key: assignDayKey,
         meal_type: assignMealType,
-        recipe_id: selectedRecipe.id,
+        ...(selectedRecipe.source === 'fatsecret'
+          ? { fatsecret_recipe_id: selectedRecipe.id }
+          : { recipe_id: selectedRecipe.id }),
       })
       toast.success('Comida añadida')
       setAssignOpen(false)
@@ -245,7 +271,9 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
                             ) : (
                               mealItems.map(it => (
                                 <div key={it.id} className='flex items-center justify-between gap-1 bg-blue-50 border border-blue-200 text-blue-800 text-[10px] rounded px-1.5 py-1'>
-                                  <span className='truncate'>{it.recipe?.title ?? `Receta #${it.recipe_id}`}</span>
+                                  <span className='truncate'>
+                                    {it.recipe?.title ?? (it.fatsecret_recipe_id ? 'Receta de FatSecret' : `Receta #${it.recipe_id}`)}
+                                  </span>
                                   <button onClick={() => handleRemoveItem(it.id)} className='shrink-0 hover:text-red-600'>
                                     <X className='size-3' />
                                   </button>
@@ -283,11 +311,29 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
           <FieldGroup className='gap-3'>
             <Field className='gap-2'>
               <FieldLabel>Receta</FieldLabel>
+              <div className='flex gap-2'>
+                <Button
+                  type='button'
+                  variant={recipeSource === 'local' ? 'default' : 'outline'}
+                  size='sm'
+                  onClick={() => { setRecipeSource('local'); setSelectedRecipe(null); searchRecipes(recipeSearch, 'local') }}
+                >
+                  Mis recetas
+                </Button>
+                <Button
+                  type='button'
+                  variant={recipeSource === 'fatsecret' ? 'default' : 'outline'}
+                  size='sm'
+                  onClick={() => { setRecipeSource('fatsecret'); setSelectedRecipe(null); searchRecipes(recipeSearch, 'fatsecret') }}
+                >
+                  FatSecret
+                </Button>
+              </div>
               <div className='relative'>
                 <Search className='absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground' />
                 <Input
                   className='pl-8'
-                  placeholder='Buscar recetas...'
+                  placeholder={recipeSource === 'local' ? 'Buscar en tus recetas...' : 'Buscar en FatSecret (en inglés)...'}
                   value={recipeSearch}
                   onChange={e => { setRecipeSearch(e.target.value); setSelectedRecipe(null) }}
                 />
@@ -295,21 +341,45 @@ export default function MealPlanTemplateDetailView({ templateId }: { templateId:
               <div className='max-h-56 overflow-y-auto border rounded-md divide-y'>
                 {recipeLoading ? (
                   <div className='p-3 text-sm text-muted-foreground text-center'>Buscando…</div>
-                ) : recipeResults.length === 0 ? (
-                  <div className='p-3 text-sm text-muted-foreground text-center'>No se encontraron recetas</div>
+                ) : recipeSource === 'local' ? (
+                  recipeResults.length === 0 ? (
+                    <div className='p-3 text-sm text-muted-foreground text-center'>No se encontraron recetas</div>
+                  ) : (
+                    recipeResults.map(r => (
+                      <button
+                        key={r.id}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center justify-between ${selectedRecipe?.source === 'local' && selectedRecipe.id === r.id ? 'bg-muted' : ''}`}
+                        onClick={() => setSelectedRecipe({ source: 'local', id: r.id, title: r.title, calories: r.calories })}
+                      >
+                        <span className='truncate'>{r.title}</span>
+                        {r.calories != null && <span className='text-xs text-muted-foreground shrink-0 ml-2'>{r.calories} kcal</span>}
+                      </button>
+                    ))
+                  )
+                ) : fatSecretResults.length === 0 ? (
+                  <div className='p-3 text-sm text-muted-foreground text-center'>
+                    {recipeSearch.trim().length < 2 ? 'Escribe al menos 2 letras para buscar' : 'No se encontraron recetas'}
+                  </div>
                 ) : (
-                  recipeResults.map(r => (
+                  fatSecretResults.map(r => (
                     <button
-                      key={r.id}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center justify-between ${selectedRecipe?.id === r.id ? 'bg-muted' : ''}`}
-                      onClick={() => setSelectedRecipe(r)}
+                      key={r.fatsecret_recipe_id}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 ${selectedRecipe?.source === 'fatsecret' && selectedRecipe.id === r.fatsecret_recipe_id ? 'bg-muted' : ''}`}
+                      onClick={() => setSelectedRecipe({ source: 'fatsecret', id: r.fatsecret_recipe_id, title: r.name, calories: r.calories })}
                     >
-                      <span className='truncate'>{r.title}</span>
-                      {r.calories != null && <span className='text-xs text-muted-foreground shrink-0 ml-2'>{r.calories} kcal</span>}
+                      {r.image_url && <img src={r.image_url} alt='' className='size-7 rounded object-cover shrink-0' />}
+                      <span className='truncate flex-1'>{r.name}</span>
+                      <span className='text-xs text-muted-foreground shrink-0'>{Math.round(r.calories)} kcal</span>
                     </button>
                   ))
                 )}
               </div>
+              {selectedRecipe && (
+                <div className='text-xs text-muted-foreground flex items-center gap-1.5'>
+                  Seleccionado: <span className='font-medium text-foreground'>{selectedRecipe.title}</span>
+                  {selectedRecipe.source === 'fatsecret' && <Badge variant='outline' className='text-[10px] py-0'>FatSecret</Badge>}
+                </div>
+              )}
             </Field>
           </FieldGroup>
           <DialogFooter>
