@@ -12,11 +12,30 @@ jobs:
       pull-requests: write
 
     steps:
+      # Este repo no tiene configurado el secret ANTHROPIC_API_KEY (bsa y
+      # Bckbs sí): sin él la action fallaba en rojo en TODOS los PRs sin
+      # llegar a revisar nada, y un check que siempre falla acaba ignorándose.
+      # Ahora se omite con un aviso visible; en cuanto se añada el secret en
+      # Settings > Secrets and variables > Actions vuelve a ejecutarse solo.
+      - name: Comprobar ANTHROPIC_API_KEY
+        id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Falta el secret ANTHROPIC_API_KEY en este repositorio: se omite la revisión de seguridad."
+          fi
+
       - uses: actions/checkout@v7
+        if: steps.key.outputs.present == 'true'
         with:
           fetch-depth: 0
 
       - name: Run Claude Code Security Review
+        if: steps.key.outputs.present == 'true'
         uses: anthropics/claude-code-security-review@main
         with:
           claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
