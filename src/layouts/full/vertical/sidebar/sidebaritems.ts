@@ -220,17 +220,35 @@ const SidebarContent: MenuItem[] = [
         name: "Entrenamiento",
         icon: Dumbbell,
         items: [
-          { id: uniqueId(), name: "Ejercicios", url: "/exercises" },
-          { id: uniqueId(), name: "Entrenamientos", url: "/workouts" },
           { id: uniqueId(), name: "Plantillas de entrenamiento", url: "/workout-templates" },
-          { id: uniqueId(), name: "Secciones", url: "/section-templates" },
           { id: uniqueId(), name: "Programas de entrenamiento", url: "/training-programs" },
-          { id: uniqueId(), name: "Partes del cuerpo", url: "/body-parts" },
-          { id: uniqueId(), name: "Equipamiento", url: "/equipment" },
-          { id: uniqueId(), name: "Niveles", url: "/levels" },
-          { id: uniqueId(), name: "Categorías", url: "/categories" },
-          { id: uniqueId(), name: "Tipos de entrenamiento", url: "/workout-types" },
-          { id: uniqueId(), name: "Etiquetas", url: "/tags" },
+          {
+            id: uniqueId(),
+            name: "Contenido",
+            items: [
+              { id: uniqueId(), name: "Ejercicios", url: "/exercises" },
+              { id: uniqueId(), name: "Entrenamientos", url: "/workouts" },
+              { id: uniqueId(), name: "Secciones", url: "/section-templates" },
+            ],
+          },
+          {
+            id: uniqueId(),
+            name: "Características",
+            items: [
+              { id: uniqueId(), name: "Partes del cuerpo", url: "/body-parts" },
+              { id: uniqueId(), name: "Equipamiento", url: "/equipment" },
+              { id: uniqueId(), name: "Niveles", url: "/levels" },
+            ],
+          },
+          {
+            id: uniqueId(),
+            name: "Clasificación",
+            items: [
+              { id: uniqueId(), name: "Categorías", url: "/categories" },
+              { id: uniqueId(), name: "Tipos de entrenamiento", url: "/workout-types" },
+              { id: uniqueId(), name: "Etiquetas", url: "/tags" },
+            ],
+          },
         ],
       },
       {
@@ -239,15 +257,27 @@ const SidebarContent: MenuItem[] = [
         icon: UtensilsCrossed,
         items: [
           { id: uniqueId(), name: "Dietas", url: "/diets" },
-          { id: uniqueId(), name: "Elementos de comidas", url: "/diet-meal-items" },
-          { id: uniqueId(), name: "Categorías de dietas", url: "/diet-categories" },
           { id: uniqueId(), name: "Recetas", url: "/recipes" },
-          { id: uniqueId(), name: "Categorías de recetas", url: "/recipe-categories" },
-          { id: uniqueId(), name: "Etiquetas de recetas", url: "/recipe-tags" },
-          { id: uniqueId(), name: "Ingredientes", url: "/ingredients" },
-          { id: uniqueId(), name: "Categorías de ingredientes", url: "/ingredient-categories" },
-          { id: uniqueId(), name: "Unidades de medida", url: "/measurement-units" },
-          { id: uniqueId(), name: "Conversiones de unidades", url: "/unit-conversions" },
+          { id: uniqueId(), name: "Elementos de comidas", url: "/diet-meal-items" },
+          {
+            id: uniqueId(),
+            name: "Ingredientes",
+            items: [
+              { id: uniqueId(), name: "Ingredientes", url: "/ingredients" },
+              { id: uniqueId(), name: "Categorías de ingredientes", url: "/ingredient-categories" },
+              { id: uniqueId(), name: "Unidades de medida", url: "/measurement-units" },
+              { id: uniqueId(), name: "Conversiones de unidades", url: "/unit-conversions" },
+            ],
+          },
+          {
+            id: uniqueId(),
+            name: "Clasificación",
+            items: [
+              { id: uniqueId(), name: "Categorías de dietas", url: "/diet-categories" },
+              { id: uniqueId(), name: "Categorías de recetas", url: "/recipe-categories" },
+              { id: uniqueId(), name: "Etiquetas de recetas", url: "/recipe-tags" },
+            ],
+          },
         ],
       },
       {
