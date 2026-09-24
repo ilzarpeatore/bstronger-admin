@@ -1,0 +1,4 @@
+# Saltos de línea fijos en el lockfile: en main estaba con CRLF (Windows) y
+# Dependabot lo escribe con LF, así que cada PR de dependencias lo reescribía
+# entero (~20.000 líneas) aunque solo cambiara un paquete.
+package-lock.json text eol=lf
