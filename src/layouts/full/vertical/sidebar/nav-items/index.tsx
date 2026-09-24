@@ -71,7 +71,7 @@ export default function NavItem({
 
         {/* Chevron only if it has children */}
         {hasChildren && (
-          <ChevronRight className="ms-auto h-4 w-4 transition-transform duration-200 group-open/nav:rotate-90 hide-menu" />
+          <ChevronRight className="ms-auto h-4 w-4 transition-transform duration-200 [details[open]>summary_&]:rotate-90 hide-menu" />
         )}
       </span>
     </motion.div >

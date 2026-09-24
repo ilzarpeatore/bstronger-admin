@@ -64,12 +64,11 @@ export default function NavCollapse({ menu, className }: NavCollapseProps) {
 
         <div className="pl-3 ml-5 border-l border-border">
           {item.items?.map((sub: ChildItem, index) =>
+            // Submenú anidado: se pinta como grupo con su propio nombre. Antes se
+            // reinvocaba NavCollapse con una sección sin `heading`, lo que
+            // creaba una fila raíz sin nombre (y cerrada) alrededor del grupo.
             sub.items ? (
-              <NavCollapse
-                key={index}
-                menu={[{ items: [sub] }]}
-                className={className}
-              />
+              renderChildItem(sub, index)
             ) : (
               <Link
                 key={index}
