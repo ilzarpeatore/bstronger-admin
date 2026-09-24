@@ -24,6 +24,7 @@ import { fetchExerciseBodyparts, primaryBodypart, getMuscleCatalogStats, fetchEx
 import { useNavigate } from 'react-router'
 import WorkoutPreviewModal from '@/components/coaching/WorkoutPreviewModal'
 import { useProgramSessionEditor, distinctPrograms } from '@/components/coaching/useProgramSessionEditor'
+import OnboardingAnswersDialog, { type OnboardingSection } from '@/components/users/OnboardingAnswersDialog'
 import { SessionDetailModal } from '@/views/coaching/SessionDetailView'
 import HabitDialog from '@/components/coaching/HabitDialog'
 import HabitProgressPanel, { type HabitProgressItem } from '@/components/coaching/HabitProgressPanel'
@@ -91,7 +92,7 @@ type ResourceItem = { id: number; coach_id: number; title: string; type: string;
 type ParQAnswers = { parq_heart_condition: boolean | null; parq_chest_pain_activity: boolean | null; parq_chest_pain_rest_last_month: boolean | null; parq_dizziness_balance: boolean | null; parq_bone_joint_problem: boolean | null; parq_bp_or_heart_medication: boolean | null; parq_reason_not_to_exercise: boolean | null; parq_fitness_level: number | null; parq_medical_history: string | null; parq_goals: string | null }
 type TrainingQuestionnaireAnswers = { goal_type: string | null; activity_level: string | null; lifestyle_type: string | null; training_experience_months: number | null; training_days_per_week: number | null; session_duration_preference: string | null; training_mindset: string | null; previous_coaching: string | null; current_routine_style: string | null; weekly_split_preference: string | null; technique_level: number | null; realistic_goal: string | null }
 type NutritionQuestionnaireAnswers = { allergies_intolerances: string | null; medications?: string | null; supplements?: string | null; disliked_foods: string | null; liked_foods: string | null; current_meals_per_day: number | null; desired_meals_per_day: number | null; typical_day_meals: string | null; favorite_meats: string | null; favorite_fish: string | null; favorite_fruits_vegetables: string | null; favorite_combined_dishes: string | null }
-type OnboardingDetail = { flagged_for_review: boolean; flagged_for_review_at: string | null; onboarding_completed: boolean; onboarding_completed_at: string | null; par_q: ParQAnswers | null; training_questionnaire: TrainingQuestionnaireAnswers | null; nutrition_questionnaire: NutritionQuestionnaireAnswers | null }
+type OnboardingDetail = { gender?: string | null; flagged_for_review: boolean; flagged_for_review_at: string | null; onboarding_completed: boolean; onboarding_completed_at: string | null; par_q: ParQAnswers | null; training_questionnaire: TrainingQuestionnaireAnswers | null; nutrition_questionnaire: NutritionQuestionnaireAnswers | null }
 
 // Feed de logros (achievement_events) -- historial de hitos detectados por el
 // motor de progresión que hoy no se ve en ningún sitio del panel.
@@ -341,6 +342,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const [assignResourceId, setAssignResourceId] = useState('')
   const [assigningResource, setAssigningResource] = useState(false)
   const [onboarding, setOnboarding] = useState<OnboardingDetail | null>(null)
+  const [onbEdit, setOnbEdit] = useState<OnboardingSection | null>(null)
   const [onboardingLoading, setOnboardingLoading] = useState(false)
   const [trainingExpDialogOpen, setTrainingExpDialogOpen] = useState(false)
   const [trainingExpForm, setTrainingExpForm] = useState({ training_experience_months: '', technique_level: '' })
@@ -1383,7 +1385,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
               {onboarding.flagged_for_review && <div className='flex items-center gap-2'><Badge variant='destructive' className='gap-1'><AlertTriangleIcon className='size-3' /> Marcado para revisión (riesgo cardíaco PAR-Q)</Badge>{onboarding.flagged_for_review_at && <span className='text-xs text-muted-foreground'>{new Date(onboarding.flagged_for_review_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}</div>}
             </CardContent></Card>
 
-            <Card><CardHeader><CardTitle className='text-base flex items-center gap-2'><HeartIcon className='size-4' /> PAR-Q (cuestionario de salud)</CardTitle></CardHeader><CardContent>
+            <Card><CardHeader className='flex flex-row items-center justify-between gap-2'><CardTitle className='text-base flex items-center gap-2'><HeartIcon className='size-4' /> PAR-Q (cuestionario de salud)</CardTitle><Button variant='outline' size='sm' onClick={() => setOnbEdit('par_q')}><PencilIcon className='size-3.5 mr-1' /> Editar</Button></CardHeader><CardContent>
               {onboarding.par_q ? (<div className='grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm'>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>¿Condición cardíaca conocida?</span>{yesNoBadge(onboarding.par_q.parq_heart_condition, true)}</div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>¿Dolor en el pecho con actividad?</span>{yesNoBadge(onboarding.par_q.parq_chest_pain_activity, true)}</div>
@@ -1398,7 +1400,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
               </div>) : <p className='text-center text-muted-foreground text-sm py-6'>Sin respuestas de PAR-Q todavía</p>}
             </CardContent></Card>
 
-            <Card><CardHeader><CardTitle className='text-base flex items-center gap-2'><DumbbellIcon className='size-4' /> Cuestionario de entrenamiento</CardTitle></CardHeader><CardContent>
+            <Card><CardHeader className='flex flex-row items-center justify-between gap-2'><CardTitle className='text-base flex items-center gap-2'><DumbbellIcon className='size-4' /> Cuestionario de entrenamiento</CardTitle><Button variant='outline' size='sm' onClick={() => setOnbEdit('training')}><PencilIcon className='size-3.5 mr-1' /> Editar</Button></CardHeader><CardContent>
               {onboarding.training_questionnaire ? (<div className='grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm'>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Objetivo</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.goal_type)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Nivel de actividad</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.activity_level)}</span></div>
@@ -1415,7 +1417,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
               </div>) : <p className='text-center text-muted-foreground text-sm py-6'>Sin respuestas del cuestionario de entrenamiento todavía</p>}
             </CardContent></Card>
 
-            <Card><CardHeader><CardTitle className='text-base flex items-center gap-2'><UtensilsIcon className='size-4' /> Cuestionario de nutrición</CardTitle></CardHeader><CardContent>
+            <Card><CardHeader className='flex flex-row items-center justify-between gap-2'><CardTitle className='text-base flex items-center gap-2'><UtensilsIcon className='size-4' /> Cuestionario de nutrición</CardTitle><Button variant='outline' size='sm' onClick={() => setOnbEdit('nutrition')}><PencilIcon className='size-3.5 mr-1' /> Editar</Button></CardHeader><CardContent>
               {onboarding.nutrition_questionnaire ? (<div className='grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm'>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Comidas actuales/día</span><span className='font-medium'>{onboarding.nutrition_questionnaire.current_meals_per_day ?? '—'}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Comidas deseadas/día</span><span className='font-medium'>{onboarding.nutrition_questionnaire.desired_meals_per_day ?? '—'}</span></div>
@@ -1610,6 +1612,14 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
       <Dialog open={!!previewPhoto} onOpenChange={() => setPreviewPhoto(null)}><DialogContent className='max-w-2xl'><DialogHeader><DialogTitle>{previewPhoto?.name || 'Foto de progreso'}</DialogTitle></DialogHeader>{previewPhoto && <div className='space-y-2'><img src={previewPhoto.url} alt={previewPhoto.name} loading='lazy' decoding='async' className='w-full rounded-lg' /><p className='text-sm text-muted-foreground text-center'>{new Date(previewPhoto.created_at).toLocaleDateString()}</p></div>}</DialogContent></Dialog>
       <WorkoutPreviewModal open={previewOpen} onOpenChange={setPreviewOpen} workoutTemplateId={previewTemplateId || 0} clientId={Number(userId)} />
       {programEditorElement}
+      <OnboardingAnswersDialog
+        section={onbEdit}
+        userId={Number(userId)}
+        gender={onboarding?.gender}
+        initial={onbEdit && onboarding ? ((onbEdit === 'par_q' ? onboarding.par_q : onbEdit === 'training' ? onboarding.training_questionnaire : onboarding.nutrition_questionnaire) as unknown as Record<string, unknown> | null) : null}
+        onClose={() => setOnbEdit(null)}
+        onSaved={fetchOnboarding}
+      />
 
       <SessionDetailModal
         open={!!selectedCompletedSession}
