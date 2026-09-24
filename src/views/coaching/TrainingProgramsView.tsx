@@ -21,6 +21,7 @@ import {
   FileSpreadsheetIcon,
   CheckCircle2Icon,
   AlertTriangleIcon,
+  Rows3Icon,
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -40,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
 import type { TrainingProgram, ProgramClientAssignment, Workout, User } from '@/types'
 import WorkoutPreviewModal from '@/components/coaching/WorkoutPreviewModal'
+import ProgramSessionMatrixEditor from '@/components/coaching/ProgramSessionMatrixEditor'
 
 export default function TrainingProgramsView() {
   const navigate = useNavigate()
@@ -104,6 +106,9 @@ export default function TrainingProgramsView() {
 
   const [calendarWeeks, setCalendarWeeks] = useState<any[]>([])
   const [calStartWeek, setCalStartWeek] = useState(1)
+  // Editor de sesiones a nivel programa: sesiones marcadas en el calendario y estado del editor.
+  const [selectedAssignments, setSelectedAssignments] = useState<number[]>([])
+  const [matrixEditor, setMatrixEditor] = useState<{ ids: number[] | null } | null>(null)
   const [calTotalWeeks, setCalTotalWeeks] = useState(0)
   const [calWeeksPerPage, setCalWeeksPerPage] = useState(4)
   const [assignDayTemplateId, setAssignDayTemplateId] = useState('')
@@ -761,7 +766,18 @@ export default function TrainingProgramsView() {
                   </span>
                 )}
               </div>
-              <div className='flex items-center gap-2'>
+              <div className='flex flex-wrap items-center gap-2'>
+                {selectedAssignments.length > 0 && (
+                  <>
+                    <Button size='sm' onClick={() => setMatrixEditor({ ids: selectedAssignments })}>
+                      <Rows3Icon className='size-3.5 mr-1' /> Editar seleccionadas ({selectedAssignments.length})
+                    </Button>
+                    <Button variant='ghost' size='sm' onClick={() => setSelectedAssignments([])}>Deseleccionar</Button>
+                  </>
+                )}
+                <Button variant='outline' size='sm' onClick={() => setMatrixEditor({ ids: null })}>
+                  <Rows3Icon className='size-3.5 mr-1' /> Editar sesiones del programa
+                </Button>
                 <Button variant='outline' size='sm' onClick={() => setCalWeeksPerPage(calWeeksPerPage === 4 ? 5 : 4)}>
                   {calWeeksPerPage} semanas
                 </Button>
@@ -859,10 +875,21 @@ export default function TrainingProgramsView() {
                               <p className='text-[11px] font-medium text-muted-foreground mb-2'>Día {dayCounter}</p>
                               {workout ? (
                                 <div
-                                  className='group rounded-lg border bg-card shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow flex-1'
+                                  className='group relative rounded-lg border bg-card shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow flex-1'
                                   draggable
                                   onDragStart={(e) => handleDragStart(e, workout.assignment_id)}
                                 >
+                                  <div
+                                    className='absolute left-1.5 top-1.5 z-10 rounded bg-background/90 p-0.5 shadow-sm'
+                                    onClick={(e) => e.stopPropagation()}
+                                    title='Seleccionar para editar varias sesiones a la vez'
+                                  >
+                                    <Checkbox
+                                      checked={selectedAssignments.includes(workout.assignment_id)}
+                                      onCheckedChange={(c) => setSelectedAssignments(prev => c === true ? [...prev, workout.assignment_id] : prev.filter(id => id !== workout.assignment_id))}
+                                      className='cursor-pointer'
+                                    />
+                                  </div>
                                   {workout.thumbnail ? (
                                     <div className='h-20 w-full overflow-hidden bg-muted'>
                                       <img src={workout.thumbnail} alt='' loading='lazy' decoding='async' className='w-full h-full object-cover' />
@@ -1143,6 +1170,16 @@ export default function TrainingProgramsView() {
             </Button>
           </div>
         </div>
+      )}
+
+      {matrixEditor && selected && (
+        <ProgramSessionMatrixEditor
+          open
+          onOpenChange={(o) => { if (!o) setMatrixEditor(null) }}
+          programId={selected.id}
+          initialAssignmentIds={matrixEditor.ids}
+          onSaved={() => { fetchCalendar() }}
+        />
       )}
 
       <WorkoutPreviewModal
