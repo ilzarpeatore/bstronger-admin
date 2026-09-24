@@ -127,6 +127,8 @@ export type WorkoutTemplateViewerProps = {
   onAddBlock?: (title: string) => void
   onRenameBlock?: (blockId: number, title: string) => void
   onRemoveBlock?: (blockId: number) => void
+  // Guardar el bloque como plantilla de sección reutilizable (/section-templates).
+  onSaveBlockAsSection?: (block: WorkoutViewerBlock) => void
   onUpdateBlockInstructions?: (blockId: number, value: string) => void
   onAddExercise?: (blockId: number, exercise: WorkoutViewerExercise) => void
   onRemoveExercise?: (blockId: number, exerciseId: number) => void
@@ -459,6 +461,7 @@ export default function WorkoutTemplateViewer({
   onAddBlock,
   onRenameBlock,
   onRemoveBlock,
+  onSaveBlockAsSection,
   onUpdateBlockInstructions,
   onAddExercise,
   onRemoveExercise,
@@ -944,7 +947,7 @@ export default function WorkoutTemplateViewer({
                         <PlusIcon className='size-3 mr-1' /> Añadir
                       </Button>
                     )}
-                    {!readOnly && (onRenameBlock || onRemoveBlock) && (
+                    {!readOnly && (onRenameBlock || onRemoveBlock || onSaveBlockAsSection) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger>
                           <span className='inline-flex size-6 items-center justify-center rounded-md hover:bg-muted'>
@@ -954,6 +957,9 @@ export default function WorkoutTemplateViewer({
                         <DropdownMenuContent align='end' className='text-xs'>
                           {onRenameBlock && (
                             <DropdownMenuItem onClick={() => startRenamingBlock(block.id, block.title)}>Renombrar</DropdownMenuItem>
+                          )}
+                          {onSaveBlockAsSection && (
+                            <DropdownMenuItem onClick={() => onSaveBlockAsSection(block)}>Guardar como plantilla de sección</DropdownMenuItem>
                           )}
                           {onRemoveBlock && (
                             <DropdownMenuItem onClick={() => setConfirmDeleteBlock(block)} className='text-destructive focus:text-destructive'>Eliminar bloque</DropdownMenuItem>

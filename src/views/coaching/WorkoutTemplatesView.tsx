@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { PlusIcon, TrashIcon, ArrowLeftIcon, DownloadIcon, ImageIcon } from 'lucide-react'
+import { ArrowLeftIcon, DownloadIcon, ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
@@ -18,6 +16,8 @@ import WorkoutTemplateViewer, {
   type WorkoutViewerExercise,
   type ExerciseLibraryFilters,
 } from '@/components/coaching/WorkoutTemplateViewer'
+import WorkoutTemplatesList from './WorkoutTemplatesList'
+import type { TemplateListItem } from './workoutTemplateGroups'
 
 const DEFAULT_THUMBNAIL = 'https://app.hubfit.com/media/workout-thumbnails/default.jpg'
 
@@ -56,15 +56,7 @@ type WorkoutDetail = {
   blocks: ApiBlock[]
 }
 
-type WorkoutTemplateListItem = {
-  id: number
-  title: string
-  description: string | null
-  is_exclusive?: boolean
-  is_public?: boolean
-  exercise_count?: number
-  thumbnail?: string | null
-}
+type WorkoutTemplateListItem = TemplateListItem
 
 type SectionTemplate = {
   id: number
@@ -84,7 +76,6 @@ export default function WorkoutTemplatesView() {
   const workoutId = params.id ? Number(params.id) : null
   const [items, setItems] = useState<WorkoutTemplateListItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingItem, setDeletingItem] = useState<WorkoutTemplateListItem | null>(null)
@@ -120,20 +111,24 @@ export default function WorkoutTemplatesView() {
   const [sections, setSections] = useState<SectionTemplate[]>([])
   const [importSectionDialogOpen, setImportSectionDialogOpen] = useState(false)
   const [importSectionId, setImportSectionId] = useState('')
+  // Guardar un bloque como plantilla de sección (inverso de "Importar sección").
+  const [saveSectionBlock, setSaveSectionBlock] = useState<WorkoutViewerBlock | null>(null)
+  const [saveSectionTitle, setSaveSectionTitle] = useState('')
+  const [savingSection, setSavingSection] = useState(false)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ per_page: '100' })
-      if (search) params.set('search', search)
-      const res = await api.get(`/admin/workout-template-list?${params}`)
+      // La búsqueda y los filtros se hacen en cliente (WorkoutTemplatesList);
+      // el endpoint devuelve todas las sueltas hasta per_page.
+      const res = await api.get('/admin/workout-template-list?per_page=1000')
       setItems(res.data?.data || res.data || [])
     } catch {
       toast.error('Error al cargar las plantillas de entrenamiento')
     } finally {
       setLoading(false)
     }
-  }, [search])
+  }, [])
 
   useEffect(() => { fetchItems() }, [fetchItems])
 
@@ -221,6 +216,21 @@ export default function WorkoutTemplatesView() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Borrado lógico de varias plantillas (selección en la lista por carpetas).
+  const handleBulkDelete = async (ids: number[]): Promise<number> => {
+    let ok = 0
+    for (const id of ids) {
+      try {
+        await api.post('/admin/workout-template-delete', { id })
+        ok++
+      } catch { /* se cuenta abajo */ }
+    }
+    if (ok === ids.length) toast.success(ok === 1 ? 'Plantilla eliminada' : `${ok} plantillas eliminadas`)
+    else toast.error(`Se eliminaron ${ok} de ${ids.length} plantillas`)
+    fetchItems()
+    return ok
   }
 
   const handleDelete = async () => {
@@ -324,6 +334,32 @@ export default function WorkoutTemplatesView() {
       fetchDetail(detail.id)
     } catch (err: any) {
       toast.error(err?.message || 'Error al importar la sección')
+    }
+  }
+
+  const openSaveAsSection = (block: WorkoutViewerBlock) => {
+    setSaveSectionBlock(block)
+    setSaveSectionTitle(block.title || '')
+  }
+
+  const handleSaveAsSection = async () => {
+    if (!saveSectionBlock) return
+    setSavingSection(true)
+    try {
+      const res = await api.post('/admin/workout-template-block-save-as-section', {
+        id: saveSectionBlock.id,
+        title: saveSectionTitle.trim() || null,
+      })
+      const sectionId = res?.data?.data?.id ?? res?.data?.id
+      setSaveSectionBlock(null)
+      toast.success('Bloque guardado como plantilla de sección', {
+        action: { label: 'Ver secciones', onClick: () => navigate(sectionId ? `/section-templates/${sectionId}` : '/section-templates') },
+      })
+      fetchSections()
+    } catch (err: any) {
+      toast.error(err?.message || 'Error al guardar el bloque como sección')
+    } finally {
+      setSavingSection(false)
     }
   }
 
@@ -445,6 +481,7 @@ export default function WorkoutTemplatesView() {
               onAddBlock={handleAddBlock}
               onRenameBlock={handleRenameBlock}
               onRemoveBlock={handleRemoveBlock}
+              onSaveBlockAsSection={openSaveAsSection}
               onUpdateBlockInstructions={handleUpdateBlockInstructions}
               onAddExercise={handleAddExercise}
               onRemoveExercise={handleRemoveExercise}
@@ -479,6 +516,27 @@ export default function WorkoutTemplatesView() {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={!!saveSectionBlock} onOpenChange={open => { if (!open) setSaveSectionBlock(null) }}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Guardar bloque como plantilla de sección</DialogTitle></DialogHeader>
+            <p className='text-sm text-muted-foreground'>
+              Se copiará el bloque (instrucciones y {saveSectionBlock?.exercises.length ?? 0} ejercicios con su prescripción y métricas)
+              a Plantillas de secciones para reutilizarlo en otros entrenamientos. Es una copia: editar uno no cambia el otro.
+              Las notas por ejercicio no se copian.
+            </p>
+            <Field className='gap-2'>
+              <FieldLabel>Nombre de la sección</FieldLabel>
+              <Input value={saveSectionTitle} onChange={e => setSaveSectionTitle(e.target.value)} placeholder='Nombre de la sección' />
+            </Field>
+            <DialogFooter>
+              <Button variant='outline' onClick={() => setSaveSectionBlock(null)} disabled={savingSection}>Cancelar</Button>
+              <Button onClick={handleSaveAsSection} disabled={savingSection || !saveSectionTitle.trim()}>
+                {savingSection ? 'Guardando...' : 'Guardar sección'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={importSectionDialogOpen} onOpenChange={setImportSectionDialogOpen}>
           <DialogContent>
             <DialogHeader><DialogTitle>Importar sección</DialogTitle></DialogHeader>
@@ -506,78 +564,19 @@ export default function WorkoutTemplatesView() {
 
   return (
     <>
-      <Card>
-        <CardHeader className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
-          <div>
-            <CardTitle>Plantillas de entrenamiento</CardTitle>
-            <CardDescription>
-              Solo plantillas sueltas para reutilizar. Las sesiones que ya pertenecen a un programa
-              (import o generador de semanas) se ven en su "Calendario del programa", en Programas de entrenamiento.
-            </CardDescription>
-          </div>
-          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
-            <Input placeholder='Buscar plantillas...' value={search} onChange={e => setSearch(e.target.value)} className='w-full sm:w-64' />
-            <Button onClick={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setIsPublic(false); setImage(null); setImagePreview(null); setDialogOpen(true) }}>
-              <PlusIcon className='size-4 mr-2' /> Nueva plantilla
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className='rounded-md border'>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className='w-[60px]'>ID</TableHead>
-                  <TableHead>Título</TableHead>
-                  <TableHead>Descripción</TableHead>
-                  <TableHead>Ejercicios</TableHead>
-                  <TableHead>Exclusivo</TableHead>
-                  <TableHead>Público</TableHead>
-                  <TableHead className='w-[120px]'>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className='h-24 text-center'>
-                      <div className='flex justify-center'>
-                        <div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : items.length ? (
-                  items.map(item => (
-                    <TableRow key={item.id} className='cursor-pointer hover:bg-muted/50' onClick={() => openDetail(item)}>
-                      <TableCell>{item.id}</TableCell>
-                      <TableCell className='font-medium'>{item.title}</TableCell>
-                      <TableCell className='text-muted-foreground truncate max-w-[200px]'>{item.description || '—'}</TableCell>
-                      <TableCell><Badge variant='outline'>{item.exercise_count ?? 0}</Badge></TableCell>
-                      <TableCell>{item.is_exclusive ? <Badge variant='default'>Exclusivo</Badge> : <Badge variant='outline'>Gratuito</Badge>}</TableCell>
-                      <TableCell>{item.is_public ? <Badge variant='default'>Público</Badge> : <Badge variant='outline'>Privado</Badge>}</TableCell>
-                      <TableCell onClick={e => e.stopPropagation()}>
-                        <div className='flex gap-2'>
-                          <Button variant='outline' size='sm' onClick={() => {
-                            setEditingItem(item); setTitle(item.title); setDescription(item.description || ''); setIsExclusive(!!item.is_exclusive); setIsPublic(!!item.is_public)
-                            setImage(null); setImagePreview(item.thumbnail || null)
-                            setDialogOpen(true)
-                          }}>Editar</Button>
-                          <Button variant='destructive' size='sm' onClick={() => { setDeletingItem(item); setDeleteDialogOpen(true) }}>
-                            <TrashIcon className='size-3' />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={7} className='h-24 text-center'>No se encontraron plantillas de entrenamiento.</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <WorkoutTemplatesList
+        items={items}
+        loading={loading}
+        onOpen={openDetail}
+        onEdit={item => {
+          setEditingItem(item); setTitle(item.title); setDescription(item.description || ''); setIsExclusive(!!item.is_exclusive); setIsPublic(!!item.is_public)
+          setImage(null); setImagePreview(item.thumbnail || null)
+          setDialogOpen(true)
+        }}
+        onDelete={item => { setDeletingItem(item); setDeleteDialogOpen(true) }}
+        onCreate={() => { setEditingItem(null); setTitle(''); setDescription(''); setIsExclusive(false); setIsPublic(false); setImage(null); setImagePreview(null); setDialogOpen(true) }}
+        onBulkDelete={handleBulkDelete}
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className='max-w-lg'>
