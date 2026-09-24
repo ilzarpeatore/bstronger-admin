@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
 
+# Dos merges seguidos lanzaban dos deploys a la vez sobre el mismo directorio
+# de la VPS: el `npm ci` de uno borraba node_modules mientras el otro hacía
+# `npm run build` ("vite: not found", visto el 2026-09-24). Se encolan en vez
+# de solaparse; no se cancela el que está en marcha a medias.
+concurrency:
+  group: deploy-admin
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
