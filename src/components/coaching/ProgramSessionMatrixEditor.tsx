@@ -286,8 +286,10 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className='flex h-[92vh] w-[97vw] max-w-[97vw] flex-col gap-3 overflow-hidden p-4 sm:max-w-[97vw]'>
-          <DialogHeader className='shrink-0'>
+        {/* El tema (.cn-dialog-content, css/styles/style-lyra.css) va fuera de las capas de Tailwind y fija
+              `display: grid` y `max-width: 24rem`: solo las utilidades `!` le ganan. */}
+        <DialogContent className='flex! h-[92vh] w-[97vw]! max-w-[97vw]! flex-col gap-3 overflow-hidden p-4'>
+          <DialogHeader className='shrink-0 pr-8'>
             <DialogTitle>Editor de sesiones del programa{data ? ` — ${data.program.title}` : ''}</DialogTitle>
             <DialogDescription>
               Cada tipo de sesión con todas sus semanas en columnas. Tab/Enter para moverte, pega desde Excel en cualquier celda.
@@ -463,7 +465,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
 
       {/* Selector de ejercicio */}
       <Dialog open={!!picker} onOpenChange={o => { if (!o) setPicker(null) }}>
-        <DialogContent className='max-w-md'>
+        <DialogContent className='max-w-md!'>
           <DialogHeader>
             <DialogTitle>{picker?.mode === 'substitute' ? 'Sustituir ejercicio en todas las semanas' : 'Añadir ejercicio'}</DialogTitle>
             <DialogDescription>
@@ -494,7 +496,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
 
       {/* Resumen antes de guardar */}
       <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-        <DialogContent className='max-w-2xl'>
+        <DialogContent className='max-w-2xl!'>
           <DialogHeader>
             <DialogTitle>Revisar cambios</DialogTitle>
             <DialogDescription>
