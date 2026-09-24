@@ -153,7 +153,6 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   const [importingTemplate, setImportingTemplate] = useState(false)
 
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [detailMeal, setDetailMeal] = useState<AssignedMeal | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailRecipe, setDetailRecipe] = useState<LocalRecipeDetail | null>(null)
   const [detailFsRecipe, setDetailFsRecipe] = useState<FatSecretRecipeDetail | null>(null)
@@ -377,7 +376,6 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   }, [])
 
   const openMealDetail = useCallback(async (meal: AssignedMeal) => {
-    setDetailMeal(meal)
     setDetailDialogOpen(true)
     setDetailEditing(false)
     setDetailRecipe(null)
