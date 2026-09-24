@@ -42,16 +42,27 @@ export type MatrixSlot = {
   rows: MatrixRow[]
 }
 
-export type FieldKey = 'series' | 'reps' | 'carga' | 'intensity' | 'descanso'
+export type FieldKey = 'series' | 'reps' | 'carga' | 'intensity' | 'descanso' | 'tempo' | 'duracion'
 export type IntensityKey = 'rir' | 'rpe'
 
+/** Columnas visibles por defecto. */
 export const FIELD_KEYS: FieldKey[] = ['series', 'reps', 'carga', 'intensity', 'descanso']
+/** Columnas que se pueden mostrar/ocultar desde "Columnas". */
+export const OPTIONAL_FIELD_KEYS: FieldKey[] = ['tempo', 'duracion']
+export const ALL_FIELD_KEYS: FieldKey[] = [...FIELD_KEYS, ...OPTIONAL_FIELD_KEYS]
 export const FIELD_LABELS: Record<FieldKey, string> = {
   series: 'Series',
   reps: 'Reps',
   carga: 'Carga',
   intensity: 'RIR/RPE',
   descanso: 'Desc.',
+  tempo: 'Tempo',
+  duracion: 'Dur.',
+}
+
+/** Campos visibles en el orden canónico: los de por defecto + los opcionales elegidos. */
+export function visibleFields(optional: readonly FieldKey[] = []): FieldKey[] {
+  return [...FIELD_KEYS, ...OPTIONAL_FIELD_KEYS.filter(f => optional.includes(f))]
 }
 export const DEFAULT_METRICS = ['reps', 'carga', 'descanso', 'rir']
 
@@ -59,6 +70,8 @@ export type CellDraft = {
   values: Record<FieldKey, string>
   intensityKey: IntensityKey
   enabledMetrics: string[]
+  /** Notas del entrenador para este ejercicio en esta sesión ('' = sin nota). */
+  notes: string
 }
 
 /** draft[assignment_id][row_key] -- ausente = el ejercicio no está en esa sesión. */
@@ -94,17 +107,21 @@ export function cellFromApi(cell: MatrixCellApi): CellDraft {
       carga: str(p.carga),
       intensity: str(p[intensityKey]),
       descanso: str(p.descanso),
+      tempo: str(p.tempo),
+      duracion: str(p.duracion),
     },
     intensityKey,
     enabledMetrics: cell.enabled_metrics && cell.enabled_metrics.length ? [...cell.enabled_metrics] : [...DEFAULT_METRICS],
+    notes: str(cell.notes),
   }
 }
 
 export function emptyCell(intensityKey: IntensityKey = 'rir'): CellDraft {
   return {
-    values: { series: '', reps: '', carga: '', intensity: '', descanso: '' },
+    values: { series: '', reps: '', carga: '', intensity: '', descanso: '', tempo: '', duracion: '' },
     intensityKey,
     enabledMetrics: DEFAULT_METRICS.map(m => (m === 'rir' ? intensityKey : m)),
+    notes: '',
   }
 }
 
@@ -120,7 +137,7 @@ export function buildDraft(slot: MatrixSlot): Draft {
   return draft
 }
 
-const cloneCell = (c: CellDraft): CellDraft => ({ values: { ...c.values }, intensityKey: c.intensityKey, enabledMetrics: [...c.enabledMetrics] })
+const cloneCell = (c: CellDraft): CellDraft => ({ values: { ...c.values }, intensityKey: c.intensityKey, enabledMetrics: [...c.enabledMetrics], notes: c.notes })
 
 export function cloneDraft(d: Draft): Draft {
   const out: Draft = {}
@@ -207,9 +224,11 @@ export function applyPaste(
   slot: MatrixSlot,
   start: { rowIndex: number; colIndex: number; fieldIndex: number },
   grid: string[][],
+  /** Campos visibles por semana, en orden (por defecto los 5 de siempre). */
+  fields: readonly FieldKey[] = FIELD_KEYS,
 ): Draft {
   let next = draft
-  const F = FIELD_KEYS.length
+  const F = fields.length
   const startFlat = start.colIndex * F + start.fieldIndex
   grid.forEach((line, i) => {
     const row = slot.rows[start.rowIndex + i]
@@ -217,7 +236,7 @@ export function applyPaste(
     line.forEach((value, j) => {
       const flat = startFlat + j
       const colIndex = Math.floor(flat / F)
-      const field = FIELD_KEYS[flat % F]
+      const field = fields[flat % F]
       const col = slot.columns[colIndex]
       if (!col) return
       next = setValue(next, col.assignment_id, row.row_key, field, value)
@@ -231,15 +250,16 @@ export function applyPaste(
 // ---------------------------------------------------------------------------
 
 export type ApiChange =
-  | { type: 'update'; assignment_id: number; row_id: number; prescribed?: Record<string, string>; enabled_metrics?: string[] }
-  | { type: 'add'; assignment_id: number; exercise_id: number; prescribed: Record<string, string>; enabled_metrics: string[] }
+  | { type: 'update'; assignment_id: number; row_id: number; prescribed?: Record<string, string>; enabled_metrics?: string[]; notes?: string | null }
+  | { type: 'add'; assignment_id: number; exercise_id: number; prescribed: Record<string, string>; enabled_metrics: string[]; notes?: string | null }
   | { type: 'remove'; assignment_id: number; row_id: number }
   | { type: 'substitute'; assignment_id: number; row_id: number; exercise_id: number }
+  | { type: 'reorder'; assignment_id: number; order: number[] }
 
 export type ChangeLine = {
   assignmentId: number
   rowKey: string
-  kind: 'update' | 'add' | 'remove' | 'substitute'
+  kind: 'update' | 'add' | 'remove' | 'substitute' | 'reorder'
   text: string
 }
 
@@ -259,6 +279,8 @@ function prescribedFromCell(cell: CellDraft): Record<string, string> {
   if (trim(cell.values.reps)) out.reps = trim(cell.values.reps)
   if (trim(cell.values.carga)) out.carga = trim(cell.values.carga)
   if (trim(cell.values.descanso)) out.descanso = trim(cell.values.descanso)
+  if (trim(cell.values.tempo)) out.tempo = trim(cell.values.tempo)
+  if (trim(cell.values.duracion)) out.duracion = trim(cell.values.duracion)
   if (trim(cell.values.intensity)) out[cell.intensityKey] = trim(cell.values.intensity)
   return out
 }
@@ -296,6 +318,7 @@ export function computeChanges(
         changes.push({
           type: 'add', assignment_id: a, exercise_id: sub?.exerciseId ?? row.exercise_id,
           prescribed: prescribedFromCell(cur), enabled_metrics: cur.enabledMetrics,
+          ...(trim(cur.notes) ? { notes: trim(cur.notes) } : {}),
         })
         const p = prescribedFromCell(cur)
         lines.push({ assignmentId: a, rowKey: row.row_key, kind: 'add', text: `${where}: añadir (${Object.entries(p).map(([k, v]) => `${k} ${v}`).join(', ') || 'sin datos'})` })
@@ -314,7 +337,7 @@ export function computeChanges(
       const patch: Record<string, string> = {}
       const fieldLines: string[] = []
 
-      for (const f of ['series', 'reps', 'carga', 'descanso'] as const) {
+      for (const f of ['series', 'reps', 'carga', 'descanso', 'tempo', 'duracion'] as const) {
         if (trim(before.values[f]) !== trim(cur.values[f])) {
           patch[f] = trim(cur.values[f])
           fieldLines.push(`${FIELD_LABELS[f]} "${trim(before.values[f]) || '—'}" → "${trim(cur.values[f]) || '—'}"`)
@@ -327,9 +350,16 @@ export function computeChanges(
         fieldLines.push(`${cur.intensityKey.toUpperCase()} "${trim(before.values.intensity) || '—'}" → "${trim(cur.values.intensity) || '—'}"`)
       }
 
+      const notesChanged = trim(before.notes) !== trim(cur.notes)
+      if (notesChanged) {
+        fieldLines.push(`Notas ${trim(before.notes) ? `"${trim(before.notes).slice(0, 30)}"` : '—'} → ${trim(cur.notes) ? `"${trim(cur.notes).slice(0, 30)}"` : '(sin nota)'}`)
+      }
+
       if (fieldLines.length) {
-        const change: ApiChange = { type: 'update', assignment_id: a, row_id: orig.id, prescribed: patch }
+        const change: ApiChange = { type: 'update', assignment_id: a, row_id: orig.id }
+        if (Object.keys(patch).length) change.prescribed = patch
         if (keyChanged) change.enabled_metrics = cur.enabledMetrics
+        if (notesChanged) change.notes = trim(cur.notes) || null
         changes.push(change)
         lines.push({ assignmentId: a, rowKey: row.row_key, kind: 'update', text: `${where}: ${fieldLines.join(' · ')}` })
         touched.add(a)
@@ -359,8 +389,84 @@ export function cellIsDirty(orig: MatrixCellApi | undefined, cur: CellDraft | un
   const before = cellFromApi(orig)
   return (
     before.intensityKey !== cur.intensityKey ||
-    FIELD_KEYS.some(f => trim(before.values[f]) !== trim(cur.values[f]))
+    trim(before.notes) !== trim(cur.notes) ||
+    ALL_FIELD_KEYS.some(f => trim(before.values[f]) !== trim(cur.values[f]))
   )
+}
+
+// ---------------------------------------------------------------------------
+// Notas, orden de ejercicios y edición en bloque
+// ---------------------------------------------------------------------------
+
+export function setNotes(draft: Draft, assignmentId: number, rowKey: string, notes: string): Draft {
+  const next = cloneDraft(draft)
+  const cell = next[assignmentId]?.[rowKey]
+  if (!cell) return next
+  cell.notes = notes
+  return next
+}
+
+/** Orden inicial de filas de un tipo de sesión. */
+export const initialOrder = (rows: readonly MatrixRow[]): string[] => rows.map(r => r.row_key)
+
+export function orderedRows(rows: readonly MatrixRow[], order: readonly string[] | undefined): MatrixRow[] {
+  if (!order || order.length === 0) return [...rows]
+  const pos = new Map(order.map((k, i) => [k, i]))
+  return [...rows].sort((a, b) => (pos.get(a.row_key) ?? 1e9) - (pos.get(b.row_key) ?? 1e9))
+}
+
+/**
+ * Sube (-1) o baja (+1) una fila intercambiándola con su vecina. Solo se mueve dentro de su bloque
+ * (mismo título de bloque): cambiar un ejercicio de bloque no forma parte de esta edición.
+ * Devuelve el mismo array si no se puede mover.
+ */
+export function moveRow(order: readonly string[], rows: readonly MatrixRow[], rowKey: string, dir: -1 | 1): string[] {
+  const byKey = new Map(rows.map(r => [r.row_key, r]))
+  const i = order.indexOf(rowKey)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= order.length) return order as string[]
+  if ((byKey.get(order[i])?.block_title ?? null) !== (byKey.get(order[j])?.block_title ?? null)) return order as string[]
+  const next = [...order]
+  ;[next[i], next[j]] = [next[j], next[i]]
+  return next
+}
+
+export const orderChanged = (order: readonly string[] | undefined, rows: readonly MatrixRow[]): boolean => {
+  if (!order) return false
+  const base = initialOrder(rows)
+  return order.length === base.length && order.some((k, i) => k !== base[i])
+}
+
+/** Una operación `reorder` por sesión (columna), con los ids de fila existentes en el orden nuevo. */
+export function computeReorder(slot: MatrixSlot, order: readonly string[] | undefined): { changes: ApiChange[]; lines: ChangeLine[] } {
+  // El orden puede incluir filas nuevas (sin celdas originales): se compara solo sobre las originales.
+  const originals = slot.rows.filter(r => Object.keys(r.cells).length > 0)
+  const filtered = (order ?? []).filter(k => originals.some(r => r.row_key === k))
+  if (!orderChanged(filtered, originals)) return { changes: [], lines: [] }
+
+  const changes: ApiChange[] = []
+  const lines: ChangeLine[] = []
+  for (const col of slot.columns) {
+    const ids = (order ?? [])
+      .map(k => slot.rows.find(r => r.row_key === k)?.cells[String(col.assignment_id)]?.id)
+      .filter((id): id is number => typeof id === 'number')
+    if (ids.length > 1) {
+      changes.push({ type: 'reorder', assignment_id: col.assignment_id, order: ids })
+      lines.push({ assignmentId: col.assignment_id, rowKey: '', kind: 'reorder', text: `${columnLabel(col)}: nuevo orden de los ejercicios` })
+    }
+  }
+  return { changes, lines }
+}
+
+/** Edición en bloque: pone un valor en un campo de TODAS las celdas existentes de las sesiones indicadas. */
+export function bulkSet(draft: Draft, slot: MatrixSlot, field: FieldKey, value: string, assignmentIds: readonly number[]): Draft {
+  let next = draft
+  for (const a of assignmentIds) {
+    for (const row of slot.rows) {
+      if (next[a]?.[row.row_key]) next = setValue(next, a, row.row_key, field, value)
+    }
+  }
+  return next
 }
 
 /** Agrupa las columnas por semana (una semana puede tener más de una sesión de este tipo). */

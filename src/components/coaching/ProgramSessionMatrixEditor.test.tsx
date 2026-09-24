@@ -125,3 +125,65 @@ describe('ProgramSessionMatrixEditor — aviso de programa asignado directamente
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })
+
+describe('ProgramSessionMatrixEditor — notas, columnas, orden y edición en bloque', () => {
+  it('edición en bloque: aplica un valor a todos los ejercicios existentes y cuenta los cambios', async () => {
+    const user = userEvent.setup()
+    renderEditor()
+    await screen.findByText('Press banca')
+    await user.click(screen.getByRole('button', { name: /Edición en bloque/ }))
+    await user.selectOptions(await screen.findByLabelText('Campo'), 'descanso')
+    await user.type(screen.getByLabelText('Valor'), '90')
+    await user.click(screen.getByRole('button', { name: 'Aplicar al borrador' }))
+    // 3 celdas existentes (Press banca S1 y S2, Fondos S1)
+    expect(await screen.findByText('3 cambios sin guardar')).toBeInTheDocument()
+    expect(screen.getByLabelText('Desc. (fila 1, semana 1)')).toHaveValue('90')
+    expect(screen.getByLabelText('Desc. (fila 2, semana 1)')).toHaveValue('90')
+  })
+
+  it('las columnas opcionales (tempo) se muestran desde el menú "Columnas"', async () => {
+    const user = userEvent.setup()
+    renderEditor()
+    await screen.findByText('Press banca')
+    expect(screen.queryByLabelText('Tempo (fila 1, semana 1)')).toBeNull()
+    await user.click(screen.getByTitle('Mostrar u ocultar columnas'))
+    await user.click(await screen.findByText('Tempo'))
+    const tempo = await screen.findByLabelText('Tempo (fila 1, semana 1)')
+    await user.type(tempo, '3-1-1-0')
+    await user.click(await screen.findByRole('button', { name: 'Revisar y guardar' }))
+    await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+    expect(postMock.mock.calls[0][1].changes).toEqual([{ type: 'update', assignment_id: 10, row_id: 1, prescribed: { tempo: '3-1-1-0' } }])
+  })
+
+  it('notas: se editan desde el menú de la celda y viajan en el guardado', async () => {
+    const user = userEvent.setup()
+    renderEditor()
+    await screen.findByText('Press banca')
+    await user.click(screen.getAllByTitle('Acciones de esta semana')[0])
+    await user.click(await screen.findByText('Añadir notas…'))
+    await user.type(await screen.findByPlaceholderText(/Indicaciones del entrenador/), 'Pausa 1s abajo')
+    await user.click(screen.getByRole('button', { name: 'Aceptar' }))
+    expect(await screen.findByText('1 cambios sin guardar')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Revisar y guardar' }))
+    expect(await screen.findByText(/Notas — → "Pausa 1s abajo"/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+    expect(postMock.mock.calls[0][1].changes).toEqual([{ type: 'update', assignment_id: 10, row_id: 1, notes: 'Pausa 1s abajo' }])
+  })
+
+  it('orden: bajar un ejercicio genera un reorder por sesión con los ids en el orden nuevo', async () => {
+    const user = userEvent.setup()
+    renderEditor()
+    await screen.findByText('Press banca')
+    // el menú de la fila 1 (Press banca) está en la primera columna
+    await user.click(screen.getAllByRole('button').filter(b => b.textContent === '' && b.closest('td'))[0] as HTMLElement)
+    await user.click(await screen.findByText(/Bajar \(en todas las semanas\)/))
+    await user.click(await screen.findByRole('button', { name: 'Revisar y guardar' }))
+    await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+    expect(postMock.mock.calls[0][1].changes).toEqual([
+      { type: 'reorder', assignment_id: 10, order: [3, 1] },
+    ])
+  })
+})

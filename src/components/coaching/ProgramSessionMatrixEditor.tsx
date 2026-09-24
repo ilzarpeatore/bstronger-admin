@@ -1,32 +1,40 @@
 import { fuzzyFilter } from '@/lib/textSearch'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangleIcon, ChevronsRightIcon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SearchIcon, TrashIcon } from 'lucide-react'
+import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, ChevronsRightIcon, Columns3Icon, LinkIcon, ListChecksIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SearchIcon, StickyNoteIcon, TrashIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
-  FIELD_KEYS,
+  ALL_FIELD_KEYS,
   FIELD_LABELS,
+  OPTIONAL_FIELD_KEYS,
   addCell,
   applyPaste,
   buildDraft,
+  bulkSet,
   cellFromApi,
   cellIsDirty,
   columnLabel,
   computeChanges,
+  computeReorder,
   fillRight,
   isGridPaste,
+  moveRow,
+  orderedRows,
   parsePaste,
   removeCell,
   removeRow,
   setIntensityKey,
+  setNotes,
   setValue,
+  visibleFields,
   type ApiChange,
   type Draft,
   type FieldKey,
@@ -58,6 +66,8 @@ const FIELD_WIDTH: Record<FieldKey, string> = {
   carga: 'w-16',
   intensity: 'w-12',
   descanso: 'w-14',
+  tempo: 'w-20',
+  duracion: 'w-14',
 }
 
 const variantOf = (title: string) => title.match(/\(S\d+\)\s*$/i)?.[0]?.trim() ?? ''
@@ -73,6 +83,17 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   const [subs, setSubs] = useState<Record<string, Substitutions>>({})
   const [extraRows, setExtraRows] = useState<Record<string, MatrixRow[]>>({})
   const [deload, setDeload] = useState<Record<number, boolean>>({})
+  // Columnas opcionales visibles (tempo, duración) y orden de ejercicios por tipo de sesión.
+  const [optionalFields, setOptionalFields] = useState<FieldKey[]>([])
+  const fields = useMemo(() => visibleFields(optionalFields), [optionalFields])
+  const [rowOrder, setRowOrder] = useState<Record<string, string[]>>({})
+  const [notesEdit, setNotesEdit] = useState<{ assignmentId: number; rowKey: string; value: string } | null>(null)
+  // Edición en bloque
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkField, setBulkField] = useState<FieldKey>('descanso')
+  const [bulkValue, setBulkValue] = useState('')
+  const [bulkWeeks, setBulkWeeks] = useState<number[] | null>(null) // null = todas las semanas
+  const [bulkAllSlots, setBulkAllSlots] = useState(false)
 
   const [exerciseOptions, setExerciseOptions] = useState<ExerciseOption[] | null>(null)
   const [picker, setPicker] = useState<{ mode: 'add' } | { mode: 'substitute'; rowKey: string } | null>(null)
@@ -98,6 +119,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
       setDrafts(nextDrafts)
       setSubs({})
       setExtraRows({})
+      setRowOrder({})
       setDeload(nextDeload)
       setActiveKey(prev => (prev && d.slots.some(s => s.key === prev) ? prev : d.slots[0]?.key ?? null))
     } catch (err: any) {
@@ -113,8 +135,8 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   const slot: MatrixSlot | null = useMemo(() => {
     const base = data?.slots.find(s => s.key === activeKey)
     if (!base) return null
-    return { ...base, rows: [...base.rows, ...(extraRows[base.key] ?? [])] }
-  }, [data, activeKey, extraRows])
+    return { ...base, rows: orderedRows([...base.rows, ...(extraRows[base.key] ?? [])], rowOrder[base.key]) }
+  }, [data, activeKey, extraRows, rowOrder])
 
   const draft = (slot && drafts[slot.key]) || {}
   const slotSubs = (slot && subs[slot.key]) || {}
@@ -137,7 +159,15 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
       changes.push(...r.changes)
       r.lines.forEach(l => lines.push({ slot: base.label, text: l.text, kind: l.kind }))
       r.unlinkAssignments.forEach(a => unlink.add(a))
-      perSlot[base.key] = r.changes.length
+      // Orden de ejercicios: una operación `reorder` por sesión; si la sesión comparte plantilla se desvincula.
+      const ro = computeReorder(s, rowOrder[base.key])
+      changes.push(...ro.changes)
+      ro.lines.forEach(l => lines.push({ slot: base.label, text: l.text, kind: l.kind }))
+      ro.changes.forEach(c => {
+        const col = base.columns.find(x => x.assignment_id === c.assignment_id)
+        if (col && (col.linked_weeks.length > 0 || col.linked_elsewhere > 0)) unlink.add(c.assignment_id)
+      })
+      perSlot[base.key] = r.changes.length + ro.changes.length
     }
     const deloadChanges: { week_number: number; is_deload: boolean }[] = []
     const seen = new Set<number>()
@@ -151,7 +181,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
       }
     }
     return { changes, lines, unlink, deloadChanges, perSlot }
-  }, [data, drafts, subs, extraRows, deload])
+  }, [data, drafts, subs, extraRows, deload, rowOrder])
 
   const dirtyCount = (computed?.changes.length ?? 0) + (computed?.deloadChanges.length ?? 0)
   const directClients = data?.program.direct_clients ?? []
@@ -239,8 +269,52 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
     if (!slot || !isGridPaste(text)) return
     e.preventDefault()
     const grid = parsePaste(text)
-    setSlotDraft(d => applyPaste(d, slot, { rowIndex: r, colIndex: c, fieldIndex: f }, grid))
+    setSlotDraft(d => applyPaste(d, slot, { rowIndex: r, colIndex: c, fieldIndex: f }, grid, fields))
     toast.success(`Pegadas ${grid.length} filas × ${Math.max(...grid.map(g => g.length))} columnas`)
+  }
+
+  // ---- orden de ejercicios, notas y edición en bloque ----------------------
+  const currentOrder = () => (slot ? slot.rows.map(r => r.row_key) : [])
+  const canMove = (rowKey: string, dir: -1 | 1) => {
+    if (!slot) return false
+    const order = currentOrder()
+    return moveRow(order, slot.rows, rowKey, dir) !== order
+  }
+  const moveRowBy = (rowKey: string, dir: -1 | 1) => {
+    if (!slot) return
+    const order = currentOrder()
+    const next = moveRow(order, slot.rows, rowKey, dir)
+    if (next !== order) setRowOrder(prev => ({ ...prev, [slot.key]: next }))
+  }
+
+  const bulkWeekOptions = useMemo(() => {
+    const slots = bulkAllSlots ? data?.slots ?? [] : slot && data ? data.slots.filter(s => s.key === slot.key) : []
+    return [...new Set(slots.flatMap(s => s.columns.map(c => c.week_number)))].sort((a, b) => a - b)
+  }, [bulkAllSlots, data, slot])
+
+  const openBulk = () => {
+    setBulkValue('')
+    setBulkWeeks(null)
+    setBulkAllSlots(false)
+    setBulkOpen(true)
+  }
+
+  const applyBulk = () => {
+    if (!data || !slot) return
+    const targets = bulkAllSlots ? data.slots : data.slots.filter(s => s.key === slot.key)
+    let touched = 0
+    setDrafts(prev => {
+      const next = { ...prev }
+      for (const s of targets) {
+        const ids = s.columns.filter(c => bulkWeeks === null || bulkWeeks.includes(c.week_number)).map(c => c.assignment_id)
+        const withExtra: MatrixSlot = { ...s, rows: [...s.rows, ...(extraRows[s.key] ?? [])] }
+        next[s.key] = bulkSet(prev[s.key] ?? {}, withExtra, bulkField, bulkValue.trim(), ids)
+        touched += ids.length
+      }
+      return next
+    })
+    toast.success(`${FIELD_LABELS[bulkField]} = "${bulkValue.trim() || '—'}" aplicado a ${touched} sesión(es)`)
+    setBulkOpen(false)
   }
 
   // ---- render --------------------------------------------------------------
@@ -254,7 +328,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   const header = (col: MatrixColumn) => {
     const variant = variantOf(col.template_title)
     return (
-      <th key={col.assignment_id} colSpan={FIELD_KEYS.length + 1} className='border-b border-l bg-muted px-2 py-1.5 text-left align-top'>
+      <th key={col.assignment_id} colSpan={fields.length + 1} className='border-b border-l bg-muted px-2 py-1.5 text-left align-top'>
         <div className='flex items-center gap-1.5'>
           <span className='font-semibold'>{columnLabel(col)}</span>
           {variant && <span className='text-[10px] text-muted-foreground'>{variant}</span>}
@@ -294,7 +368,8 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
             <DialogTitle>Editor de sesiones del programa{data ? ` — ${data.program.title}` : ''}</DialogTitle>
             <DialogDescription>
               Cada tipo de sesión con todas sus semanas en columnas. Tab/Enter para moverte, pega desde Excel en cualquier celda.
-              Las copias que ya tengan los clientes no se modifican.
+              Notas, tempo, duración, orden de ejercicios y edición en bloque en las barras de abajo y en el menú "⋯" de cada fila y celda.
+              Solo se modifica lo que estés editando: las copias de otros clientes no cambian.
             </DialogDescription>
           </DialogHeader>
 
@@ -339,6 +414,29 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                     {showAll ? 'Solo las seleccionadas' : 'Mostrar todos los tipos de sesión'}
                   </Button>
                 ) : null}
+                <div className='ml-auto flex items-center gap-1.5'>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger>
+                      <span className='inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs hover:bg-muted' title='Mostrar u ocultar columnas'>
+                        <Columns3Icon className='size-3.5' /> Columnas
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align='end' className='text-xs'>
+                      {OPTIONAL_FIELD_KEYS.map(f => (
+                        <DropdownMenuItem
+                          key={f}
+                          onClick={() => setOptionalFields(prev => (prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]))}
+                        >
+                          <span className='mr-2 inline-block w-3'>{optionalFields.includes(f) ? '✓' : ''}</span>
+                          {f === 'tempo' ? 'Tempo' : 'Duración'}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button variant='outline' size='sm' className='h-7 text-xs' onClick={openBulk} disabled={!slot}>
+                    <ListChecksIcon className='mr-1 size-3.5' /> Edición en bloque
+                  </Button>
+                </div>
               </div>
 
               {slot && (
@@ -353,7 +451,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                       </tr>
                       <tr>
                         {slot.columns.map(col => (
-                          <FieldHeaders key={col.assignment_id} draft={draft} col={col} slot={slot} />
+                          <FieldHeaders key={col.assignment_id} draft={draft} col={col} slot={slot} fields={fields} />
                         ))}
                       </tr>
                     </thead>
@@ -366,7 +464,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                           return (
                             <tr key={row.row_key} className='opacity-50'>
                               <td className='sticky left-0 z-10 border-b bg-background px-3 py-2 line-through'>{row.exercise_title}</td>
-                              <td colSpan={slot.columns.length * (FIELD_KEYS.length + 1)} className='border-b border-l px-3 text-muted-foreground'>
+                              <td colSpan={slot.columns.length * (fields.length + 1)} className='border-b border-l px-3 text-muted-foreground'>
                                 Se quitará de todas las semanas al guardar.{' '}
                                 <button
                                   type='button'
@@ -400,6 +498,12 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                                     </span>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align='start' className='text-xs'>
+                                    <DropdownMenuItem disabled={!canMove(row.row_key, -1)} onClick={() => moveRowBy(row.row_key, -1)}>
+                                      <ArrowUpIcon className='mr-2 size-3.5' /> Subir (en todas las semanas)
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem disabled={!canMove(row.row_key, 1)} onClick={() => moveRowBy(row.row_key, 1)}>
+                                      <ArrowDownIcon className='mr-2 size-3.5' /> Bajar (en todas las semanas)
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => openPicker({ mode: 'substitute', rowKey: row.row_key })}>
                                       <RepeatIcon className='mr-2 size-3.5' /> Sustituir en todas las semanas
                                     </DropdownMenuItem>
@@ -419,7 +523,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                               const orig = row.cells[String(col.assignment_id)]
                               if (!cur) {
                                 return (
-                                  <td key={col.assignment_id} colSpan={FIELD_KEYS.length + 1} className='border-b border-l px-2 py-1.5'>
+                                  <td key={col.assignment_id} colSpan={fields.length + 1} className='border-b border-l px-2 py-1.5'>
                                     <button
                                       type='button'
                                       className='flex h-8 w-full items-center justify-center gap-1 rounded-md border border-dashed text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary'
@@ -435,8 +539,10 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                                 <CellGroup
                                   key={col.assignment_id}
                                   cur={cur}
+                                  fields={fields}
                                   dirty={dirty}
                                   isLast={c === slot.columns.length - 1}
+                                  onNotes={() => setNotesEdit({ assignmentId: col.assignment_id, rowKey: row.row_key, value: cur.notes })}
                                   onChange={(field, value) => setSlotDraft(d => setValue(d, col.assignment_id, row.row_key, field, value))}
                                   onKeyDown={(e, f) => onCellKeyDown(e, r, c, f)}
                                   onPaste={(e, f) => onCellPaste(e, r, c, f)}
@@ -468,6 +574,108 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
               <Button variant='outline' onClick={() => handleOpenChange(false)}>Cerrar</Button>
               <Button onClick={() => setSummaryOpen(true)} disabled={dirtyCount === 0}>Revisar y guardar</Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notas del ejercicio en una sesión */}
+      <Dialog open={!!notesEdit} onOpenChange={o => { if (!o) setNotesEdit(null) }}>
+        <DialogContent className='max-w-md!'>
+          <DialogHeader>
+            <DialogTitle>Notas del ejercicio</DialogTitle>
+            <DialogDescription>Las ve el cliente en esa sesión. Déjalo vacío para quitar la nota.</DialogDescription>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            className='min-h-[120px] text-sm'
+            value={notesEdit?.value ?? ''}
+            onChange={e => setNotesEdit(prev => (prev ? { ...prev, value: e.target.value } : prev))}
+            placeholder='Indicaciones del entrenador para este ejercicio...'
+          />
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setNotesEdit(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (notesEdit) setSlotDraft(d => setNotes(d, notesEdit.assignmentId, notesEdit.rowKey, notesEdit.value))
+                setNotesEdit(null)
+              }}
+            >
+              Aceptar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edición en bloque */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className='max-w-lg!'>
+          <DialogHeader>
+            <DialogTitle>Edición en bloque</DialogTitle>
+            <DialogDescription>
+              Pone el mismo valor en un campo de todos los ejercicios de las sesiones que elijas (solo donde el ejercicio ya existe).
+              Se aplica al borrador: revisas y guardas como siempre.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-3 text-sm'>
+            <div className='flex items-center gap-2'>
+              <label htmlFor='bulk-field' className='w-20 shrink-0 text-xs font-medium'>Campo</label>
+              <select
+                id='bulk-field'
+                value={bulkField}
+                onChange={e => setBulkField(e.target.value as FieldKey)}
+                className='h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm'
+              >
+                {ALL_FIELD_KEYS.map(f => <option key={f} value={f}>{f === 'intensity' ? 'RIR / RPE' : FIELD_LABELS[f]}</option>)}
+              </select>
+            </div>
+            <div className='flex items-center gap-2'>
+              <label htmlFor='bulk-value' className='w-20 shrink-0 text-xs font-medium'>Valor</label>
+              <Input id='bulk-value' className='h-8' value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder='Vacío = borrar el campo' />
+            </div>
+            <div className='space-y-1.5'>
+              <p className='text-xs font-medium'>Tipos de sesión</p>
+              <label className='flex items-center gap-2 text-xs'>
+                <input type='radio' name='bulk-scope' checked={!bulkAllSlots} onChange={() => { setBulkAllSlots(false); setBulkWeeks(null) }} />
+                Solo «{slot?.label}»
+              </label>
+              <label className='flex items-center gap-2 text-xs'>
+                <input type='radio' name='bulk-scope' checked={bulkAllSlots} onChange={() => { setBulkAllSlots(true); setBulkWeeks(null) }} />
+                Todos los tipos de sesión cargados ({data?.slots.length ?? 0})
+              </label>
+            </div>
+            <div className='space-y-1.5'>
+              <p className='text-xs font-medium'>Semanas</p>
+              <div className='flex flex-wrap gap-1.5'>
+                <button
+                  type='button'
+                  onClick={() => setBulkWeeks(null)}
+                  className={cn('rounded-full border px-2.5 py-0.5 text-xs', bulkWeeks === null ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted')}
+                >
+                  Todas
+                </button>
+                {bulkWeekOptions.map(w => {
+                  const on = bulkWeeks?.includes(w) ?? false
+                  return (
+                    <button
+                      key={w}
+                      type='button'
+                      onClick={() => setBulkWeeks(prev => {
+                        const base = prev ?? []
+                        const next = base.includes(w) ? base.filter(x => x !== w) : [...base, w]
+                        return next.length === 0 ? null : next
+                      })}
+                      className={cn('rounded-full border px-2.5 py-0.5 text-xs', on ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted')}
+                    >
+                      S{w}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant='outline' onClick={() => setBulkOpen(false)}>Cancelar</Button>
+            <Button onClick={applyBulk}>Aplicar al borrador</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -552,13 +760,13 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   )
 }
 
-function FieldHeaders({ col, draft, slot }: { col: MatrixColumn; draft: Draft; slot: MatrixSlot }) {
+function FieldHeaders({ col, draft, slot, fields }: { col: MatrixColumn; draft: Draft; slot: MatrixSlot; fields: FieldKey[] }) {
   // La etiqueta de intensidad refleja RIR/RPE si todas las celdas de la columna coinciden.
   const keys = new Set(slot.rows.map(r => draft[col.assignment_id]?.[r.row_key]?.intensityKey).filter(Boolean))
   const intensityLabel = keys.size === 1 ? [...keys][0]!.toUpperCase() : FIELD_LABELS.intensity
   return (
     <>
-      {FIELD_KEYS.map(f => (
+      {fields.map(f => (
         <th key={f} className='border-b border-l bg-muted px-1 py-1 text-center text-[10px] font-medium text-muted-foreground'>
           {f === 'intensity' ? intensityLabel : FIELD_LABELS[f]}
         </th>
@@ -569,9 +777,11 @@ function FieldHeaders({ col, draft, slot }: { col: MatrixColumn; draft: Draft; s
 }
 
 function CellGroup({
-  cur, dirty, isLast, coords, onChange, onKeyDown, onPaste, onFillRight, onToggleIntensity, onRemove,
+  cur, fields, dirty, isLast, coords, onChange, onKeyDown, onPaste, onFillRight, onToggleIntensity, onRemove, onNotes,
 }: {
   cur: NonNullable<Draft[number][string]>
+  fields: FieldKey[]
+  onNotes: () => void
   dirty: boolean
   isLast: boolean
   coords: { r: number; c: number }
@@ -584,7 +794,7 @@ function CellGroup({
 }) {
   return (
     <>
-      {FIELD_KEYS.map((f, fi) => (
+      {fields.map((f, fi) => (
         <td key={f} className={cn('border-b px-0.5 py-1', fi === 0 && 'border-l pl-1.5', dirty && 'bg-amber-100/70 dark:bg-amber-900/25')}>
           <input
             data-cell={`${coords.r}:${coords.c}:${fi}`}
@@ -604,11 +814,15 @@ function CellGroup({
       <td className={cn('border-b px-0.5', dirty && 'bg-amber-100/70 dark:bg-amber-900/25', isLast && 'pr-1')}>
         <DropdownMenu>
           <DropdownMenuTrigger>
-            <span className='inline-flex size-6 items-center justify-center rounded-md hover:bg-muted' title='Acciones de esta semana'>
+            <span className='relative inline-flex size-6 items-center justify-center rounded-md hover:bg-muted' title={cur.notes.trim() ? 'Acciones de esta semana (tiene notas)' : 'Acciones de esta semana'}>
               <MoreVerticalIcon className='size-3' />
+              {cur.notes.trim() && <span className='absolute right-0.5 top-0.5 size-1.5 rounded-full bg-sky-500' aria-label='Tiene notas' />}
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='text-xs'>
+            <DropdownMenuItem onClick={onNotes}>
+              <StickyNoteIcon className='mr-2 size-3.5' /> {cur.notes.trim() ? 'Editar notas…' : 'Añadir notas…'}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={onFillRight}>
               <ChevronsRightIcon className='mr-2 size-3.5' /> Copiar a las semanas siguientes
             </DropdownMenuItem>

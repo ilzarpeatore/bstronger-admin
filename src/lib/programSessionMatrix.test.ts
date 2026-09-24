@@ -3,15 +3,23 @@ import {
   addCell,
   applyPaste,
   buildDraft,
+  bulkSet,
   cellIsDirty,
   computeChanges,
+  computeReorder,
   fillRight,
+  initialOrder,
   isGridPaste,
+  moveRow,
+  orderChanged,
+  orderedRows,
   parsePaste,
   removeCell,
   removeRow,
   setIntensityKey,
+  setNotes,
   setValue,
+  visibleFields,
   type MatrixSlot,
 } from './programSessionMatrix'
 
@@ -44,7 +52,7 @@ const slot: MatrixSlot = {
 describe('buildDraft', () => {
   it('lee series/reps/carga/descanso y la intensidad según enabled_metrics (RIR o RPE)', () => {
     const d = buildDraft(slot)
-    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '45', intensity: '2', descanso: '120' })
+    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '45', intensity: '2', descanso: '120', tempo: '', duracion: '' })
     expect(d[11]['5#1']!.intensityKey).toBe('rpe')
     expect(d[11]['5#1']!.values.intensity).toBe('8')
   })
@@ -140,7 +148,7 @@ describe('pegar desde Excel', () => {
     // Empieza en fila 0, semana 1, campo "series": 5 campos (semana 1) + 2 de la semana 2.
     const grid = [['4', '6-8', '50', '2', '90', '5', '10-12'], ['3', '12']]
     const d = applyPaste(buildDraft(slot), slot, { rowIndex: 0, colIndex: 0, fieldIndex: 0 }, grid)
-    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '50', intensity: '2', descanso: '90' })
+    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '50', intensity: '2', descanso: '90', tempo: '', duracion: '' })
     expect(d[11]['5#1']!.values.series).toBe('5')
     expect(d[11]['5#1']!.values.reps).toBe('10-12')
     expect(d[10]['9#1']!.values.series).toBe('3')
@@ -162,5 +170,93 @@ describe('deload y estado sucio', () => {
     expect(cellIsDirty(slot.rows[0].cells['10'], d[10]['5#1'])).toBe(true)
     expect(cellIsDirty(slot.rows[0].cells['11'], d[11]['5#1'])).toBe(false)
     expect(cellIsDirty(undefined, undefined)).toBe(false)
+  })
+})
+
+describe('tempo, duración y notas', () => {
+  it('los lee de la API y los manda solo si cambian', () => {
+    const withTempo: MatrixSlot = {
+      ...slot,
+      rows: [{ ...slot.rows[0], cells: { '10': { ...slot.rows[0].cells['10'], prescribed: { series: '4', reps: '6-8', tempo: '3-1-1-0' }, notes: 'Pausa abajo' } } }],
+      columns: [slot.columns[0]],
+    }
+    const d = buildDraft(withTempo)
+    expect(d[10]['5#1']!.values.tempo).toBe('3-1-1-0')
+    expect(d[10]['5#1']!.notes).toBe('Pausa abajo')
+    expect(computeChanges(withTempo, d).changes).toEqual([])
+    const r = computeChanges(withTempo, setValue(d, 10, '5#1', 'tempo', '2-0-2-0'))
+    expect(r.changes).toEqual([{ type: 'update', assignment_id: 10, row_id: 1, prescribed: { tempo: '2-0-2-0' } }])
+  })
+  it('editar solo la nota manda notes y no prescribed; vaciarla manda null', () => {
+    const d = setNotes(buildDraft(slot), 10, '5#1', '  Ojo con la espalda ')
+    expect(computeChanges(slot, d).changes).toEqual([{ type: 'update', assignment_id: 10, row_id: 1, notes: 'Ojo con la espalda' }])
+    const d2 = setNotes(setNotes(buildDraft(slot), 10, '5#1', 'x'), 10, '5#1', '')
+    expect(computeChanges(slot, d2).changes).toEqual([])
+    const withNote: MatrixSlot = { ...slot, rows: [{ ...slot.rows[0], cells: { '10': { ...slot.rows[0].cells['10'], notes: 'vieja' } } }], columns: [slot.columns[0]] }
+    expect(computeChanges(withNote, setNotes(buildDraft(withNote), 10, '5#1', '')).changes).toEqual([{ type: 'update', assignment_id: 10, row_id: 1, notes: null }])
+  })
+  it('una celda nueva con nota y tempo la manda en el add', () => {
+    let d = addCell(buildDraft(slot), 11, '9#1')
+    d = setValue(d, 11, '9#1', 'tempo', '3-0-1-0')
+    d = setNotes(d, 11, '9#1', 'Controlado')
+    expect(computeChanges(slot, d).changes).toEqual([
+      { type: 'add', assignment_id: 11, exercise_id: 9, prescribed: { tempo: '3-0-1-0' }, enabled_metrics: ['reps', 'carga', 'descanso', 'rir'], notes: 'Controlado' },
+    ])
+  })
+  it('cellIsDirty detecta cambios de nota y de tempo', () => {
+    const d = setNotes(buildDraft(slot), 10, '5#1', 'nueva')
+    expect(cellIsDirty(slot.rows[0].cells['10'], d[10]['5#1'])).toBe(true)
+    expect(cellIsDirty(slot.rows[0].cells['10'], setValue(buildDraft(slot), 10, '5#1', 'duracion', '30')[10]['5#1'])).toBe(true)
+  })
+  it('pegar usa los campos visibles (con tempo) para saltar de semana', () => {
+    const fields = visibleFields(['tempo'])
+    expect(fields).toEqual(['series', 'reps', 'carga', 'intensity', 'descanso', 'tempo'])
+    const grid = [['5', '8', '50', '2', '60', '3-1-1-0', '6']]
+    const d = applyPaste(buildDraft(slot), slot, { rowIndex: 0, colIndex: 0, fieldIndex: 0 }, grid, fields)
+    expect(d[10]['5#1']!.values.tempo).toBe('3-1-1-0')
+    expect(d[11]['5#1']!.values.series).toBe('6') // 7º valor = primera columna de la semana 2
+  })
+})
+
+describe('orden de ejercicios', () => {
+  const rows: MatrixSlot['rows'] = [
+    { row_key: 'a', exercise_id: 1, exercise_title: 'A', block_title: 'Principal', cells: { '10': { id: 11, block_id: 1, sequence: 1, prescribed: {}, enabled_metrics: ['rir'], notes: null }, '11': { id: 21, block_id: 2, sequence: 1, prescribed: {}, enabled_metrics: ['rir'], notes: null } } },
+    { row_key: 'b', exercise_id: 2, exercise_title: 'B', block_title: 'Principal', cells: { '10': { id: 12, block_id: 1, sequence: 2, prescribed: {}, enabled_metrics: ['rir'], notes: null }, '11': { id: 22, block_id: 2, sequence: 2, prescribed: {}, enabled_metrics: ['rir'], notes: null } } },
+    { row_key: 'c', exercise_id: 3, exercise_title: 'C', block_title: 'Accesorios', cells: { '10': { id: 13, block_id: 3, sequence: 1, prescribed: {}, enabled_metrics: ['rir'], notes: null } } },
+  ]
+  const s: MatrixSlot = { key: 'x', label: 'X', columns: slot.columns.slice(0, 2), rows }
+  it('mueve una fila dentro de su bloque y no entre bloques', () => {
+    const order = initialOrder(rows)
+    expect(moveRow(order, rows, 'a', 1)).toEqual(['b', 'a', 'c'])
+    expect(moveRow(order, rows, 'a', -1)).toBe(order) // ya es la primera
+    expect(moveRow(order, rows, 'b', 1)).toBe(order) // c es de otro bloque
+  })
+  it('sin cambios de orden no genera operaciones', () => {
+    expect(computeReorder(s, initialOrder(rows)).changes).toEqual([])
+    expect(orderChanged(initialOrder(rows), rows)).toBe(false)
+  })
+  it('genera un reorder por sesión con los ids existentes en el orden nuevo', () => {
+    const r = computeReorder(s, ['b', 'a', 'c'])
+    expect(r.changes).toEqual([
+      { type: 'reorder', assignment_id: 10, order: [12, 11, 13] },
+      { type: 'reorder', assignment_id: 11, order: [22, 21] },
+    ])
+    expect(r.lines).toHaveLength(2)
+  })
+  it('orderedRows aplica el orden y las filas nuevas no cuentan como cambio', () => {
+    expect(orderedRows(rows, ['b', 'a', 'c']).map(r => r.row_key)).toEqual(['b', 'a', 'c'])
+    const withNew = [...rows, { row_key: 'new:9#1', exercise_id: 9, exercise_title: 'N', block_title: null, cells: {} }]
+    expect(computeReorder({ ...s, rows: withNew }, [...initialOrder(withNew)]).changes).toEqual([])
+  })
+})
+
+describe('edición en bloque', () => {
+  it('pone un valor en todas las celdas existentes de las sesiones elegidas', () => {
+    const d = bulkSet(buildDraft(slot), slot, 'descanso', '90', [10, 11])
+    expect(d[10]['5#1']!.values.descanso).toBe('90')
+    expect(d[10]['9#1']!.values.descanso).toBe('90')
+    expect(d[11]['5#1']!.values.descanso).toBe('90')
+    expect(d[11]['9#1']).toBeUndefined() // no crea celdas que no existían
+    expect(d[12]['5#1']!.values.descanso).toBe('') // semana no elegida
   })
 })

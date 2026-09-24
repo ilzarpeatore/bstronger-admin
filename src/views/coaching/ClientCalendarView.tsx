@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Copy, X, ArrowUpDown, TrashIcon, DownloadIcon, CalendarIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, X, ArrowUpDown, TrashIcon, DownloadIcon, CalendarIcon, PencilIcon, Table2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useProgramSessionEditor, distinctPrograms } from '@/components/coaching/useProgramSessionEditor'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -178,6 +180,17 @@ export default function ClientCalendarView() {
       setLoading(false)
     }
   }, [clientId, year, month])
+
+  // Editor de sesiones (ejercicios x semanas) sobre la copia del programa de ESTE cliente:
+  // editarlo no afecta a ningún otro cliente ni a la biblioteca.
+  const { openEditor, editorElement } = useProgramSessionEditor(fetchCalendar)
+  const clientPrograms = useMemo(
+    () => distinctPrograms(
+      assignments.filter(a => !isDirectAssignment(a)),
+      a => (a.training_program ?? (a.training_program_id ? { id: a.training_program_id, title: null } : null)),
+    ),
+    [assignments],
+  )
 
   useEffect(() => {
     Promise.all([fetchClients(), fetchTemplates(), fetchPrograms()])
@@ -531,6 +544,32 @@ export default function ClientCalendarView() {
             </div>
           </div>
           <div className='flex items-center gap-2'>
+            {clientPrograms.length === 1 && (
+              <Button
+                variant='outline'
+                size='sm'
+                className='w-full sm:w-auto'
+                onClick={() => openEditor(clientPrograms[0].id)}
+              >
+                <Table2Icon className='size-4 mr-1' />
+                Editar sesiones del programa
+              </Button>
+            )}
+            {clientPrograms.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant='outline' size='sm' className='w-full sm:w-auto' />}>
+                  <Table2Icon className='size-4 mr-1' />
+                  Editar sesiones del programa
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align='end'>
+                  {clientPrograms.map(p => (
+                    <DropdownMenuItem key={p.id} onClick={() => openEditor(p.id)}>
+                      {p.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button
               variant='outline'
               size='sm'
@@ -693,6 +732,18 @@ export default function ClientCalendarView() {
                                       {title}
                                     </span>
                                     <div className='flex items-center gap-0 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity'>
+                                      {!direct && assignment.training_program_id && (
+                                        <button
+                                          className='hover:text-emerald-700 p-0'
+                                          title='Editar esta sesión en todas las semanas del programa'
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            openEditor(assignment.training_program_id as number, [assignment.program_day_assignment_id ?? assignment.id])
+                                          }}
+                                        >
+                                          <PencilIcon className='size-[10px]' />
+                                        </button>
+                                      )}
                                       <button
                                         className='hover:text-blue-600 p-0'
                                         title='Copiar al portapapeles'
@@ -834,6 +885,8 @@ export default function ClientCalendarView() {
         programDayAssignmentId={sessionDetailAssignmentId}
         clientId={sessionDetailClientId}
       />
+
+      {editorElement}
     </>
   )
 }

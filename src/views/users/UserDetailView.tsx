@@ -1,7 +1,7 @@
 import { fuzzyMatch } from '@/lib/textSearch'
 
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon } from 'lucide-react'
+import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon, Table2Icon as TableIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { fetchExerciseBodyparts, primaryBodypart, getMuscleCatalogStats, fetchExerciseCatalogEntries, type MuscleCatalogStats, type CatalogEntry } from '@/lib/muscle-groups'
 import { useNavigate } from 'react-router'
 import WorkoutPreviewModal from '@/components/coaching/WorkoutPreviewModal'
+import { useProgramSessionEditor, distinctPrograms } from '@/components/coaching/useProgramSessionEditor'
 import { SessionDetailModal } from '@/views/coaching/SessionDetailView'
 import HabitDialog from '@/components/coaching/HabitDialog'
 import HabitProgressPanel, { type HabitProgressItem } from '@/components/coaching/HabitProgressPanel'
@@ -435,6 +436,9 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   useEffect(() => { if (activeTab !== 'overview') fetchTabData(activeTab) }, [activeTab, fetchTabData])
   useEffect(() => { if (activeTab === 'overview') Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchReadinessScores(), fetchAchievementEvents()]) }, [activeTab, fetchNotes, fetchAssignedForms, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchPhotos, fetchBodyMetricTypes, fetchReadinessScores, fetchAchievementEvents])
   useEffect(() => { if (activeTab === 'training') fetchCalendar() }, [calYear, calMonth, fetchCalendar, activeTab])
+  // Editor de sesiones (ejercicios x semanas) sobre la copia del programa de ESTE cliente; no afecta a nadie más.
+  const { openEditor: openProgramEditor, editorElement: programEditorElement } = useProgramSessionEditor(fetchCalendar)
+  const clientPrograms = useMemo(() => distinctPrograms(calDays.flatMap(d => d.workouts).filter(w => !w.is_personal), w => (w.training_program_id ? { id: w.training_program_id, title: w.program_title } : null)), [calDays])
   useEffect(() => { if (trainingSubTab === 'adherence') fetchAdherence() }, [trainingSubTab, fetchAdherence])
   useEffect(() => {
     if (trainingSubTab !== 'volume') return
@@ -768,7 +772,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                 <DropdownMenu><DropdownMenuTrigger><button type='button' className='opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-foreground shrink-0' onClick={(e) => e.stopPropagation()}><MoreVerticalIcon className='size-3' /></button></DropdownMenuTrigger>
                   <DropdownMenuContent align='end' className='text-xs'>
                     <DropdownMenuItem onClick={() => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }}><SearchIcon className='size-3 mr-1.5' /> {isCompleted ? 'Ver sesión' : 'Abrir'}</DropdownMenuItem>
-                    {!isCompleted && <DropdownMenuItem onClick={() => handleCalOpenPreview(workout.id)}><PencilIcon className='size-3 mr-1.5' /> Editar plantilla base (afecta a todos)</DropdownMenuItem>}
+                    {!isCompleted && !workout.is_personal && workout.training_program_id ? <DropdownMenuItem onClick={() => openProgramEditor(workout.training_program_id as number, [workout.assignment_id])}><TableIcon className='size-3 mr-1.5' /> Editar esta sesión en todas las semanas</DropdownMenuItem> : null}
+                    {!isCompleted && <DropdownMenuItem onClick={() => handleCalOpenPreview(workout.id)}><PencilIcon className='size-3 mr-1.5' /> Editar solo este día (solo este cliente)</DropdownMenuItem>}
                     <DropdownMenuItem onClick={() => handleCalCopy(workout.assignment_id, workout.title)}><CopyIcon className='size-3 mr-1.5' /> Copiar</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleRemoveAssignment(workout.assignment_id)} className='text-destructive focus:text-destructive'><XIcon className='size-3 mr-1.5' /> Quitar</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -986,7 +991,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
           <div className='space-y-4'>
             {trainingSubTab === 'calendar' && (<Card>
               <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-3'><div className='flex items-center gap-3 flex-wrap'><CalendarIcon className='size-5 text-muted-foreground' /><CardTitle className='text-base'>Calendario de entrenamiento</CardTitle>{calClipboard && <span className='text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1'><CopyIcon className='size-3' /> Copiado</span>}</div>
-                <div className='flex items-center gap-2 flex-wrap'><Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => { setAssignDate(''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3.5 mr-1' /> Importar workout</Button><Button size='sm' className='flex-1 sm:flex-initial' onClick={() => { setImportStartDate(''); setImportProgramId(''); setImportDialogOpen(true) }}><DownloadIcon className='size-3.5 mr-1' /> Asignar programa</Button></div></CardHeader>
+                <div className='flex items-center gap-2 flex-wrap'>{clientPrograms.length === 1 && <Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => openProgramEditor(clientPrograms[0].id)}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</Button>}{clientPrograms.length > 1 && <DropdownMenu><DropdownMenuTrigger render={<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' />}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</DropdownMenuTrigger><DropdownMenuContent align='end'>{clientPrograms.map(p => <DropdownMenuItem key={p.id} onClick={() => openProgramEditor(p.id)}>{p.title}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>}<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => { setAssignDate(''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3.5 mr-1' /> Importar workout</Button><Button size='sm' className='flex-1 sm:flex-initial' onClick={() => { setImportStartDate(''); setImportProgramId(''); setImportDialogOpen(true) }}><DownloadIcon className='size-3.5 mr-1' /> Asignar programa</Button></div></CardHeader>
               <CardContent>
                 <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4'>
                   <div className='flex items-center gap-2'><Button variant='outline' size='sm' onClick={goToToday}>Hoy</Button><div className='flex items-center'><Button variant='outline' size='icon' className='rounded-r-none h-8 w-8' onClick={prevCal}><ChevronLeftIcon className='size-4' /></Button><div className='h-8 px-3 border-y flex items-center text-sm font-medium min-w-[100px] justify-center bg-background'>{calViewMode === 'week' ? formatWeekRange(calWeeks[calWeekIndex] || []) : `${MONTH_NAMES[calMonth - 1]} ${calYear}`}</div><Button variant='outline' size='icon' className='rounded-l-none h-8 w-8' onClick={nextCal}><ChevronRightIcon className='size-4' /></Button></div></div>
@@ -1604,6 +1609,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
       <Dialog open={assignFormDialogOpen} onOpenChange={setAssignFormDialogOpen}><DialogContent><DialogHeader><DialogTitle>Añadir check-in</DialogTitle></DialogHeader><FieldGroup className='gap-4'><Field className='gap-2'><FieldLabel>Formulario</FieldLabel><Select value={assignFormId} onValueChange={v => setAssignFormId(v ?? '')}><SelectTrigger><SelectValue placeholder='Seleccionar un formulario' /></SelectTrigger><SelectContent>{availableForms.map((f: any) => <SelectItem key={f.id} value={String(f.id)}>{f.title} {f.recurrence ? `(${f.recurrence})` : ''}</SelectItem>)}</SelectContent></Select></Field></FieldGroup><DialogFooter><Button variant='outline' onClick={() => setAssignFormDialogOpen(false)}>Cancelar</Button><Button onClick={handleAssignForm} disabled={!assignFormId || assigningForm}>{assigningForm ? 'Asignando...' : 'Asignar'}</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={!!previewPhoto} onOpenChange={() => setPreviewPhoto(null)}><DialogContent className='max-w-2xl'><DialogHeader><DialogTitle>{previewPhoto?.name || 'Foto de progreso'}</DialogTitle></DialogHeader>{previewPhoto && <div className='space-y-2'><img src={previewPhoto.url} alt={previewPhoto.name} loading='lazy' decoding='async' className='w-full rounded-lg' /><p className='text-sm text-muted-foreground text-center'>{new Date(previewPhoto.created_at).toLocaleDateString()}</p></div>}</DialogContent></Dialog>
       <WorkoutPreviewModal open={previewOpen} onOpenChange={setPreviewOpen} workoutTemplateId={previewTemplateId || 0} clientId={Number(userId)} />
+      {programEditorElement}
 
       <SessionDetailModal
         open={!!selectedCompletedSession}
