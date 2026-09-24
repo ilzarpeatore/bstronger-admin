@@ -1,12 +1,31 @@
 version: 2
 updates:
+  # Parches y versiones menores en un único PR semanal: cada merge a main
+  # despliega el panel, así que mejor un deploy agrupado que uno por paquete.
+  # Los saltos de versión mayor siguen llegando sueltos para revisarlos uno a
+  # uno (probar build + lint + tests antes de mergear).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      # react y react-dom tienen que ir SIEMPRE a la misma versión (el PR
+      # #15 subía solo uno y rompía todos los tests). Va antes que el grupo
+      # general: Dependabot asigna cada paquete al primer grupo que coincide.
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # typescript-eslint todavía no soporta TypeScript 7 (rompe el lint).
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
