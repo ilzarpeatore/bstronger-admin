@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronsRightIcon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SearchIcon, TrashIcon } from 'lucide-react'
+import { AlertTriangleIcon, ChevronsRightIcon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SearchIcon, TrashIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +36,7 @@ import {
 } from '@/lib/programSessionMatrix'
 
 type MatrixResponse = {
-  program: { id: number; title: string; num_weeks: number }
+  program: { id: number; title: string; num_weeks: number; direct_clients?: { id: number; name: string }[] }
   slots: MatrixSlot[]
 }
 
@@ -153,6 +153,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   }, [data, drafts, subs, extraRows, deload])
 
   const dirtyCount = (computed?.changes.length ?? 0) + (computed?.deloadChanges.length ?? 0)
+  const directClients = data?.program.direct_clients ?? []
 
   const handleOpenChange = (next: boolean) => {
     if (!next && dirtyCount > 0 && !window.confirm(`Tienes ${dirtyCount} cambios sin guardar. ¿Cerrar y perderlos?`)) return
@@ -296,6 +297,14 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
               Las copias que ya tengan los clientes no se modifican.
             </DialogDescription>
           </DialogHeader>
+
+          {directClients.length > 0 && (
+            <div className='shrink-0 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300' role='alert'>
+              <AlertTriangleIcon className='mr-1 inline size-3.5' />
+              Este programa de la biblioteca está asignado <strong>directamente</strong> a {directClients.map(c => c.name).join(', ')} (sin copia propia):
+              los cambios se verán en su calendario en vivo. Los programas asignados con "Asignar cliente" crean una copia independiente y no tienen este aviso.
+            </div>
+          )}
 
           {loading && !data ? (
             <div className='flex flex-1 items-center justify-center'>
@@ -504,6 +513,12 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
               {computed && computed.deloadChanges.length > 0 ? ` y ${computed.deloadChanges.length} semanas de descarga` : ''}.
             </DialogDescription>
           </DialogHeader>
+          {directClients.length > 0 && (
+            <div className='rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300'>
+              <AlertTriangleIcon className='mr-1 inline size-3' />
+              Al guardar cambiarás el calendario en vivo de {directClients.map(c => c.name).join(', ')}.
+            </div>
+          )}
           {computed && computed.unlink.size > 0 && (
             <div className='rounded-md border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-xs text-sky-700 dark:text-sky-300'>
               <LinkIcon className='mr-1 inline size-3' />

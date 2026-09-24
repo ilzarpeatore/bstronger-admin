@@ -108,3 +108,20 @@ describe('ProgramSessionMatrixEditor', () => {
     expect(await screen.findByText(/aún no tiene sesiones asignadas/)).toBeInTheDocument()
   })
 })
+
+describe('ProgramSessionMatrixEditor — aviso de programa asignado directamente', () => {
+  it('avisa cuando un cliente usa el programa de biblioteca sin copia propia', async () => {
+    getMock.mockResolvedValue({
+      data: { data: { ...matrix, program: { ...matrix.program, direct_clients: [{ id: 8, name: 'Hamzaa Cliente' }] } } },
+    })
+    renderEditor()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hamzaa Cliente')
+    expect(screen.getByRole('alert')).toHaveTextContent('en vivo')
+  })
+
+  it('no muestra aviso en copias de cliente o programas sin asignar', async () => {
+    renderEditor()
+    await screen.findByText('Press banca')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
