@@ -1,12 +1,22 @@
 
 import { useContext, useEffect, useState } from "react";
 import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
+  useTable,
+  tableFeatures,
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  columnVisibilityFeature,
+  createFilteredRowModel,
+  createSortedRowModel,
+  createPaginatedRowModel,
+  sortFn_alphanumeric,
+  sortFn_text,
+  sortFn_datetime,
+  sortFn_basic,
   flexRender,
-  getPaginationRowModel,
   createColumnHelper,
 } from "@tanstack/react-table";
 import { Pen, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -41,6 +51,30 @@ import { BlogPostType } from "src/types/apps/blog";
 import { useNavigate } from "react-router";
 import PlaceholdersInput from "src/components/animated-components/animatedinput-placeholder";
 
+// TanStack Table v9: cada funcionalidad se registra explícitamente.
+// - columnFilteringFeature es requisito de globalFilteringFeature.
+// - rowSelectionFeature: casillas y borrado múltiple.
+// - Los sortFn_* son los que el sortFn 'auto' de v8 elegía según el tipo de
+//   dato, para ordenar igual que antes.
+// - columnVisibilityFeature aporta row.getVisibleCells(), que usa el render.
+const blogTableFeatures = tableFeatures({
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  columnVisibilityFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  paginatedRowModel: createPaginatedRowModel(),
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    text: sortFn_text,
+    datetime: sortFn_datetime,
+    basic: sortFn_basic,
+  },
+});
+
 const ManageBlogTable = () => {
   const { posts, blogCategories, fetchPosts, deletePost, toggleStatus, isLoading } = useContext(BlogContext);
   const [tableData, setTableData] = useState<BlogPostType[]>([]);
@@ -62,7 +96,7 @@ const ManageBlogTable = () => {
     setTableData(posts);
   }, [posts]);
 
-  const columnHelper = createColumnHelper<BlogPostType>();
+  const columnHelper = createColumnHelper<typeof blogTableFeatures, BlogPostType>();
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -78,7 +112,7 @@ const ManageBlogTable = () => {
     }
   };
 
-  const columns = [
+  const columns = columnHelper.columns([
     columnHelper.display({
       id: "select",
       header: ({ table }) => (
@@ -215,9 +249,10 @@ const ManageBlogTable = () => {
         );
       },
     }),
-  ];
+  ]);
 
-  const table = useReactTable({
+  const table = useTable({
+    features: blogTableFeatures,
     data: tableData,
     columns,
     state: {
@@ -225,10 +260,6 @@ const ManageBlogTable = () => {
       rowSelection,
       pagination,
     },
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
@@ -435,7 +466,7 @@ const ManageBlogTable = () => {
               <div className="flex items-center gap-2">
                 <p className="text-sm text-muted-foreground">Mostrar</p>
                 <Select
-                  value={String(table.getState().pagination.pageSize)}
+                  value={String(table.state.pagination.pageSize)}
                   onValueChange={(value) => table.setPageSize(Number(value))}
                 >
                   <SelectTrigger className="w-24">
@@ -455,8 +486,8 @@ const ManageBlogTable = () => {
                 <div>
                   <p className="text-sm font-normal text-muted-foreground">
                     {table.getRowModel().rows.length > 0
-                      ? `${table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}-${Math.min(
-                          (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                      ? `${table.state.pagination.pageIndex * table.state.pagination.pageSize + 1}-${Math.min(
+                          (table.state.pagination.pageIndex + 1) * table.state.pagination.pageSize,
                           table.getFilteredRowModel().rows.length
                         )} de ${table.getFilteredRowModel().rows.length}`
                       : `0 de 0`}
@@ -466,22 +497,22 @@ const ManageBlogTable = () => {
                   <ChevronLeft
                     size={20}
                     className={`text-muted-foreground hover:text-primary cursor-pointer ${
-                      table.getState().pagination.pageIndex === 0 ? "opacity-50 cursor-not-allowed!" : ""
+                      table.state.pagination.pageIndex === 0 ? "opacity-50 cursor-not-allowed!" : ""
                     }`}
                     onClick={() => table.previousPage()}
                   />
                   <span className="w-8 h-8 text-primary flex items-center justify-center rounded-md text-sm font-normal">
-                    {table.getState().pagination.pageIndex + 1}
+                    {table.state.pagination.pageIndex + 1}
                   </span>
                   <ChevronRight
                     size={20}
                     className={`text-muted-foreground hover:text-primary cursor-pointer ${
-                      table.getState().pagination.pageIndex + 1 === table.getPageCount()
+                      table.state.pagination.pageIndex + 1 === table.getPageCount()
                         ? "opacity-50 cursor-not-allowed!"
                         : ""
                     }`}
                     onClick={() =>
-                      table.getState().pagination.pageIndex + 1 < table.getPageCount() && table.nextPage()
+                      table.state.pagination.pageIndex + 1 < table.getPageCount() && table.nextPage()
                     }
                   />
                 </div>

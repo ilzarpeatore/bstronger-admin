@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import {
-  useReactTable,
-  getCoreRowModel,
+  useTable,
+  tableFeatures,
+  columnVisibilityFeature,
   flexRender,
 } from '@tanstack/react-table'
 import {
@@ -51,6 +52,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+
+// Tablas solo de presentación: sin ordenación, filtros ni paginación del lado
+// de TanStack (el modelo de filas básico es automático en v9).
+// columnVisibilityFeature aporta row.getVisibleCells(), que usa el render.
+const subscriptionTableFeatures = tableFeatures({ columnVisibilityFeature })
 
 type Tab = 'subscriptions' | 'payments' | 'expiring'
 
@@ -472,7 +478,7 @@ export default function SubscriptionView() {
     document.body.removeChild(link)
   }, [filteredTransactions, transactionsTotal])
 
-  const subscriptionColumns = useMemo<ColumnDef<Subscription>[]>(
+  const subscriptionColumns = useMemo<ColumnDef<typeof subscriptionTableFeatures, Subscription>[]>(
     () => [
       {
         id: 'select',
@@ -557,7 +563,7 @@ export default function SubscriptionView() {
     [filteredSubscriptions, selectedIds, toggleAll, toggleSelection]
   )
 
-  const transactionColumns = useMemo<ColumnDef<Transaction>[]>(
+  const transactionColumns = useMemo<ColumnDef<typeof subscriptionTableFeatures, Transaction>[]>(
     () => [
       {
         id: 'client',
@@ -613,16 +619,16 @@ export default function SubscriptionView() {
     []
   )
 
-  const subscriptionTable = useReactTable({
+  const subscriptionTable = useTable({
+    features: subscriptionTableFeatures,
     data: activeTab === 'expiring' ? expiringSubscriptions : filteredSubscriptions,
     columns: subscriptionColumns,
-    getCoreRowModel: getCoreRowModel(),
   })
 
-  const transactionTable = useReactTable({
+  const transactionTable = useTable({
+    features: subscriptionTableFeatures,
     data: filteredTransactions,
     columns: transactionColumns,
-    getCoreRowModel: getCoreRowModel(),
   })
 
   const statCards = [
