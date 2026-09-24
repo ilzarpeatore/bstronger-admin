@@ -3,7 +3,8 @@ import {
   addCell,
   applyPaste,
   buildDraft,
-  bulkSet,
+  cascadeBase,
+  cascadeRow,
   cellIsDirty,
   computeChanges,
   computeReorder,
@@ -19,6 +20,7 @@ import {
   setIntensityKey,
   setNotes,
   setValue,
+  shiftNumeric,
   visibleFields,
   type MatrixSlot,
 } from './programSessionMatrix'
@@ -250,13 +252,46 @@ describe('orden de ejercicios', () => {
   })
 })
 
-describe('edición en bloque', () => {
-  it('pone un valor en todas las celdas existentes de las sesiones elegidas', () => {
-    const d = bulkSet(buildDraft(slot), slot, 'descanso', '90', [10, 11])
-    expect(d[10]['5#1']!.values.descanso).toBe('90')
-    expect(d[10]['9#1']!.values.descanso).toBe('90')
-    expect(d[11]['5#1']!.values.descanso).toBe('90')
-    expect(d[11]['9#1']).toBeUndefined() // no crea celdas que no existían
-    expect(d[12]['5#1']!.values.descanso).toBe('') // semana no elegida
+describe('cascada por ejercicio', () => {
+  it('shiftNumeric suma a números, rangos y decimales; el texto queda igual', () => {
+    expect(shiftNumeric('3', 1)).toBe('4')
+    expect(shiftNumeric('8-10', 2)).toBe('10-12')
+    expect(shiftNumeric('7,5', 1)).toBe('8,5')
+    expect(shiftNumeric('AMRAP', 1)).toBe('AMRAP')
+    expect(shiftNumeric('2', -5, 0)).toBe('0') // respeta el mínimo
+    expect(shiftNumeric('9', 3, 0, 10)).toBe('10') // y el máximo
+  })
+
+  it('la base es la primera semana donde el ejercicio ya existe', () => {
+    expect(cascadeBase(buildDraft(slot), slot, '5#1')?.assignment_id).toBe(10)
+    expect(cascadeBase(buildDraft(slot), slot, 'no-existe')).toBeNull()
+  })
+
+  it('aplica el incremento acumulado semana a semana solo a ese ejercicio', () => {
+    const d = cascadeRow(buildDraft(slot), slot, '5#1', { steps: { series: 1, reps: 2, intensity: 1 }, carga: [] })
+    expect(d[10]['5#1']!.values.series).toBe('4') // la base no se toca
+    expect(d[11]['5#1']!.values.series).toBe('5')
+    expect(d[12]['5#1']!.values.series).toBe('6')
+    expect(d[11]['5#1']!.values.reps).toBe('8-10')
+    expect(d[12]['5#1']!.values.reps).toBe('10-12')
+    expect(d[11]['5#1']!.values.intensity).toBe('3')
+    expect(d[12]['5#1']!.values.intensity).toBe('4')
+    // otro ejercicio de la misma sesión: intacto
+    expect(d[11]['9#1']).toEqual(buildDraft(slot)[11]['9#1'])
+  })
+
+  it('carga: indicación textual por semana; no crea celdas que no existían', () => {
+    const d = cascadeRow(buildDraft(slot), slot, '9#1', { steps: { series: 1 }, carga: ['Subir', 'Bajar'] })
+    expect(d[11]['9#1']).toBeUndefined() // solo existe en la semana 1
+    expect(d[12]['9#1']).toBeUndefined()
+    const e = cascadeRow(buildDraft(slot), slot, '5#1', { steps: {}, carga: ['Subir', 'Mantener'] })
+    expect(e[10]['5#1']!.values.carga).toBe('45')
+    expect(e[11]['5#1']!.values.carga).toBe('Subir')
+    expect(e[12]['5#1']!.values.carga).toBe('Mantener')
+  })
+
+  it('no inventa valores: si la base no tiene el campo relleno lo deja como está', () => {
+    const d = cascadeRow(buildDraft(slot), slot, '5#1', { steps: { duracion: 5 }, carga: [] })
+    expect(d[11]['5#1']!.values.duracion).toBe('')
   })
 })

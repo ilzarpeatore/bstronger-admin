@@ -126,19 +126,24 @@ describe('ProgramSessionMatrixEditor — aviso de programa asignado directamente
   })
 })
 
-describe('ProgramSessionMatrixEditor — notas, columnas, orden y edición en bloque', () => {
-  it('edición en bloque: aplica un valor a todos los ejercicios existentes y cuenta los cambios', async () => {
+describe('ProgramSessionMatrixEditor — notas, columnas, orden y cascada', () => {
+  it('cascada por ejercicio: desde la semana 1 sube series y pone una indicación de carga solo en ese ejercicio', async () => {
     const user = userEvent.setup()
     renderEditor()
     await screen.findByText('Press banca')
-    await user.click(screen.getByRole('button', { name: /Edición en bloque/ }))
-    await user.selectOptions(await screen.findByLabelText('Campo'), 'descanso')
-    await user.type(screen.getByLabelText('Valor'), '90')
+    await user.click(screen.getAllByRole('button').filter(b => b.textContent === '' && b.closest('td'))[0] as HTMLElement)
+    await user.click(await screen.findByText('Cascada por semanas…'))
+    await user.selectOptions(await screen.findByLabelText('Series por semana'), '1')
+    await user.selectOptions(screen.getByLabelText('Carga semana 2'), 'Subir')
     await user.click(screen.getByRole('button', { name: 'Aplicar al borrador' }))
-    // 3 celdas existentes (Press banca S1 y S2, Fondos S1)
-    expect(await screen.findByText('3 cambios sin guardar')).toBeInTheDocument()
-    expect(screen.getByLabelText('Desc. (fila 1, semana 1)')).toHaveValue('90')
-    expect(screen.getByLabelText('Desc. (fila 2, semana 1)')).toHaveValue('90')
+    expect(await screen.findByText('1 cambios sin guardar')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Revisar y guardar' }))
+    await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+    // la semana 1 no se toca; Fondos (otro ejercicio) tampoco
+    expect(postMock.mock.calls[0][1].changes).toEqual([
+      { type: 'update', assignment_id: 11, row_id: 2, prescribed: { series: '5', carga: 'Subir' } },
+    ])
   })
 
   it('las columnas opcionales (tempo) se muestran desde el menú "Columnas"', async () => {

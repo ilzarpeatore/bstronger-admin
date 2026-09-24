@@ -1,24 +1,25 @@
-import { fuzzyFilter } from '@/lib/textSearch'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, ChevronsRightIcon, Columns3Icon, LinkIcon, ListChecksIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SearchIcon, StickyNoteIcon, TrashIcon } from 'lucide-react'
+import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, ChevronsRightIcon, Columns3Icon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SlidersHorizontalIcon, StickyNoteIcon, TrashIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
+import ExercisePickerPanel from '@/components/coaching/ExercisePickerPanel'
 import { cn } from '@/lib/utils'
 import {
-  ALL_FIELD_KEYS,
+  CARGA_HINTS,
+  CASCADE_FIELDS,
   FIELD_LABELS,
   OPTIONAL_FIELD_KEYS,
   addCell,
   applyPaste,
   buildDraft,
-  bulkSet,
+  cascadeBase,
+  cascadeRow,
   cellFromApi,
   cellIsDirty,
   columnLabel,
@@ -31,11 +32,14 @@ import {
   parsePaste,
   removeCell,
   removeRow,
+  slotWeeks,
   setIntensityKey,
   setNotes,
   setValue,
   visibleFields,
   type ApiChange,
+  type CargaHint,
+  type CascadeField,
   type Draft,
   type FieldKey,
   type MatrixColumn,
@@ -88,16 +92,10 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   const fields = useMemo(() => visibleFields(optionalFields), [optionalFields])
   const [rowOrder, setRowOrder] = useState<Record<string, string[]>>({})
   const [notesEdit, setNotesEdit] = useState<{ assignmentId: number; rowKey: string; value: string } | null>(null)
-  // Edición en bloque
-  const [bulkOpen, setBulkOpen] = useState(false)
-  const [bulkField, setBulkField] = useState<FieldKey>('descanso')
-  const [bulkValue, setBulkValue] = useState('')
-  const [bulkWeeks, setBulkWeeks] = useState<number[] | null>(null) // null = todas las semanas
-  const [bulkAllSlots, setBulkAllSlots] = useState(false)
+  // Cascada por ejercicio (semana 1 → siguientes)
+  const [cascade, setCascade] = useState<{ rowKey: string; steps: Partial<Record<CascadeField, number>>; carga: CargaHint[] } | null>(null)
 
-  const [exerciseOptions, setExerciseOptions] = useState<ExerciseOption[] | null>(null)
   const [picker, setPicker] = useState<{ mode: 'add' } | { mode: 'substitute'; rowKey: string } | null>(null)
-  const [pickerQuery, setPickerQuery] = useState('')
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const tableRef = useRef<HTMLDivElement>(null)
@@ -138,7 +136,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
     return { ...base, rows: orderedRows([...base.rows, ...(extraRows[base.key] ?? [])], rowOrder[base.key]) }
   }, [data, activeKey, extraRows, rowOrder])
 
-  const draft = (slot && drafts[slot.key]) || {}
+  const draft = useMemo<Draft>(() => (slot && drafts[slot.key]) || {}, [slot, drafts])
   const slotSubs = (slot && subs[slot.key]) || {}
 
   const setSlotDraft = (fn: (d: Draft) => Draft) => {
@@ -212,19 +210,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   }
 
   // ---- selector de ejercicios (añadir fila / sustituir) -------------------
-  const openPicker = async (p: NonNullable<typeof picker>) => {
-    setPicker(p)
-    setPickerQuery('')
-    if (!exerciseOptions) {
-      try {
-        const res = await api.get('/admin/exercises?per_page=-1')
-        const items = res.data?.data || res.data || []
-        setExerciseOptions(items.map((e: any) => ({ id: e.id, title: e.title })))
-      } catch {
-        toast.error('Error al cargar los ejercicios')
-      }
-    }
-  }
+  const openPicker = (p: NonNullable<typeof picker>) => setPicker(p)
 
   const pickExercise = (ex: ExerciseOption) => {
     if (!slot || !picker) return
@@ -239,10 +225,6 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
     }
     setPicker(null)
   }
-
-  const filteredExercises = useMemo(() => {
-    return fuzzyFilter(exerciseOptions ?? [], pickerQuery, e => e.title, { rank: true }).slice(0, 60)
-  }, [exerciseOptions, pickerQuery])
 
   // ---- teclado y pegado ----------------------------------------------------
   const focusCell = (rowIndex: number, colIndex: number, fieldIndex: number) => {
@@ -287,34 +269,21 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
     if (next !== order) setRowOrder(prev => ({ ...prev, [slot.key]: next }))
   }
 
-  const bulkWeekOptions = useMemo(() => {
-    const slots = bulkAllSlots ? data?.slots ?? [] : slot && data ? data.slots.filter(s => s.key === slot.key) : []
-    return [...new Set(slots.flatMap(s => s.columns.map(c => c.week_number)))].sort((a, b) => a - b)
-  }, [bulkAllSlots, data, slot])
+  const cascadeRowInfo = cascade && slot ? slot.rows.find(r => r.row_key === cascade.rowKey) ?? null : null
+  const cascadeBaseCol = cascade && slot ? cascadeBase(draft, slot, cascade.rowKey) : null
+  const cascadeWeeksAfter = slot && cascadeBaseCol ? slotWeeks(slot).filter(w => w > cascadeBaseCol.week_number) : []
+  const cascadePreview = useMemo(
+    () => (cascade && slot ? cascadeRow(draft, slot, cascade.rowKey, { steps: cascade.steps, carga: cascade.carga }) : null),
+    [cascade, slot, draft],
+  )
 
-  const openBulk = () => {
-    setBulkValue('')
-    setBulkWeeks(null)
-    setBulkAllSlots(false)
-    setBulkOpen(true)
-  }
+  const openCascade = (rowKey: string) => setCascade({ rowKey, steps: {}, carga: [] })
 
-  const applyBulk = () => {
-    if (!data || !slot) return
-    const targets = bulkAllSlots ? data.slots : data.slots.filter(s => s.key === slot.key)
-    let touched = 0
-    setDrafts(prev => {
-      const next = { ...prev }
-      for (const s of targets) {
-        const ids = s.columns.filter(c => bulkWeeks === null || bulkWeeks.includes(c.week_number)).map(c => c.assignment_id)
-        const withExtra: MatrixSlot = { ...s, rows: [...s.rows, ...(extraRows[s.key] ?? [])] }
-        next[s.key] = bulkSet(prev[s.key] ?? {}, withExtra, bulkField, bulkValue.trim(), ids)
-        touched += ids.length
-      }
-      return next
-    })
-    toast.success(`${FIELD_LABELS[bulkField]} = "${bulkValue.trim() || '—'}" aplicado a ${touched} sesión(es)`)
-    setBulkOpen(false)
+  const applyCascade = () => {
+    if (!slot || !cascade) return
+    setSlotDraft(d => cascadeRow(d, slot, cascade.rowKey, { steps: cascade.steps, carga: cascade.carga }))
+    toast.success('Cascada aplicada al borrador (solo a este ejercicio)')
+    setCascade(null)
   }
 
   // ---- render --------------------------------------------------------------
@@ -433,9 +402,6 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <Button variant='outline' size='sm' className='h-7 text-xs' onClick={openBulk} disabled={!slot}>
-                    <ListChecksIcon className='mr-1 size-3.5' /> Edición en bloque
-                  </Button>
                 </div>
               </div>
 
@@ -503,6 +469,9 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                                     </DropdownMenuItem>
                                     <DropdownMenuItem disabled={!canMove(row.row_key, 1)} onClick={() => moveRowBy(row.row_key, 1)}>
                                       <ArrowDownIcon className='mr-2 size-3.5' /> Bajar (en todas las semanas)
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => openCascade(row.row_key)}>
+                                      <SlidersHorizontalIcon className='mr-2 size-3.5' /> Cascada por semanas…
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => openPicker({ mode: 'substitute', rowKey: row.row_key })}>
                                       <RepeatIcon className='mr-2 size-3.5' /> Sustituir en todas las semanas
@@ -606,84 +575,120 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
         </DialogContent>
       </Dialog>
 
-      {/* Edición en bloque */}
-      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
-        <DialogContent className='max-w-lg!'>
+      {/* Cascada por ejercicio */}
+      <Dialog open={!!cascade} onOpenChange={o => { if (!o) setCascade(null) }}>
+        <DialogContent className='max-w-2xl!'>
           <DialogHeader>
-            <DialogTitle>Edición en bloque</DialogTitle>
+            <DialogTitle>Cascada: {cascadeRowInfo?.exercise_title}</DialogTitle>
             <DialogDescription>
-              Pone el mismo valor en un campo de todos los ejercicios de las sesiones que elijas (solo donde el ejercicio ya existe).
-              Se aplica al borrador: revisas y guardas como siempre.
+              Parte de la semana {cascadeBaseCol?.week_number ?? '—'} (lo que ya rellenaste) y sube o baja cada campo semana a semana, solo para este
+              ejercicio. Deja «Sin cambio» lo que no quieras tocar.
             </DialogDescription>
           </DialogHeader>
-          <div className='space-y-3 text-sm'>
-            <div className='flex items-center gap-2'>
-              <label htmlFor='bulk-field' className='w-20 shrink-0 text-xs font-medium'>Campo</label>
-              <select
-                id='bulk-field'
-                value={bulkField}
-                onChange={e => setBulkField(e.target.value as FieldKey)}
-                className='h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm'
-              >
-                {ALL_FIELD_KEYS.map(f => <option key={f} value={f}>{f === 'intensity' ? 'RIR / RPE' : FIELD_LABELS[f]}</option>)}
-              </select>
-            </div>
-            <div className='flex items-center gap-2'>
-              <label htmlFor='bulk-value' className='w-20 shrink-0 text-xs font-medium'>Valor</label>
-              <Input id='bulk-value' className='h-8' value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder='Vacío = borrar el campo' />
-            </div>
-            <div className='space-y-1.5'>
-              <p className='text-xs font-medium'>Tipos de sesión</p>
-              <label className='flex items-center gap-2 text-xs'>
-                <input type='radio' name='bulk-scope' checked={!bulkAllSlots} onChange={() => { setBulkAllSlots(false); setBulkWeeks(null) }} />
-                Solo «{slot?.label}»
-              </label>
-              <label className='flex items-center gap-2 text-xs'>
-                <input type='radio' name='bulk-scope' checked={bulkAllSlots} onChange={() => { setBulkAllSlots(true); setBulkWeeks(null) }} />
-                Todos los tipos de sesión cargados ({data?.slots.length ?? 0})
-              </label>
-            </div>
-            <div className='space-y-1.5'>
-              <p className='text-xs font-medium'>Semanas</p>
-              <div className='flex flex-wrap gap-1.5'>
-                <button
-                  type='button'
-                  onClick={() => setBulkWeeks(null)}
-                  className={cn('rounded-full border px-2.5 py-0.5 text-xs', bulkWeeks === null ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted')}
-                >
-                  Todas
-                </button>
-                {bulkWeekOptions.map(w => {
-                  const on = bulkWeeks?.includes(w) ?? false
+          {cascade && cascadeBaseCol && cascadePreview && slot && (
+            <div className='space-y-3 text-sm'>
+              <div className='grid gap-2 sm:grid-cols-2'>
+                {CASCADE_FIELDS.filter(f => f !== 'duracion').map(f => {
+                  const label = f === 'intensity' ? (draft[cascadeBaseCol.assignment_id]?.[cascade.rowKey]?.intensityKey ?? 'rir').toUpperCase() : FIELD_LABELS[f]
                   return (
-                    <button
-                      key={w}
-                      type='button'
-                      onClick={() => setBulkWeeks(prev => {
-                        const base = prev ?? []
-                        const next = base.includes(w) ? base.filter(x => x !== w) : [...base, w]
-                        return next.length === 0 ? null : next
-                      })}
-                      className={cn('rounded-full border px-2.5 py-0.5 text-xs', on ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted')}
-                    >
-                      S{w}
-                    </button>
+                    <label key={f} className='flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5'>
+                      <span className='text-xs font-medium'>{label} por semana</span>
+                      <select
+                        aria-label={`${label} por semana`}
+                        value={cascade.steps[f] ?? 0}
+                        onChange={e => setCascade(prev => (prev ? { ...prev, steps: { ...prev.steps, [f]: Number(e.target.value) } } : prev))}
+                        className='h-8 rounded-md border border-input bg-background px-2 text-xs'
+                      >
+                        {[-2, -1, 0, 1, 2].map(n => (
+                          <option key={n} value={n}>{n === 0 ? 'Sin cambio' : n > 0 ? `+${n}` : String(n)}</option>
+                        ))}
+                      </select>
+                    </label>
                   )
                 })}
               </div>
+
+              <div className='space-y-1.5 rounded-md border p-2.5'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <p className='text-xs font-medium'>Carga (indicación en texto)</p>
+                  <div className='flex items-center gap-1'>
+                    <span className='text-[11px] text-muted-foreground'>Todas las semanas:</span>
+                    {CARGA_HINTS.map(h => (
+                      <button
+                        key={h}
+                        type='button'
+                        onClick={() => setCascade(prev => (prev ? { ...prev, carga: cascadeWeeksAfter.map(() => h) } : prev))}
+                        className='rounded-full border px-2 py-0.5 text-[11px] hover:bg-muted'
+                      >
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  {cascadeWeeksAfter.map((w, i) => (
+                    <label key={w} className='flex items-center gap-1 text-[11px]'>
+                      S{w}
+                      <select
+                        aria-label={`Carga semana ${w}`}
+                        value={cascade.carga[i] ?? ''}
+                        onChange={e => setCascade(prev => {
+                          if (!prev) return prev
+                          const carga = cascadeWeeksAfter.map((_, k) => prev.carga[k] ?? '') as CargaHint[]
+                          carga[i] = e.target.value as CargaHint
+                          return { ...prev, carga }
+                        })}
+                        className='h-7 rounded-md border border-input bg-background px-1 text-[11px]'
+                      >
+                        <option value=''>Sin cambio</option>
+                        {CARGA_HINTS.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className='max-h-56 overflow-auto rounded-md border'>
+                <table className='w-full text-xs'>
+                  <thead className='bg-muted'>
+                    <tr>
+                      <th className='px-2 py-1 text-left'>Semana</th>
+                      {(['series', 'reps', 'carga', 'intensity', 'descanso'] as FieldKey[]).map(f => <th key={f} className='px-2 py-1 text-center'>{FIELD_LABELS[f]}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slot.columns.map(col => {
+                      const cell = cascadePreview[col.assignment_id]?.[cascade.rowKey]
+                      if (!cell) return null
+                      const before = draft[col.assignment_id]?.[cascade.rowKey]
+                      return (
+                        <tr key={col.assignment_id} className='border-t'>
+                          <td className='px-2 py-1'>{columnLabel(col)}</td>
+                          {(['series', 'reps', 'carga', 'intensity', 'descanso'] as FieldKey[]).map(f => (
+                            <td key={f} className={cn('px-2 py-1 text-center', before && before.values[f] !== cell.values[f] && 'bg-amber-100/70 font-medium dark:bg-amber-900/25')}>
+                              {cell.values[f] || '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
+          {cascade && !cascadeBaseCol && <p className='text-sm text-muted-foreground'>Este ejercicio no tiene ninguna semana rellenada de la que partir.</p>}
           <DialogFooter>
-            <Button variant='outline' onClick={() => setBulkOpen(false)}>Cancelar</Button>
-            <Button onClick={applyBulk}>Aplicar al borrador</Button>
+            <Button variant='outline' onClick={() => setCascade(null)}>Cancelar</Button>
+            <Button onClick={applyCascade} disabled={!cascadeBaseCol}>Aplicar al borrador</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Selector de ejercicio */}
+      {/* Selector de ejercicio (con fotos y filtros) */}
       <Dialog open={!!picker} onOpenChange={o => { if (!o) setPicker(null) }}>
-        <DialogContent className='max-w-md!'>
-          <DialogHeader>
+        <DialogContent className='flex! h-[90vh] w-[97vw]! max-w-5xl! flex-col gap-3'>
+          <DialogHeader className='shrink-0'>
             <DialogTitle>{picker?.mode === 'substitute' ? 'Sustituir ejercicio en todas las semanas' : 'Añadir ejercicio'}</DialogTitle>
             <DialogDescription>
               {picker?.mode === 'substitute'
@@ -691,23 +696,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                 : 'El ejercicio aparece en todas las semanas de este tipo de sesión, listo para rellenar.'}
             </DialogDescription>
           </DialogHeader>
-          <div className='relative'>
-            <SearchIcon className='absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
-            <Input autoFocus className='pl-9' placeholder='Buscar ejercicio...' value={pickerQuery} onChange={e => setPickerQuery(e.target.value)} />
-          </div>
-          <div className='max-h-72 overflow-y-auto rounded-md border'>
-            {!exerciseOptions ? (
-              <p className='px-3 py-4 text-center text-sm text-muted-foreground'>Cargando...</p>
-            ) : filteredExercises.length === 0 ? (
-              <p className='px-3 py-4 text-center text-sm text-muted-foreground'>Sin resultados</p>
-            ) : (
-              filteredExercises.map(e => (
-                <button key={e.id} type='button' className='block w-full px-3 py-1.5 text-left text-sm hover:bg-muted' onClick={() => pickExercise(e)}>
-                  {e.title}
-                </button>
-              ))
-            )}
-          </div>
+          {picker && <ExercisePickerPanel onPick={pickExercise} />}
         </DialogContent>
       </Dialog>
 

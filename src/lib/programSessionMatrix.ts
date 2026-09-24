@@ -458,13 +458,84 @@ export function computeReorder(slot: MatrixSlot, order: readonly string[] | unde
   return { changes, lines }
 }
 
-/** Edición en bloque: pone un valor en un campo de TODAS las celdas existentes de las sesiones indicadas. */
-export function bulkSet(draft: Draft, slot: MatrixSlot, field: FieldKey, value: string, assignmentIds: readonly number[]): Draft {
+// ---------------------------------------------------------------------------
+// Cascada por ejercicio: parte de la primera semana rellenada y va sumando/restando semana a semana
+// ---------------------------------------------------------------------------
+
+export type CascadeField = 'series' | 'reps' | 'intensity' | 'descanso' | 'duracion'
+export const CASCADE_FIELDS: CascadeField[] = ['series', 'reps', 'intensity', 'descanso', 'duracion']
+export type CargaHint = '' | 'Mantener' | 'Subir' | 'Bajar'
+export const CARGA_HINTS: CargaHint[] = ['Mantener', 'Subir', 'Bajar']
+
+export type CascadeSpec = {
+  /** Incremento por semana (p. ej. +1, +2, -1). 0 o ausente = no tocar el campo. */
+  steps: Partial<Record<CascadeField, number>>
+  /** Indicación textual de carga por semana: índice 0 = semana siguiente a la base. '' = no tocar. */
+  carga: CargaHint[]
+}
+
+const NUM = /^(\d+(?:[.,]\d+)?)(?:\s*-\s*(\d+(?:[.,]\d+)?))?$/
+
+/**
+ * Suma `delta` a un valor numérico ("3" → "4"; rangos "8-10" → "9-11"; decimales "7,5").
+ * Texto no numérico ("AMRAP", "fallo") se devuelve tal cual.
+ */
+export function shiftNumeric(value: string, delta: number, min = 0, max = Infinity): string {
+  const m = NUM.exec(value.trim())
+  if (!m) return value
+  const comma = value.includes(',')
+  const one = (x: string) => {
+    const n = Math.min(max, Math.max(min, parseFloat(x.replace(',', '.')) + delta))
+    const out = String(Math.round(n * 100) / 100)
+    return comma ? out.replace('.', ',') : out
+  }
+  return m[2] !== undefined ? `${one(m[1])}-${one(m[2])}` : one(m[1])
+}
+
+const CASCADE_LIMITS: Record<CascadeField, { min: number; max: number }> = {
+  series: { min: 1, max: 99 },
+  reps: { min: 1, max: 999 },
+  intensity: { min: 0, max: 10 },
+  descanso: { min: 0, max: 3600 },
+  duracion: { min: 0, max: 36000 },
+}
+
+/** Semanas distintas del tipo de sesión, en orden. */
+export function slotWeeks(slot: MatrixSlot): number[] {
+  return [...new Set(slot.columns.map(c => c.week_number))].sort((a, b) => a - b)
+}
+
+/** Columna de partida de un ejercicio: la de la primera semana donde ya existe en el borrador. */
+export function cascadeBase(draft: Draft, slot: MatrixSlot, rowKey: string): MatrixColumn | null {
+  const sorted = [...slot.columns].sort((a, b) => a.week_number - b.week_number)
+  return sorted.find(c => draft[c.assignment_id]?.[rowKey]) ?? null
+}
+
+/**
+ * Aplica la cascada SOLO a este ejercicio. La semana base no se toca; en la semana n-ésima posterior
+ * cada campo con incremento vale `base + incremento × n`. Solo se escribe donde el ejercicio ya existe
+ * (no se crean celdas) y solo en campos que la base ya tiene rellenados.
+ */
+export function cascadeRow(draft: Draft, slot: MatrixSlot, rowKey: string, spec: CascadeSpec): Draft {
+  const base = cascadeBase(draft, slot, rowKey)
+  if (!base) return draft
+  const baseCell = draft[base.assignment_id][rowKey]!
+  const weeks = slotWeeks(slot).filter(w => w > base.week_number)
   let next = draft
-  for (const a of assignmentIds) {
-    for (const row of slot.rows) {
-      if (next[a]?.[row.row_key]) next = setValue(next, a, row.row_key, field, value)
+  for (const col of slot.columns) {
+    const n = weeks.indexOf(col.week_number) + 1
+    if (n === 0 || !next[col.assignment_id]?.[rowKey]) continue
+    for (const f of CASCADE_FIELDS) {
+      const step = spec.steps[f]
+      if (!step) continue
+      const from = baseCell.values[f]
+      if (!from.trim()) continue
+      const { min, max } = CASCADE_LIMITS[f]
+      const value = shiftNumeric(from, step * n, min, f === 'intensity' && baseCell.intensityKey === 'rir' ? 6 : max)
+      if (value !== next[col.assignment_id][rowKey]!.values[f]) next = setValue(next, col.assignment_id, rowKey, f, value)
     }
+    const hint = spec.carga[n - 1]
+    if (hint) next = setValue(next, col.assignment_id, rowKey, 'carga', hint)
   }
   return next
 }
