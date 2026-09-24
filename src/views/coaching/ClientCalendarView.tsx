@@ -20,6 +20,10 @@ type CalendarAssignment = {
   month: number
   day: number
   is_direct?: boolean
+  // Entrenamiento que creó el propio cliente desde la app (backend:
+  // ClientCustomWorkoutController) -- se pinta en morado para distinguirlo
+  // de lo asignado por el coach.
+  is_client_created?: boolean
   training_program_id?: number | null
   training_program?: { id: number; title: string }
   thumbnail?: string | null
@@ -158,6 +162,7 @@ export default function ClientCalendarView() {
             month: d.getMonth() + 1,
             day: d.getDate(),
             is_direct: w.is_personal || false,
+            is_client_created: !!w.is_client_created,
             training_program_id: w.training_program_id || null,
             training_program: w.program_title ? { id: w.training_program_id || 0, title: w.program_title } : undefined,
             thumbnail: w.thumbnail || null,
@@ -519,6 +524,10 @@ export default function ClientCalendarView() {
                 <span className='inline-block h-3 w-3 rounded bg-green-100 border border-green-300' />
                 Programa
               </span>
+              <span className='flex items-center gap-1'>
+                <span className='inline-block h-3 w-3 rounded bg-purple-100 border border-purple-300' />
+                Creado por el cliente
+              </span>
             </div>
           </div>
           <div className='flex items-center gap-2'>
@@ -664,9 +673,11 @@ export default function ClientCalendarView() {
                                   onDragStart={direct ? (e) => handleDragStart(e, assignment) : undefined}
                                   className={`
                                     text-[10px] leading-tight px-1 py-0.5 rounded group relative
-                                    ${direct
-                                      ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                      : 'bg-green-100 text-green-800 border border-green-200'
+                                    ${assignment.is_client_created
+                                      ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                      : direct
+                                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                        : 'bg-green-100 text-green-800 border border-green-200'
                                     }
                                   `}
                                 >
