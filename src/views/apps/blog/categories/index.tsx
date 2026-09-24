@@ -10,7 +10,7 @@ const BCrumb = [
   { title: "Categorías del Blog" },
 ];
 
-const columns: ColumnDef<any, any>[] = [
+const columns: ColumnDef<any, any, any>[] = [
   {
     accessorKey: "id",
     header: "ID",

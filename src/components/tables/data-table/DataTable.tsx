@@ -2,13 +2,22 @@
 
 import React, { useMemo, useState } from 'react'
 import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
+  useTable,
+  tableFeatures,
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  rowPaginationFeature,
+  columnVisibilityFeature,
+  createFilteredRowModel,
+  createSortedRowModel,
+  createPaginatedRowModel,
+  filterFn_includesString,
+  sortFn_alphanumeric,
+  sortFn_text,
+  sortFn_datetime,
+  sortFn_basic,
   flexRender,
-  CellContext,
 } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -19,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { ColumnDef, SortingState } from '@tanstack/react-table'
+import type { CellContext, ColumnDef, SortingState } from '@tanstack/react-table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@iconify-icon/react'
@@ -67,6 +76,29 @@ export function toTitleCase(str: string) {
     .join(' ')
 }
 
+// TanStack Table v9: cada funcionalidad se registra explícitamente.
+// - columnFilteringFeature es requisito de globalFilteringFeature (buscador).
+// - Los sortFn_* registrados son los que el sortFn 'auto' de v8 elegía según
+//   el tipo de dato, para ordenar igual que antes.
+// - columnVisibilityFeature aporta row.getVisibleCells(), que usa el render.
+const dataTableFeatures = tableFeatures({
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  rowPaginationFeature,
+  columnVisibilityFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  paginatedRowModel: createPaginatedRowModel(),
+  filterFns: { includesString: filterFn_includesString },
+  sortFns: {
+    alphanumeric: sortFn_alphanumeric,
+    text: sortFn_text,
+    datetime: sortFn_datetime,
+    basic: sortFn_basic,
+  },
+})
+
 interface DynamicTableProps<T> {
   data?: T[]
 }
@@ -88,7 +120,7 @@ const DataTable = <T extends Record<string, unknown>>({
     return sizes.filter((size) => size <= data.length)
   }, [data.length])
 
-  const columns = useMemo<ColumnDef<T, unknown>[]>(() => {
+  const columns = useMemo<ColumnDef<typeof dataTableFeatures, T, unknown>[]>(() => {
     if (!data.length) return []
 
     const keys = Object.keys(data[0]).filter((key) => {
@@ -99,7 +131,7 @@ const DataTable = <T extends Record<string, unknown>>({
     const baseColumns = keys.map((col) => ({
       accessorKey: col as keyof T & string,
       header: toTitleCase(col.replace(/([A-Z])/g, ' $1').trim()),
-      cell: (info: CellContext<T, unknown>) => {
+      cell: (info: CellContext<typeof dataTableFeatures, T, unknown>) => {
         const value = info.getValue()
 
         if (
@@ -340,7 +372,7 @@ const DataTable = <T extends Record<string, unknown>>({
       enableGlobalFilter: true,
     }))
 
-    const actionColumn: ColumnDef<T, unknown> = {
+    const actionColumn: ColumnDef<typeof dataTableFeatures, T, unknown> = {
       id: 'action',
       header: 'Acción',
       enableSorting: false,
@@ -364,18 +396,15 @@ const DataTable = <T extends Record<string, unknown>>({
   }, [data])
 
   // React Table Setup
-  const table = useReactTable({
+  const table = useTable({
+    features: dataTableFeatures,
     data,
     columns,
     state: { globalFilter, sorting },
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
     globalFilterFn: 'includesString',
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: paginationOptions[0] || 5 } },
+    initialState: { pagination: { pageIndex: 0, pageSize: paginationOptions[0] || 5 } },
   })
 
   // CSV Download
@@ -526,7 +555,7 @@ const DataTable = <T extends Record<string, unknown>>({
               </div>
 
               <div className='text-forest-black dark:text-white/90 font-medium text-base'>
-                Página {table.getState().pagination.pageIndex + 1} de{' '}
+                Página {table.state.pagination.pageIndex + 1} de{' '}
                 {table.getPageCount()}
               </div>
 
@@ -537,7 +566,7 @@ const DataTable = <T extends Record<string, unknown>>({
                   Filas por página:
                 </Label>
                 <Select
-                  value={String(table.getState().pagination.pageSize)}
+                  value={String(table.state.pagination.pageSize)}
                   onValueChange={(value) => table.setPageSize(Number(value))}>
                   <SelectTrigger className='w-18! cursor-pointer'>
                     <SelectValue placeholder='Tamaño de página' />
