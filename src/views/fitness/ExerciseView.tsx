@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { api, apiFetch } from '@/lib/api'
+import ExerciseFiltersPanel from './ExerciseFiltersPanel'
+import { EMPTY_FILTERS, applyExerciseFilters, type ExerciseFilterState } from './exerciseFilters'
 
 type ExerciseItem = {
   id: number
@@ -73,13 +75,17 @@ export default function ExerciseView() {
   const [selectedBodyParts, setSelectedBodyParts] = useState<number[]>([])
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 50
+  const [filters, setFilters] = useState<ExerciseFilterState>(EMPTY_FILTERS)
+
+  // Filtros y orden se aplican en cliente sobre la lista completa cargada.
+  const filteredItems = useMemo(() => applyExerciseFilters(items, filters), [items, filters])
 
   const paginatedItems = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
-    return items.slice(start, start + PAGE_SIZE)
-  }, [items, page])
+    return filteredItems.slice(start, start + PAGE_SIZE)
+  }, [filteredItems, page])
 
-  const totalPages = Math.ceil(items.length / PAGE_SIZE)
+  const totalPages = Math.ceil(filteredItems.length / PAGE_SIZE)
   const fetchItems = useCallback(async () => {
     setLoading(true)
     try {
@@ -216,6 +222,19 @@ export default function ExerciseView() {
             <p className='text-center text-muted-foreground py-16'>No se encontraron ejercicios.</p>
           ) : (
             <>
+            <ExerciseFiltersPanel
+              items={items}
+              filters={filters}
+              onChange={next => { setFilters(next); setPage(1) }}
+              bodyParts={bodyParts}
+              equipments={equipments}
+              levels={levels}
+              categories={EXERCISE_TYPES}
+              resultCount={filteredItems.length}
+            />
+            {filteredItems.length === 0 && (
+              <p className='text-center text-muted-foreground py-12'>Ningún ejercicio cumple estos filtros.</p>
+            )}
             <div className='grid gap-3'>
               {paginatedItems.map(item => (
                 <div
@@ -258,7 +277,7 @@ export default function ExerciseView() {
             </div>
             {totalPages > 1 && (
               <div className='flex items-center justify-between pt-4'>
-                <p className='text-xs text-muted-foreground'>Mostrando {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, items.length)} de {items.length}</p>
+                <p className='text-xs text-muted-foreground'>Mostrando {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredItems.length)} de {filteredItems.length}</p>
                 <div className='flex gap-1'>
                   <Button variant='outline' size='sm' disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Anterior</Button>
                   <Button variant='outline' size='sm' disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
