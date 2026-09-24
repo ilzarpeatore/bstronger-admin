@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { api } from '@/lib/api'
@@ -511,10 +512,9 @@ export default function WorkoutTemplateViewer({
   const allRoutineExercises = useMemo(() => blocks.flatMap(b => b.exercises), [blocks])
 
   const filteredBlocks = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return blocks
+    if (!search.trim()) return blocks
     return blocks
-      .map(b => ({ ...b, exercises: b.exercises.filter(e => e.title.toLowerCase().includes(q)) }))
+      .map(b => ({ ...b, exercises: b.exercises.filter(e => fuzzyMatch(search, e.title)) }))
       .filter(b => b.exercises.length > 0)
   }, [blocks, search])
 

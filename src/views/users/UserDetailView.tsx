@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon } from 'lucide-react'
@@ -550,7 +551,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const completedByTemplate = useMemo(() => new Set(completedSessions.filter(s => s.workout_template_id != null && s.date).map(s => `${String(s.date).slice(0, 10)}|${s.workout_template_id}`)), [completedSessions])
   const completedByDate = useMemo(() => new Set(completedSessions.filter(s => s.date).map(s => String(s.date).slice(0, 10))), [completedSessions])
   const todayStr = new Date().toISOString().split('T')[0]
-  const filteredTasks = useMemo(() => { let list = tasks; if (taskStatusFilter !== 'all') list = list.filter(t => t.status === taskStatusFilter); if (taskSearch.trim()) { const q = taskSearch.toLowerCase(); list = list.filter(t => t.title.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q)) }; return list }, [tasks, taskStatusFilter, taskSearch])
+  const filteredTasks = useMemo(() => { let list = tasks; if (taskStatusFilter !== 'all') list = list.filter(t => t.status === taskStatusFilter); if (taskSearch.trim()) { list = list.filter(t => fuzzyMatch(taskSearch, t.title, t.description)) }; return list }, [tasks, taskStatusFilter, taskSearch])
   const filteredResources = useMemo(() => resourceTypeFilter === 'all' ? resources : resources.filter(r => r.type === resourceTypeFilter), [resources, resourceTypeFilter])
 
   // Historial de ejercicios agrupado por ejercicio (antes era un log plano,
@@ -570,9 +571,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   }, [records])
 
   const filteredHistoryGroups = useMemo(() => {
-    const q = historySearch.trim().toLowerCase()
-    if (!q) return exerciseHistoryGroups
-    return exerciseHistoryGroups.filter(g => g.title.toLowerCase().includes(q))
+    if (!historySearch.trim()) return exerciseHistoryGroups
+    return exerciseHistoryGroups.filter(g => fuzzyMatch(historySearch, g.title))
   }, [exerciseHistoryGroups, historySearch])
 
   const selectedHistoryGroup = useMemo(
@@ -671,9 +671,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   }, [windowedRecords, bodyparts])
 
   const filteredMuscleGroups = useMemo(() => {
-    const q = muscleSearch.trim().toLowerCase()
-    if (!q) return volumeByMuscle
-    return volumeByMuscle.filter(g => g.group.toLowerCase().includes(q))
+    if (!muscleSearch.trim()) return volumeByMuscle
+    return volumeByMuscle.filter(g => fuzzyMatch(muscleSearch, g.group))
   }, [volumeByMuscle, muscleSearch])
 
   const selectedMuscle = useMemo(

@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react'
 import { PlusIcon, TrashIcon, PencilIcon, SearchIcon, ImageIcon, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -224,7 +225,7 @@ export default function ResourcesView() {
     }
   }
 
-  const filteredClients = allClients.filter(c => c.label.toLowerCase().includes(clientSearch.toLowerCase()))
+  const filteredClients = allClients.filter(c => fuzzyMatch(clientSearch, c.label))
 
   return (
     <>

@@ -79,3 +79,15 @@ describe('carpetas', () => {
     expect(weeks[0].items.map(i => i.session)).toEqual(['X (S1)', 'Y (S1)'])
   })
 })
+
+describe('búsqueda insensible a acentos y tolerante a erratas', () => {
+  const items = decorate([
+    t(1, 'Macrociclo 2 · Tracción (S1)'),
+    t(2, 'Macrociclo 2 · Empuje (S1)', { description: 'Fuerza máxima' }),
+  ])
+  it('encuentra sin tilde y con errata', () => {
+    expect(filterItems(items, { ...DEFAULT_LIST_FILTERS, search: 'traccion' }).map(i => i.id)).toEqual([1])
+    expect(filterItems(items, { ...DEFAULT_LIST_FILTERS, search: 'macrociclo empuge' }).map(i => i.id)).toEqual([2])
+    expect(filterItems(items, { ...DEFAULT_LIST_FILTERS, search: 'fuerza maxima' }).map(i => i.id)).toEqual([2])
+  })
+})

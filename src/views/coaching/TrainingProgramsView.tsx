@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 
@@ -1058,7 +1059,7 @@ export default function TrainingProgramsView() {
                 <div className='flex-1 overflow-y-auto -mx-1 px-1'>
                   <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
                     {workoutTemplates
-                      .filter(w => !templateSearch || w.title?.toLowerCase().includes(templateSearch.toLowerCase()))
+                      .filter(w => fuzzyMatch(templateSearch, w.title))
                       .map(w => (
                         <button
                           key={w.id}
@@ -1090,7 +1091,7 @@ export default function TrainingProgramsView() {
                   {workoutTemplates.length === 0 && (
                     <p className='text-sm text-muted-foreground text-center py-10'>No se encontraron plantillas.</p>
                   )}
-                  {workoutTemplates.length > 0 && workoutTemplates.filter(w => !templateSearch || w.title?.toLowerCase().includes(templateSearch.toLowerCase())).length === 0 && (
+                  {workoutTemplates.length > 0 && workoutTemplates.filter(w => fuzzyMatch(templateSearch, w.title)).length === 0 && (
                     <p className='text-sm text-muted-foreground text-center py-10'>No hay entrenamientos coincidentes</p>
                   )}
                 </div>

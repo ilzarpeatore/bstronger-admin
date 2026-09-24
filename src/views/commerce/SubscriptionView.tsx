@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import {
@@ -320,13 +321,7 @@ export default function SubscriptionView() {
   }, [fetchStats])
 
   const filteredSubscriptions = useMemo(() => {
-    return subscriptions.filter((sub) => {
-      const text = [sub.subscriber?.name, sub.subscriber?.email, sub.plan?.name]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return text.includes(search.toLowerCase())
-    })
+    return subscriptions.filter((sub) => fuzzyMatch(search, sub.subscriber?.name, sub.subscriber?.email, sub.plan?.name))
   }, [subscriptions, search])
 
   const toggleSelection = useCallback((id: number) => {

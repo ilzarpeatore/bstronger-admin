@@ -1,3 +1,4 @@
+import { fuzzyFilter } from '@/lib/textSearch'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangleIcon, ChevronsRightIcon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SearchIcon, TrashIcon } from 'lucide-react'
 import { toast } from 'sonner'
@@ -210,8 +211,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   }
 
   const filteredExercises = useMemo(() => {
-    const q = pickerQuery.trim().toLowerCase()
-    return (exerciseOptions ?? []).filter(e => !q || e.title.toLowerCase().includes(q)).slice(0, 60)
+    return fuzzyFilter(exerciseOptions ?? [], pickerQuery, e => e.title, { rank: true }).slice(0, 60)
   }, [exerciseOptions, pickerQuery])
 
   // ---- teclado y pegado ----------------------------------------------------

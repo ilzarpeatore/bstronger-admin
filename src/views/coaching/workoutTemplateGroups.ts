@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 // Organización de la lista de /workout-templates: las sesiones generadas por
 // un import/generador de semanas se llaman "<Programa> · <Sesión> (S<semana>)"
 // (a veces con más "·" dentro del nombre del programa), así que se agrupan en
@@ -90,9 +91,8 @@ export function sortItems<T extends DecoratedItem>(items: T[], sort: ListSort): 
 }
 
 export function filterItems(items: DecoratedItem[], f: ListFilters): DecoratedItem[] {
-  const q = f.search.trim().toLowerCase()
   const out = items.filter(it => {
-    if (q && !`${it.title} ${it.description ?? ''} ${it.id}`.toLowerCase().includes(q)) return false
+    if (!fuzzyMatch(f.search, it.title, it.description, it.id)) return false
     if (f.access === 'exclusive' && !it.is_exclusive) return false
     if (f.access === 'free' && it.is_exclusive) return false
     if (f.visibility === 'public' && !it.is_public) return false

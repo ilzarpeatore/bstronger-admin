@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { PlusIcon, TrashIcon, ArrowLeftIcon, SaveIcon } from 'lucide-react'
@@ -304,7 +305,7 @@ export default function SectionsView() {
                 />
                 <div className='max-h-60 overflow-y-auto rounded-md border'>
                   {exerciseList
-                    .filter(e => !exerciseSearch || e.title.toLowerCase().includes(exerciseSearch.toLowerCase()))
+                    .filter(e => fuzzyMatch(exerciseSearch, e.title))
                     .slice(0, 50)
                     .map(e => (
                       <div
@@ -315,7 +316,7 @@ export default function SectionsView() {
                         {e.title}
                       </div>
                     ))}
-                  {exerciseList.filter(e => !exerciseSearch || e.title.toLowerCase().includes(exerciseSearch.toLowerCase())).length === 0 && (
+                  {exerciseList.filter(e => fuzzyMatch(exerciseSearch, e.title)).length === 0 && (
                     <p className='px-3 py-2 text-sm text-muted-foreground'>No se encontraron ejercicios</p>
                   )}
                 </div>

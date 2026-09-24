@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 
 
 import { useState, useMemo, useCallback } from "react";
@@ -26,7 +27,7 @@ function Search() {
       if (
         item.name &&
         item.url &&
-        item.name.toLowerCase().includes(q.toLowerCase())
+        fuzzyMatch(q, item.name)
       ) {
         results.push({
           name: item.name,

@@ -1,3 +1,4 @@
+import { fuzzyMatch } from '@/lib/textSearch'
 import { useState, useEffect, useCallback } from 'react'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -69,7 +70,7 @@ const SendPushCard = () => {
   }
 
   const filteredUsers = userSearch
-    ? users.filter(u => userLabel(u).toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+    ? users.filter(u => fuzzyMatch(userSearch, userLabel(u), u.email))
     : users
 
   const toggleAllFiltered = () => {
