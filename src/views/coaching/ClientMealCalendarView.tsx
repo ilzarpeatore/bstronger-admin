@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronLeft, ChevronRight, X, CalendarIcon, Plus, Search } from 'lucide-react'
+import { X, CalendarIcon, Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import { MonthWeekCalendar } from '@/components/calendar/MonthWeekCalendar'
 import FatSecretRecipeFilters, { EMPTY_FATSECRET_FILTERS, fatSecretFiltersToParams, fatSecretFiltersToRecipeTypesQuery, type FatSecretRecipeFilterValues } from '@/components/coaching/FatSecretRecipeFilters'
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks'
@@ -72,36 +73,11 @@ type FatSecretRecipeDetail = {
 }
 type SimpleOption = { id: number; title: string }
 
-const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const MONTH_NAMES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-]
-
-function getCalendarCells(year: number, month: number) {
-  const first = new Date(year, month - 1, 1)
-  const last = new Date(year, month, 0)
-  const startDay = (first.getDay() + 6) % 7
-  const totalDays = last.getDate()
-  const cells: (string | null)[] = []
-  for (let i = 0; i < startDay; i++) cells.push(null)
-  for (let d = 1; d <= totalDays; d++) {
-    cells.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
-  }
-  while (cells.length % 7 !== 0) cells.push(null)
-  return cells
-}
-
 function getMonthBounds(year: number, month: number) {
   const start = `${year}-${String(month).padStart(2, '0')}-01`
   const lastDay = new Date(year, month, 0).getDate()
   const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
   return { start, end }
-}
-
-function getTodayString() {
-  const n = new Date()
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
 }
 
 const MEAL_LABEL_SHORT: Record<MealType, string> = {
@@ -166,8 +142,6 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
   const [addIngForm, setAddIngForm] = useState<Record<string, any>>({ ingredient_id: '', measurement_unit_id: '', quantity: 1, quantity_grams: '' })
   const [savingIng, setSavingIng] = useState(false)
 
-  const today = useMemo(() => getTodayString(), [])
-
   const fetchClients = useCallback(async () => {
     if (fixedClientId) return
     try {
@@ -204,15 +178,6 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
     for (const d of days) map.set(d.date, d)
     return map
   }, [days])
-
-  const prevMonth = () => {
-    if (month === 1) { setMonth(12); setYear(y => y - 1) } else { setMonth(m => m - 1) }
-  }
-  const nextMonth = () => {
-    if (month === 12) { setMonth(1); setYear(y => y + 1) } else { setMonth(m => m + 1) }
-  }
-
-  const cells = useMemo(() => getCalendarCells(year, month), [year, month])
 
   const searchRecipes = useCallback(async (query: string, source: RecipeSource, filters: FatSecretRecipeFilterValues) => {
     if (source === 'fatsecret' && query.trim().length < 2) {
@@ -518,108 +483,67 @@ export default function ClientMealCalendarView({ clientId: fixedClientId }: Prop
               <p>Selecciona un cliente para ver y asignar su plan de comidas</p>
             </div>
           ) : (
-            <>
-              <div className='flex items-center justify-between mb-4'>
-                <Button variant='outline' size='sm' onClick={prevMonth}>
-                  <ChevronLeft className='size-4' />
-                  <span className='ml-1'>Mes</span>
-                </Button>
-                <h3 className='text-lg font-semibold'>
-                  {MONTH_NAMES[month - 1]} {year} {loading && <span className='text-xs text-muted-foreground font-normal ml-2'>cargando…</span>}
-                </h3>
-                <Button variant='outline' size='sm' onClick={nextMonth}>
-                  <span className='mr-1'>Mes</span>
-                  <ChevronRight className='size-4' />
-                </Button>
-              </div>
-
-              <div className='overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0'>
-              <div className='grid grid-cols-7 border-t border-l min-w-[700px] sm:min-w-0'>
-                {DAYS.map(d => (
-                  <div key={d} className='border-r border-b bg-muted/50 px-2 py-1.5 text-center text-xs font-medium text-muted-foreground'>
-                    {d}
-                  </div>
-                ))}
-                {cells.map((dateStr, i) => {
-                  const day = dateStr ? daysByDate.get(dateStr) : undefined
-                  const isToday = dateStr === today
-
-                  return (
-                    <div
-                      key={i}
-                      className={`border-r border-b min-h-[130px] p-1.5 ${dateStr ? 'bg-background' : 'bg-muted/30'}`}
-                    >
-                      {dateStr && (
-                        <>
-                          <div className={`text-xs font-medium mb-1 ${isToday ? 'text-primary font-bold bg-primary/10 rounded px-1 inline-block' : ''}`}>
-                            {parseInt(dateStr.split('-')[2])}
-                          </div>
-                          <div className='space-y-0.5'>
-                            {MEAL_TYPES.map(({ key, label }) => {
-                              const meals = day?.meals?.[key] ?? []
-                              return (
-                                <div key={key} className='group'>
-                                  <div className='flex items-start gap-1'>
-                                    <span className='text-[9px] font-bold text-muted-foreground w-2.5 shrink-0 pt-0.5'>{MEAL_LABEL_SHORT[key]}</span>
-                                    <div className='flex-1 min-w-0 space-y-0.5'>
-                                      {meals.length === 0 ? (
-                                        <button
-                                          className='opacity-0 group-hover:opacity-100 transition-opacity text-[9px] text-muted-foreground hover:text-primary flex items-center gap-0.5'
-                                          onClick={() => openAssignDialog(dateStr, key)}
-                                          title={`Asignar ${label}`}
-                                        >
-                                          <Plus className='size-2.5' /> añadir
-                                        </button>
-                                      ) : (
-                                        meals.map(m => (
-                                          <div
-                                            key={m.id}
-                                            className={`text-[9px] leading-tight px-1 py-0.5 rounded flex items-center justify-between gap-0.5 cursor-pointer hover:brightness-95 ${
-                                              m.is_coach_assigned
-                                                ? 'bg-orange-100 text-orange-800 border border-orange-200'
-                                                : 'bg-gray-100 text-gray-700 border border-gray-200'
-                                            }`}
-                                            title={m.recipe?.title ?? undefined}
-                                            onClick={() => openMealDetail(m)}
-                                          >
-                                            <span className='truncate'>
-                                              {m.recipe?.title ?? (m.fatsecret_recipe_id ? 'Receta de FatSecret' : `Receta #${m.recipe_id}`)}
-                                            </span>
-                                            <button
-                                              className='shrink-0 opacity-0 group-hover:opacity-100 hover:text-red-600'
-                                              onClick={(e) => {
-                                                e.stopPropagation()
-                                                if (window.confirm('¿Eliminar esta comida?')) handleRemove(m.id)
-                                              }}
-                                            >
-                                              <X className='size-2.5' />
-                                            </button>
-                                          </div>
-                                        ))
-                                      )}
-                                      {meals.length > 0 && (
-                                        <button
-                                          className='opacity-0 group-hover:opacity-100 transition-opacity text-[9px] text-muted-foreground hover:text-primary flex items-center gap-0.5'
-                                          onClick={() => openAssignDialog(dateStr, key)}
-                                          title={`Añadir otro ${label}`}
-                                        >
-                                          <Plus className='size-2.5' /> añadir
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
+            <MonthWeekCalendar
+              year={year}
+              month={month}
+              onMonthChange={(y, m) => { setYear(y); setMonth(m) }}
+              loading={loading}
+              legend={(
+                <>
+                  <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border border-orange-500/50 bg-orange-500/10' /> Asignado por el coach</span>
+                  <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border bg-card' /> Añadido por el cliente</span>
+                </>
+              )}
+              renderDay={({ date }) => {
+                const day = daysByDate.get(date)
+                return (
+                  <div className='flex-1 space-y-1'>
+                    {MEAL_TYPES.map(({ key, label }) => {
+                      const meals = day?.meals?.[key] ?? []
+                      return (
+                        <div key={key} className='group'>
+                          <div className='flex items-start gap-1'>
+                            <span className='text-[9px] font-bold text-muted-foreground w-2.5 shrink-0 pt-1'>{MEAL_LABEL_SHORT[key]}</span>
+                            <div className='flex-1 min-w-0 space-y-1'>
+                              {meals.map(m => (
+                                <div
+                                  key={m.id}
+                                  className={`text-[10px] leading-tight px-1.5 py-1 rounded-lg border shadow-sm flex items-center justify-between gap-1 cursor-pointer hover:shadow-md transition-shadow ${
+                                    m.is_coach_assigned ? 'border-orange-500/50 bg-orange-500/10' : 'bg-card'
+                                  }`}
+                                  title={m.recipe?.title ?? undefined}
+                                  onClick={() => openMealDetail(m)}
+                                >
+                                  <span className='truncate font-medium'>
+                                    {m.recipe?.title ?? (m.fatsecret_recipe_id ? 'Receta de FatSecret' : `Receta #${m.recipe_id}`)}
+                                  </span>
+                                  <button
+                                    className='shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive'
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (window.confirm('¿Eliminar esta comida?')) handleRemove(m.id)
+                                    }}
+                                  >
+                                    <X className='size-2.5' />
+                                  </button>
                                 </div>
-                              )
-                            })}
+                              ))}
+                              <button
+                                className='opacity-0 group-hover:opacity-100 transition-opacity text-[9px] text-muted-foreground hover:text-primary flex items-center gap-0.5'
+                                onClick={() => openAssignDialog(date, key)}
+                                title={meals.length === 0 ? `Asignar ${label}` : `Añadir otro ${label}`}
+                              >
+                                <Plus className='size-2.5' /> añadir
+                              </button>
+                            </div>
                           </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              </div>
-            </>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              }}
+            />
           )}
         </CardContent>
       </Card>

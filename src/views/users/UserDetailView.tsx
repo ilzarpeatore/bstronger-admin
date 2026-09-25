@@ -1,7 +1,7 @@
 import { fuzzyMatch } from '@/lib/textSearch'
 
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon, Table2Icon as TableIcon } from 'lucide-react'
+import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon, Table2Icon as TableIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { MonthWeekCalendar, type CalendarDayContext } from '@/components/calendar/MonthWeekCalendar'
+import { CalendarAddButton, CalendarWorkoutCard } from '@/components/calendar/CalendarDayParts'
+import { getMonthGrid } from '@/lib/calendarGrid'
 import { fetchExerciseBodyparts, primaryBodypart, getMuscleCatalogStats, fetchExerciseCatalogEntries, type MuscleCatalogStats, type CatalogEntry } from '@/lib/muscle-groups'
 import { useNavigate } from 'react-router'
 import WorkoutPreviewModal from '@/components/coaching/WorkoutPreviewModal'
@@ -116,8 +119,6 @@ const ACHIEVEMENT_TYPE_LABELS: Record<AchievementEventType, string> = {
   mantiene_fuerza_en_deficit: 'Mantiene fuerza en déficit',
 }
 
-const CAL_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 const GOAL_TYPES = [{ value: 'weight_loss', label: 'Pérdida de peso' }, { value: 'strength', label: 'Fuerza' }, { value: 'endurance', label: 'Resistencia' }, { value: 'flexibility', label: 'Flexibilidad' }, { value: 'body_comp', label: 'Composición corporal' }, { value: 'custom', label: 'Personalizado' }]
 const LIMITATION_TYPES = [{ value: 'injury', label: 'Lesión' }, { value: 'limitation', label: 'Limitación' }, { value: 'medical_condition', label: 'Condición médica' }, { value: 'allergy', label: 'Alergia' }]
 const DEFAULT_BODY_METRIC_TYPES = [{ value: 'weight', label: 'Peso', unit: 'kg' }, { value: 'body_fat', label: '% Grasa corporal', unit: '%' }, { value: 'muscle_mass', label: 'Masa muscular', unit: 'kg' }, { value: 'chest', label: 'Pecho', unit: 'cm' }, { value: 'waist', label: 'Cintura', unit: 'cm' }, { value: 'hips', label: 'Cadera', unit: 'cm' }]
@@ -197,13 +198,6 @@ const SLUG_TO_TAB: Record<string, string> = Object.fromEntries(
   Object.entries(TAB_SLUGS).map(([value, slug]) => [slug, value]),
 )
 
-function getMonthGrid(year: number, month: number): (string | null)[] {
-  const first = new Date(year, month - 1, 1); const last = new Date(year, month, 0); const startDay = (first.getDay() + 6) % 7; const totalDays = last.getDate(); const cells: (string | null)[] = []
-  for (let i = 0; i < startDay; i++) cells.push(null)
-  for (let d = 1; d <= totalDays; d++) cells.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
-  while (cells.length % 7 !== 0) cells.push(null); return cells
-}
-function getCalendarWeeks(year: number, month: number): (string | null)[][] { const cells = getMonthGrid(year, month); const weeks: (string | null)[][] = []; for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7)); return weeks }
 
 export default function UserDetailView({ userId, tab }: { userId: string; tab?: string }) {
   const navigate = useNavigate()
@@ -254,8 +248,6 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const [calMonth, setCalMonth] = useState(now.getMonth() + 1)
   const [calDays, setCalDays] = useState<CalendarDay[]>([])
   const [calLoading, setCalLoading] = useState(false)
-  const [calViewMode, setCalViewMode] = useState<'month' | 'week'>('month')
-  const [calWeekIndex, setCalWeekIndex] = useState(0)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assignDate, setAssignDate] = useState('')
   const [assignTemplateId, setAssignTemplateId] = useState('')
@@ -459,9 +451,6 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   }, [trainingSubTab])
   useEffect(() => { if (activeTab === 'checkins') Promise.all([fetchAvailableForms(), fetchSubmissions(), fetchAssignedForms(), fetchReadinessChecks(), fetchFeatureSettings()]) }, [activeTab, submissionFormFilter, fetchAvailableForms, fetchSubmissions, fetchAssignedForms, fetchReadinessChecks, fetchFeatureSettings])
 
-  const goToToday = () => { const n = new Date(); setCalYear(n.getFullYear()); setCalMonth(n.getMonth() + 1); const first = new Date(n.getFullYear(), n.getMonth(), 1); setCalWeekIndex(Math.floor(((first.getDay() + 6) % 7 + n.getDate() - 1) / 7)) }
-  const prevCal = () => { if (calViewMode === 'week') { if (calWeekIndex > 0) setCalWeekIndex(i => i - 1); else { const nm = calMonth === 1 ? 12 : calMonth - 1; const ny = calMonth === 1 ? calYear - 1 : calYear; const tc = ((new Date(ny, nm - 1, 1).getDay() + 6) % 7) + new Date(ny, nm, 0).getDate(); setCalMonth(nm); setCalYear(ny); setCalWeekIndex(Math.floor((tc - 1) / 7)) } } else { if (calMonth === 1) { setCalMonth(12); setCalYear(y => y - 1) } else setCalMonth(m => m - 1) } }
-  const nextCal = () => { if (calViewMode === 'week') { const tc = ((new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7) + new Date(calYear, calMonth, 0).getDate(); if (calWeekIndex < Math.floor((tc - 1) / 7)) setCalWeekIndex(i => i + 1); else { setCalMonth(calMonth === 12 ? 1 : calMonth + 1); setCalYear(calMonth === 12 ? calYear + 1 : calYear); setCalWeekIndex(0) } } else { if (calMonth === 12) { setCalMonth(1); setCalYear(y => y + 1) } else setCalMonth(m => m + 1) } }
 
   const handleCreateNote = async () => { if (!noteDraft.trim()) return; try { const res = await api.post('/admin/client-note-store', { client_id: Number(userId), content: noteDraft.trim() }); setNotes(prev => [res.data?.data || res.data, ...prev]); setNoteDraft(''); toast.success('Nota añadida') } catch { toast.error('No se pudo añadir la nota') } }
   const handleUpdateNote = async (noteId: number) => { if (!editingNoteContent.trim()) return; try { const res = await api.post('/admin/client-note-update', { id: noteId, content: editingNoteContent.trim() }); setNotes(prev => prev.map(n => n.id === noteId ? (res.data?.data || res.data) : n)); setEditingNoteId(null); setEditingNoteContent(''); toast.success('Nota actualizada') } catch { toast.error('Error') } }
@@ -551,12 +540,10 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const handleTogglePersonalClient = async (checked: boolean) => { const previous = personalClient; setPersonalClient(checked); setSavingPersonalClient(true); try { await api.put(`/admin/users/${userId}`, { is_personal_client: checked }); toast.success(checked ? 'Cliente marcado como Full Access (entrenamiento personal)' : 'Cliente marcado como Free') } catch { setPersonalClient(previous); toast.error('No se pudo actualizar el nivel de acceso') } finally { setSavingPersonalClient(false) } }
   const sortedSubmissionAnswers = useMemo(() => [...(selectedSubmission?.answers ?? [])].sort((a, b) => (a.question?.order ?? 0) - (b.question?.order ?? 0)), [selectedSubmission])
   const calCells = useMemo(() => getMonthGrid(calYear, calMonth), [calYear, calMonth])
-  const calWeeks = useMemo(() => getCalendarWeeks(calYear, calMonth), [calYear, calMonth])
   const calDayMap = useMemo(() => new Map(calDays.map(d => [d.date, d])), [calDays])
   const completedAssignments = useMemo(() => new Set(completedSessions.filter(s => s.program_day_assignment_id != null).map(s => s.program_day_assignment_id as number)), [completedSessions])
   const completedByTemplate = useMemo(() => new Set(completedSessions.filter(s => s.workout_template_id != null && s.date).map(s => `${String(s.date).slice(0, 10)}|${s.workout_template_id}`)), [completedSessions])
   const completedByDate = useMemo(() => new Set(completedSessions.filter(s => s.date).map(s => String(s.date).slice(0, 10))), [completedSessions])
-  const todayStr = new Date().toISOString().split('T')[0]
   const filteredTasks = useMemo(() => { let list = tasks; if (taskStatusFilter !== 'all') list = list.filter(t => t.status === taskStatusFilter); if (taskSearch.trim()) { list = list.filter(t => fuzzyMatch(taskSearch, t.title, t.description)) }; return list }, [tasks, taskStatusFilter, taskSearch])
   const filteredResources = useMemo(() => resourceTypeFilter === 'all' ? resources : resources.filter(r => r.type === resourceTypeFilter), [resources, resourceTypeFilter])
 
@@ -754,39 +741,28 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const activeLimitations = limitations.filter(l => l.status === 'active')
   const latestPhotos = photos.slice(0, 4)
 
-  function formatWeekRange(week: (string | null)[]): string { const dates = week.filter(Boolean) as string[]; if (!dates.length) return ''; const s = new Date(dates[0]); const e = new Date(dates[dates.length - 1]); const f = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); return s.getMonth() === e.getMonth() ? `${f(s)} - ${f(e)} ${e.getFullYear()}` : `${f(s)} - ${f(e)} ${e.getFullYear()}` }
-
-  const renderCalendarDay = (dateStr: string | null, key: string) => {
-    const dayData = dateStr ? calDayMap.get(dateStr) : null; const workout = dayData?.workouts?.[0]; const isCurrentMonth = dayData?.in_month ?? true; const dayNum = dateStr ? parseInt(dateStr.split('-')[2], 10) : 0; const isToday = dateStr === todayStr
-    const isCompleted = workout ? (completedAssignments.has(workout.assignment_id) || (!!dateStr && !!workout.id && completedByTemplate.has(`${dateStr}|${workout.id}`)) || (!!dateStr && completedByDate.has(dateStr))) : false
+  const renderCalendarDay = ({ date: dateStr }: CalendarDayContext) => {
+    const workout = calDayMap.get(dateStr)?.workouts?.[0]
+    if (!workout) return <CalendarAddButton onClick={() => { setAssignDate(dateStr); setAssignTemplateId(''); setAssignDialogOpen(true) }} />
+    const isCompleted = completedAssignments.has(workout.assignment_id) || (!!workout.id && completedByTemplate.has(`${dateStr}|${workout.id}`)) || completedByDate.has(dateStr)
+    const open = () => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }
     return (
-      <div key={key} className={cn('p-2 min-h-[150px] flex flex-col', !isCurrentMonth && 'bg-muted/30', calClipboard && dateStr && 'hover:bg-primary/5 cursor-pointer')} onDragOver={handleCalDragOver} onDrop={(e) => dateStr && handleCalDrop(e, dateStr)} onClick={() => { if (calClipboard && dateStr) handleCalPaste(dateStr) }}>
-        <div className='flex items-center justify-between mb-2'>
-          <p className={cn('text-[11px] font-medium', isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/50')}>{dayNum || '—'}</p>
-          {isToday && <span className='text-[9px] bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center'>T</span>}
-        </div>
-        {workout ? (
-          <div className={cn('group rounded-lg border shadow-sm overflow-hidden hover:shadow-md transition-shadow flex-1', isCompleted ? 'border-green-500/50 bg-green-500/10 cursor-pointer' : 'bg-card cursor-grab active:cursor-grabbing')} draggable onDragStart={(e) => handleCalDragStart(e, workout.assignment_id)} onClick={() => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }}>
-            {workout.thumbnail ? <div className={cn('h-16 w-full overflow-hidden', isCompleted ? 'bg-green-500/20' : 'bg-muted')}><img src={workout.thumbnail} alt='' loading='lazy' decoding='async' className='w-full h-full object-cover' /></div> : <div className={cn('h-16 w-full flex items-center justify-center', isCompleted ? 'bg-green-500/20 text-green-600' : 'bg-muted text-muted-foreground/30')}><DumbbellIcon className='size-5' /></div>}
-            <div className='px-2 py-1.5'>
-              <div className='flex items-start justify-between gap-1'>
-                <span className='text-[11px] font-semibold leading-tight cursor-pointer hover:underline line-clamp-2' title={workout.title} onClick={(e) => { e.stopPropagation(); if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }}>{workout.title}</span>
-                <DropdownMenu><DropdownMenuTrigger><button type='button' className='opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-foreground shrink-0' onClick={(e) => e.stopPropagation()}><MoreVerticalIcon className='size-3' /></button></DropdownMenuTrigger>
-                  <DropdownMenuContent align='end' className='text-xs'>
-                    <DropdownMenuItem onClick={() => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }}><SearchIcon className='size-3 mr-1.5' /> {isCompleted ? 'Ver sesión' : 'Abrir'}</DropdownMenuItem>
-                    {!isCompleted && !workout.is_personal && workout.training_program_id ? <DropdownMenuItem onClick={() => openProgramEditor(workout.training_program_id as number, [workout.assignment_id])}><TableIcon className='size-3 mr-1.5' /> Editar esta sesión en todas las semanas</DropdownMenuItem> : null}
-                    {!isCompleted && <DropdownMenuItem onClick={() => handleCalOpenPreview(workout.id)}><PencilIcon className='size-3 mr-1.5' /> Editar solo este día (solo este cliente)</DropdownMenuItem>}
-                    <DropdownMenuItem onClick={() => handleCalCopy(workout.assignment_id, workout.title)}><CopyIcon className='size-3 mr-1.5' /> Copiar</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleRemoveAssignment(workout.assignment_id)} className='text-destructive focus:text-destructive'><XIcon className='size-3 mr-1.5' /> Quitar</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              {isCompleted && <p className='text-[10px] font-medium text-green-600 mt-1 flex items-center gap-1'><CheckCircleIcon className='size-3' /> Completado</p>}
-              {!isCompleted && workout.exercise_count !== undefined && workout.exercise_count > 0 && <p className='text-[10px] text-muted-foreground mt-1'>{workout.exercise_count} {workout.exercise_count !== 1 ? 'ejercicios' : 'ejercicio'}</p>}
-            </div>
-          </div>
-        ) : dateStr ? <button className='flex-1 rounded-lg border border-dashed hover:border-primary/50 hover:bg-muted/50 transition-colors flex items-center justify-center text-muted-foreground hover:text-primary' onClick={() => { setAssignDate(dateStr); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-4' /></button> : null}
-      </div>
+      <CalendarWorkoutCard
+        title={workout.title}
+        thumbnail={workout.thumbnail}
+        exerciseCount={workout.exercise_count}
+        completed={isCompleted}
+        draggable
+        onDragStart={(e) => handleCalDragStart(e, workout.assignment_id)}
+        onOpen={open}
+        menu={<>
+          <DropdownMenuItem onClick={open}><SearchIcon className='size-3 mr-1.5' /> {isCompleted ? 'Ver sesión' : 'Abrir'}</DropdownMenuItem>
+          {!isCompleted && !workout.is_personal && workout.training_program_id ? <DropdownMenuItem onClick={() => openProgramEditor(workout.training_program_id as number, [workout.assignment_id])}><TableIcon className='size-3 mr-1.5' /> Editar esta sesión en todas las semanas</DropdownMenuItem> : null}
+          {!isCompleted && <DropdownMenuItem onClick={() => handleCalOpenPreview(workout.id)}><PencilIcon className='size-3 mr-1.5' /> Editar solo este día (solo este cliente)</DropdownMenuItem>}
+          <DropdownMenuItem onClick={() => handleCalCopy(workout.assignment_id, workout.title)}><CopyIcon className='size-3 mr-1.5' /> Copiar</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleRemoveAssignment(workout.assignment_id)} className='text-destructive focus:text-destructive'><XIcon className='size-3 mr-1.5' /> Quitar</DropdownMenuItem>
+        </>}
+      />
     )
   }
 
@@ -995,17 +971,20 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
               <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-3'><div className='flex items-center gap-3 flex-wrap'><CalendarIcon className='size-5 text-muted-foreground' /><CardTitle className='text-base'>Calendario de entrenamiento</CardTitle>{calClipboard && <span className='text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1'><CopyIcon className='size-3' /> Copiado</span>}</div>
                 <div className='flex items-center gap-2 flex-wrap'>{clientPrograms.length === 1 && <Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => openProgramEditor(clientPrograms[0].id)}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</Button>}{clientPrograms.length > 1 && <DropdownMenu><DropdownMenuTrigger render={<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' />}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</DropdownMenuTrigger><DropdownMenuContent align='end'>{clientPrograms.map(p => <DropdownMenuItem key={p.id} onClick={() => openProgramEditor(p.id)}>{p.title}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>}<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => { setAssignDate(''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3.5 mr-1' /> Importar workout</Button><Button size='sm' className='flex-1 sm:flex-initial' onClick={() => { setImportStartDate(''); setImportProgramId(''); setImportDialogOpen(true) }}><DownloadIcon className='size-3.5 mr-1' /> Asignar programa</Button></div></CardHeader>
               <CardContent>
-                <div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4'>
-                  <div className='flex items-center gap-2'><Button variant='outline' size='sm' onClick={goToToday}>Hoy</Button><div className='flex items-center'><Button variant='outline' size='icon' className='rounded-r-none h-8 w-8' onClick={prevCal}><ChevronLeftIcon className='size-4' /></Button><div className='h-8 px-3 border-y flex items-center text-sm font-medium min-w-[100px] justify-center bg-background'>{calViewMode === 'week' ? formatWeekRange(calWeeks[calWeekIndex] || []) : `${MONTH_NAMES[calMonth - 1]} ${calYear}`}</div><Button variant='outline' size='icon' className='rounded-l-none h-8 w-8' onClick={nextCal}><ChevronRightIcon className='size-4' /></Button></div></div>
-                  <div className='flex items-center bg-muted rounded-lg p-1'>{(['week', 'month'] as const).map(m => <button key={m} type='button' onClick={() => setCalViewMode(m)} className={cn('px-3 py-1 text-xs rounded-md transition-colors', calViewMode === m ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>{m.charAt(0).toUpperCase() + m.slice(1)}</button>)}</div>
-                  <div className='flex items-center gap-3 text-xs text-muted-foreground'>
+                <MonthWeekCalendar
+                  year={calYear}
+                  month={calMonth}
+                  onMonthChange={(y, m) => { setCalYear(y); setCalMonth(m) }}
+                  loading={calLoading}
+                  hasData={calDays.length > 0}
+                  emptyState={<div className='rounded-lg border border-dashed p-12 text-center'><DumbbellIcon className='size-10 mx-auto text-muted-foreground/40 mb-3' /><p className='text-sm text-muted-foreground'>No hay entrenamientos programados este mes.</p><Button size='sm' className='mt-3' onClick={() => { setAssignDate(calCells.find(Boolean) || ''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3 mr-1' /> Importar workout</Button></div>}
+                  legend={<>
                     <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border border-green-500 bg-green-500/20' /> Realizado</span>
                     <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border bg-card' /> Pendiente</span>
-                  </div>
-                </div>
-                {calLoading ? <div className='flex items-center justify-center py-20'><div className='h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div>
-                : calDays.length === 0 ? <div className='rounded-lg border border-dashed p-12 text-center'><DumbbellIcon className='size-10 mx-auto text-muted-foreground/40 mb-3' /><p className='text-sm text-muted-foreground'>No hay entrenamientos programados este mes.</p><Button size='sm' className='mt-3' onClick={() => { setAssignDate(calCells.find(Boolean) || ''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3 mr-1' /> Importar workout</Button></div>
-                : <div className='overflow-x-auto'><div className='space-y-4 min-w-[700px]'><div className='grid grid-cols-7 border-b'>{CAL_DAYS.map(d => <div key={d} className='py-2 text-center text-xs font-medium text-muted-foreground'>{d}</div>)}</div>{calViewMode === 'month' ? calWeeks.map((week, wi) => <div key={wi} className='rounded-lg border bg-card overflow-hidden'><div className='grid grid-cols-7 divide-x'>{week.map((ds, di) => renderCalendarDay(ds, `${wi}-${di}`))}</div></div>) : <div className='rounded-lg border bg-card overflow-hidden'><div className='grid grid-cols-7 divide-x'>{(calWeeks[calWeekIndex] || []).map((ds, di) => renderCalendarDay(ds, `week-${di}`))}</div></div>}</div></div>}
+                  </>}
+                  renderDay={renderCalendarDay}
+                  dayProps={(ctx) => ({ className: cn(calClipboard && 'hover:bg-primary/5 cursor-pointer'), onDragOver: handleCalDragOver, onDrop: (e) => handleCalDrop(e, ctx.date), onClick: () => { if (calClipboard) handleCalPaste(ctx.date) } })}
+                />
               </CardContent>
             </Card>)}
             {trainingSubTab === 'history' && (

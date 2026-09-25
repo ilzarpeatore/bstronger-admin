@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Copy, X, ArrowUpDown, TrashIcon, DownloadIcon, CalendarIcon, PencilIcon, Table2Icon } from 'lucide-react'
+import { Copy, ArrowUpDown, TrashIcon, DownloadIcon, CalendarIcon, PencilIcon, Table2Icon, SearchIcon, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useProgramSessionEditor, distinctPrograms } from '@/components/coaching/useProgramSessionEditor'
@@ -10,6 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { SessionDetailModal } from '@/views/coaching/SessionDetailView'
+import { MonthWeekCalendar } from '@/components/calendar/MonthWeekCalendar'
+import { CalendarAddButton, CalendarWorkoutCard } from '@/components/calendar/CalendarDayParts'
+import { getMonthGrid } from '@/lib/calendarGrid'
 
 type CalendarAssignment = {
   id: number
@@ -40,42 +43,8 @@ type ClipboardData = {
   assignment: CalendarAssignment
 }
 
-type WeekActions = {
-  weekNumber: number
-  startDate: string
-}
-
-const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const MONTH_NAMES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-]
-
-function getCalendarCells(year: number, month: number) {
-  const first = new Date(year, month - 1, 1)
-  const last = new Date(year, month, 0)
-  const startDay = (first.getDay() + 6) % 7
-  const totalDays = last.getDate()
-  const cells: (string | null)[] = []
-  for (let i = 0; i < startDay; i++) cells.push(null)
-  for (let d = 1; d <= totalDays; d++) {
-    cells.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
-  }
-  while (cells.length % 7 !== 0) cells.push(null)
-  return cells
-}
-
-function getTodayString() {
-  const n = new Date()
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-}
-
 function isDirectAssignment(a: CalendarAssignment): boolean {
   return a.is_direct === true || !a.training_program_id
-}
-
-function getWeekNumberFromGridIndex(i: number): number {
-  return Math.floor(i / 7) + 1
 }
 
 function formatDateISO(d: Date): string {
@@ -88,7 +57,7 @@ export default function ClientCalendarView() {
   const [clientId, setClientId] = useState('')
   const [clients, setClients] = useState<User[]>([])
   const [assignments, setAssignments] = useState<CalendarAssignment[]>([])
-  const [, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [workoutTemplates, setWorkoutTemplates] = useState<WorkoutTemplate[]>([])
   const [trainingPrograms, setTrainingPrograms] = useState<TrainingProgram[]>([])
 
@@ -103,13 +72,9 @@ export default function ClientCalendarView() {
   const [clipboard, setClipboard] = useState<ClipboardData | null>(null)
   const [draggedAssignment, setDraggedAssignment] = useState<CalendarAssignment | null>(null)
 
-  const [weekActionsTarget, setWeekActionsTarget] = useState<WeekActions | null>(null)
-
   const [sessionDetailOpen, setSessionDetailOpen] = useState(false)
   const [sessionDetailAssignmentId, setSessionDetailAssignmentId] = useState<number>(0)
   const [sessionDetailClientId, setSessionDetailClientId] = useState<number>(0)
-
-  const today = useMemo(() => getTodayString(), [])
 
   const fetchClients = useCallback(async () => {
     try {
@@ -200,25 +165,7 @@ export default function ClientCalendarView() {
     fetchCalendar()
   }, [fetchCalendar])
 
-  const prevMonth = () => {
-    if (month === 1) {
-      setMonth(12)
-      setYear(y => y - 1)
-    } else {
-      setMonth(m => m - 1)
-    }
-  }
-
-  const nextMonth = () => {
-    if (month === 12) {
-      setMonth(1)
-      setYear(y => y + 1)
-    } else {
-      setMonth(m => m + 1)
-    }
-  }
-
-  const cells = useMemo(() => getCalendarCells(year, month), [year, month])
+  const cells = useMemo(() => getMonthGrid(year, month), [year, month])
 
   const assignmentsByDate = useMemo(() => {
     const map = new Map<string, CalendarAssignment[]>()
@@ -275,8 +222,7 @@ export default function ClientCalendarView() {
     }
   }, [fetchCalendar])
 
-  const handleCopyToClipboard = useCallback((e: React.MouseEvent, assignment: CalendarAssignment) => {
-    e.stopPropagation()
+  const handleCopyToClipboard = useCallback((assignment: CalendarAssignment) => {
     if (!isDirectAssignment(assignment)) {
       toast.warning('No se pueden copiar asignaciones de programas. Solo se pueden copiar asignaciones directas.')
       return
@@ -356,8 +302,7 @@ export default function ClientCalendarView() {
     setAssignDialogOpen(true)
   }, [clientId, clipboard, handlePasteToDay, fetchTemplates])
 
-  const handleBadgeTitleClick = useCallback((e: React.MouseEvent, assignment: CalendarAssignment) => {
-    e.stopPropagation()
+  const handleOpenSession = useCallback((assignment: CalendarAssignment) => {
     if (!clientId) {
       toast.info('Selecciona un cliente para ver el detalle de la sesión')
       return
@@ -496,19 +441,11 @@ export default function ClientCalendarView() {
         await api.post('/admin/client-calendar-remove', { assignment_id: a.id })
       }
       toast.success('Semana vaciada')
-      setWeekActionsTarget(null)
       fetchCalendar()
     } catch {
       toast.error('Error al vaciar la semana')
     }
   }, [getDirectAssignmentsForWeek, fetchCalendar])
-
-  const handleBadgeTitleKeyDown = useCallback((e: React.KeyboardEvent, assignment: CalendarAssignment) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      handleBadgeTitleClick(e as any, assignment)
-    }
-  }, [handleBadgeTitleClick])
 
   return (
     <>
@@ -592,194 +529,93 @@ export default function ClientCalendarView() {
               <p>Selecciona un cliente para ver su calendario</p>
             </div>
           ) : (
-            <>
-              <div className='flex items-center justify-between mb-4'>
-                <Button variant='outline' size='sm' onClick={prevMonth}>
-                  <ChevronLeft className='size-4' />
-                  <span className='ml-1'>Mes</span>
-                </Button>
-                <h3 className='text-lg font-semibold'>
-                  {MONTH_NAMES[month - 1]} {year}
-                </h3>
-                <Button variant='outline' size='sm' onClick={nextMonth}>
-                  <span className='mr-1'>Mes</span>
-                  <ChevronRight className='size-4' />
-                </Button>
-              </div>
-
-              <div className='overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0'>
-              <div className='grid grid-cols-7 border-t border-l min-w-[640px] sm:min-w-0'>
-                {DAYS.map(d => (
-                  <div
-                    key={d}
-                    className='border-r border-b bg-muted/50 px-2 py-1.5 text-center text-xs font-medium text-muted-foreground'
-                  >
-                    {d}
-                  </div>
-                ))}
-                {cells.map((dateStr, i) => {
-                  const dayAssignments = dateStr ? (assignmentsByDate.get(dateStr) || []) : []
-                  const isToday = dateStr === today
-                  const hasClipboard = !!clipboard
-                  const weekNum = dateStr ? getWeekNumberFromGridIndex(i) : 0
-                  const isFirstDayOfWeek = dateStr && (i % 7 === 0)
-
-                  return (
-                    <div
-                      key={i}
-                      className={`
-                        border-r border-b min-h-[110px] p-1.5 transition-colors
-                        ${dateStr
-                          ? hasClipboard
-                            ? 'bg-background hover:bg-muted/40 cursor-copy'
-                            : 'bg-background hover:bg-muted/30 cursor-pointer'
-                          : 'bg-muted/30'
-                        }
-                      `}
-                      onClick={(e) => {
-                        if (dateStr) {
-                          if (clipboard) {
-                            handlePasteToDay(dateStr, e.ctrlKey || e.metaKey)
-                          } else if (clientId) {
-                            handleDayClick(dateStr, e.ctrlKey || e.metaKey)
-                          }
-                        }
-                      }}
-                      onDragOver={dateStr ? handleDragOver : undefined}
-                      onDrop={dateStr ? (e) => handleDrop(e, dateStr) : undefined}
-                    >
-                      {dateStr && (
-                        <>
-                          <div className='flex items-center justify-between mb-1'>
-                            <div className={`text-xs font-medium ${isToday ? 'text-primary font-bold bg-primary/10 rounded px-1' : ''}`}>
-                              {parseInt(dateStr.split('-')[2])}
-                            </div>
-                            {isFirstDayOfWeek && weekNum > 0 && (
-                              <div
-                                className='relative'
-                                onMouseEnter={() => setWeekActionsTarget({ weekNumber: weekNum, startDate: dateStr })}
-                                onMouseLeave={() => setWeekActionsTarget(null)}
+            <MonthWeekCalendar
+              year={year}
+              month={month}
+              onMonthChange={(y, m) => { setYear(y); setMonth(m) }}
+              loading={loading}
+              legend={(
+                <>
+                  <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border border-purple-500/50 bg-purple-500/10' /> Creado por el cliente</span>
+                  <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border bg-card' /> Asignado por el coach</span>
+                </>
+              )}
+              dayHeaderExtra={({ dayIndex, weekIndex }) => {
+                if (dayIndex !== 0) return null
+                const weekNum = weekIndex + 1
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger>
+                      <button
+                        type='button'
+                        className='text-[9px] font-bold text-muted-foreground bg-muted/70 hover:bg-muted rounded px-1'
+                        title='Acciones de la semana'
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        W{weekNum}
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align='end' className='text-xs'>
+                      <DropdownMenuItem onClick={() => handleMoveWeekUp(weekNum)}><ArrowUpDown className='size-3 mr-1.5' /> Mover arriba</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleMoveWeekDown(weekNum)}><ArrowUpDown className='size-3 mr-1.5 rotate-180' /> Mover abajo</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDuplicateWeek(weekNum)}><Copy className='size-3 mr-1.5' /> Duplicar semana</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleClearWeek(weekNum)} className='text-destructive focus:text-destructive'><TrashIcon className='size-3 mr-1.5' /> Vaciar semana</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )
+              }}
+              dayProps={({ date }) => ({
+                className: clipboard ? 'hover:bg-muted/40 cursor-copy' : 'hover:bg-muted/30 cursor-pointer',
+                onClick: (e) => {
+                  if (clipboard) handlePasteToDay(date, e.ctrlKey || e.metaKey)
+                  else handleDayClick(date, e.ctrlKey || e.metaKey)
+                },
+                onDragOver: handleDragOver,
+                onDrop: (e) => handleDrop(e, date),
+              })}
+              renderDay={({ date }) => {
+                const dayAssignments = assignmentsByDate.get(date) || []
+                if (dayAssignments.length === 0) return <CalendarAddButton onClick={() => handleDayClick(date, false)} />
+                return (
+                  <div className='flex-1 flex flex-col gap-1'>
+                    {dayAssignments.map((assignment) => {
+                      const direct = isDirectAssignment(assignment)
+                      const title = assignment.workout_template?.title || `Entrenamiento #${assignment.workout_template_id}`
+                      return (
+                        <CalendarWorkoutCard
+                          key={assignment.id}
+                          title={title}
+                          thumbnail={assignment.thumbnail}
+                          exerciseCount={assignment.exercise_count}
+                          tone={assignment.is_client_created ? 'client' : 'default'}
+                          subtitle={assignment.training_program?.title ?? (direct ? 'Directo' : null)}
+                          draggable={direct}
+                          onDragStart={direct ? (e) => handleDragStart(e, assignment) : undefined}
+                          onOpen={() => handleOpenSession(assignment)}
+                          menu={(
+                            <>
+                              <DropdownMenuItem onClick={() => handleOpenSession(assignment)}><SearchIcon className='size-3 mr-1.5' /> Abrir</DropdownMenuItem>
+                              {!direct && assignment.training_program_id && (
+                                <DropdownMenuItem onClick={() => openEditor(assignment.training_program_id as number, [assignment.program_day_assignment_id ?? assignment.id])}>
+                                  <PencilIcon className='size-3 mr-1.5' /> Editar esta sesión en todas las semanas
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => handleCopyToClipboard(assignment)}><Copy className='size-3 mr-1.5' /> Copiar</DropdownMenuItem>
+                              <DropdownMenuItem
+                                className='text-destructive focus:text-destructive'
+                                onClick={() => { if (window.confirm('¿Eliminar esta asignación?')) handleRemoveAssignment(assignment.id) }}
                               >
-                                <span className='text-[9px] font-bold text-muted-foreground bg-muted/70 rounded px-1 cursor-default select-none'>
-                                  W{weekNum}
-                                </span>
-                                {weekActionsTarget?.weekNumber === weekNum && (
-                                  <div
-                                    className='absolute right-0 top-full z-50 mt-1 bg-popover border rounded-md shadow-lg p-1 flex flex-col gap-0.5 min-w-[120px]'
-                                    onMouseEnter={() => setWeekActionsTarget({ weekNumber: weekNum, startDate: dateStr })}
-                                    onMouseLeave={() => setWeekActionsTarget(null)}
-                                  >
-                                    <button
-                                      className='flex items-center gap-2 text-xs px-2 py-1 rounded hover:bg-muted text-left w-full'
-                                      onClick={(e) => { e.stopPropagation(); handleMoveWeekUp(weekNum) }}
-                                    >
-                                      <ArrowUpDown className='size-3' /> Mover arriba
-                                    </button>
-                                    <button
-                                      className='flex items-center gap-2 text-xs px-2 py-1 rounded hover:bg-muted text-left w-full'
-                                      onClick={(e) => { e.stopPropagation(); handleMoveWeekDown(weekNum) }}
-                                    >
-                                      <ArrowUpDown className='size-3 rotate-180' /> Mover abajo
-                                    </button>
-                                    <button
-                                      className='flex items-center gap-2 text-xs px-2 py-1 rounded hover:bg-muted text-left w-full'
-                                      onClick={(e) => { e.stopPropagation(); handleDuplicateWeek(weekNum) }}
-                                    >
-                                      <Copy className='size-3' /> Duplicar semana
-                                    </button>
-                                    <div className='border-t my-0.5' />
-                                    <button
-                                      className='flex items-center gap-2 text-xs px-2 py-1 rounded hover:bg-destructive/10 text-destructive text-left w-full'
-                                      onClick={(e) => { e.stopPropagation(); handleClearWeek(weekNum) }}
-                                    >
-                                      <TrashIcon className='size-3' /> Vaciar semana
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className='space-y-0.5'>
-                            {dayAssignments.map((assignment) => {
-                              const direct = isDirectAssignment(assignment)
-                              const title = assignment.workout_template?.title || `Entrenamiento #${assignment.workout_template_id}`
-                              const programTitle = assignment.training_program?.title
-
-                              return (
-                                <div
-                                  key={assignment.id}
-                                  draggable={direct}
-                                  onDragStart={direct ? (e) => handleDragStart(e, assignment) : undefined}
-                                  className={`
-                                    text-[10px] leading-tight px-1 py-0.5 rounded group relative
-                                    ${assignment.is_client_created
-                                      ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                      : direct
-                                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                        : 'bg-green-100 text-green-800 border border-green-200'
-                                    }
-                                  `}
-                                >
-                                  <div className='flex items-center justify-between gap-0.5'>
-                                    <span
-                                      className='truncate flex-1 cursor-pointer hover:underline font-medium'
-                                      onClick={(e) => handleBadgeTitleClick(e, assignment)}
-                                      onKeyDown={(e) => handleBadgeTitleKeyDown(e, assignment)}
-                                      tabIndex={0}
-                                      role='button'
-                                      title={`Ver sesión: ${title}`}
-                                    >
-                                      {title}
-                                    </span>
-                                    <div className='flex items-center gap-0 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity'>
-                                      {!direct && assignment.training_program_id && (
-                                        <button
-                                          className='hover:text-emerald-700 p-0'
-                                          title='Editar esta sesión en todas las semanas del programa'
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            openEditor(assignment.training_program_id as number, [assignment.program_day_assignment_id ?? assignment.id])
-                                          }}
-                                        >
-                                          <PencilIcon className='size-[10px]' />
-                                        </button>
-                                      )}
-                                      <button
-                                        className='hover:text-blue-600 p-0'
-                                        title='Copiar al portapapeles'
-                                        onClick={(e) => handleCopyToClipboard(e, assignment)}
-                                      >
-                                        <Copy className='size-[10px]' />
-                                      </button>
-                                      <button
-                                        className='hover:text-red-600 p-0'
-                                        title='Eliminar'
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          if (window.confirm('¿Eliminar esta asignación?')) {
-                                            handleRemoveAssignment(assignment.id)
-                                          }
-                                        }}
-                                      >
-                                        <X className='size-[10px]' />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  {programTitle && (
-                                    <div className='text-[8px] opacity-70 truncate'>{programTitle}</div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              </div>
-            </>
+                                <XIcon className='size-3 mr-1.5' /> Quitar
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        />
+                      )
+                    })}
+                  </div>
+                )
+              }}
+            />
           )}
         </CardContent>
       </Card>
