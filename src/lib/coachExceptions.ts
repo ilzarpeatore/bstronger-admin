@@ -20,6 +20,8 @@ export type ExceptionCategory =
   | 'riesgo_abandono'
   // El cliente finalizó una sesión sin registrar ninguna serie (2026-09-25).
   | 'sesion_sin_registro'
+  // Patrón: 2+ sesiones finalizadas sin series en pocos días (sessions:audit-empty).
+  | 'patron_sesiones_sin_registro'
 
 export type ExceptionSeverity = 'alta' | 'media' | 'baja'
 export type ExceptionStatusVal = 'pendiente' | 'resuelta' | 'descartada'
@@ -74,6 +76,7 @@ export const CATEGORY_META: Record<ExceptionCategory, { label: string; icon: typ
   inactividad: { label: 'Inactividad', icon: CalendarX2 },
   riesgo_abandono: { label: 'Riesgo de abandono', icon: UserX },
   sesion_sin_registro: { label: 'Sesión sin registrar', icon: ClipboardX },
+  patron_sesiones_sin_registro: { label: 'No registra series', icon: ClipboardX },
 }
 
 // Categorías con acción real de aprobar/editar/rechazar (Fase 1) en vez de

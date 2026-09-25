@@ -44,6 +44,8 @@ const Tags = Loadable(lazy(() => import('../views/fitness/TagsView')));
 
 // mightyfitness diet/recipes
 const DietMealItems = Loadable(lazy(() => import('../views/diet/DietMealItemsView')));
+// Catálogo de dietas de la app (tabla `diets`, lo que lista DietList en la app). `/diets` son las plantillas de menú.
+const LegacyDiets = Loadable(lazy(() => import('../views/diet/DietView')));
 const DietCategories = Loadable(lazy(() => import('../views/diet/CategoryDietView')));
 const Recipes = Loadable(lazy(() => import('../views/recipes/RecipeView')));
 const RecipeCategories = Loadable(lazy(() => import('../views/recipes/RecipeCategoryView')));
@@ -218,6 +220,7 @@ const Router = [
       { path: '/tags', element: <Tags /> },
 
       { path: '/diets', element: <MealPlanTemplates /> },
+      { path: '/legacy-diets', element: <LegacyDiets /> },
       { path: '/diet-meal-items', element: <DietMealItems /> },
       { path: '/diet-categories', element: <DietCategories /> },
       { path: '/recipes', element: <Recipes /> },
