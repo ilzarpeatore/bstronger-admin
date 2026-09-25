@@ -1,4 +1,4 @@
-import { AlertTriangle, TrendingDown, Gauge, CalendarClock, CalendarX2, MoonStar, UserX } from 'lucide-react'
+import { AlertTriangle, TrendingDown, Gauge, CalendarClock, CalendarX2, MoonStar, UserX, ClipboardX } from 'lucide-react'
 
 // Tipos y helpers compartidos del Panel de Excepciones del Coach
 // (docs/Panel_Excepciones_Implementacion.md, docs/Plan_Cierre_Motor_UI.md).
@@ -18,6 +18,8 @@ export type ExceptionCategory =
   // ítems históricos ya cerrados sigan tipando sin error.
   | 'inactividad'
   | 'riesgo_abandono'
+  // El cliente finalizó una sesión sin registrar ninguna serie (2026-09-25).
+  | 'sesion_sin_registro'
 
 export type ExceptionSeverity = 'alta' | 'media' | 'baja'
 export type ExceptionStatusVal = 'pendiente' | 'resuelta' | 'descartada'
@@ -71,6 +73,7 @@ export const CATEGORY_META: Record<ExceptionCategory, { label: string; icon: typ
   semana_adaptativa_pendiente: { label: 'Semana adaptativa', icon: CalendarClock },
   inactividad: { label: 'Inactividad', icon: CalendarX2 },
   riesgo_abandono: { label: 'Riesgo de abandono', icon: UserX },
+  sesion_sin_registro: { label: 'Sesión sin registrar', icon: ClipboardX },
 }
 
 // Categorías con acción real de aprobar/editar/rechazar (Fase 1) en vez de
