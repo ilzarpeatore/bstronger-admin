@@ -82,7 +82,7 @@ type ClientNote = { id: number; content: string; author?: { id: number; first_na
 type ProgressPhoto = { id: number; url: string; name: string; created_at: string }
 type CalendarWorkout = { assignment_id: number; id: number; title: string; program_title: string | null; is_personal: boolean; thumbnail?: string | null; exercise_count?: number; training_program_id?: number | null; date?: string }
 type CalendarDay = { date: string; in_month: boolean; personal_week_number: number; workouts: CalendarWorkout[] }
-type CompletedSession = { id: number; program_day_assignment_id: number | null; workout_template_id: number | null; title: string; thumbnail: string | null; date: string | null; duration_seconds: number | null; volume_kg: number | null; calories_burned: number | null; difficulty_rating: number | null; difficulty_label: string | null }
+type CompletedSession = { has_logs?: boolean | null; id: number; program_day_assignment_id: number | null; workout_template_id: number | null; title: string; thumbnail: string | null; date: string | null; duration_seconds: number | null; volume_kg: number | null; calories_burned: number | null; difficulty_rating: number | null; difficulty_label: string | null }
 type WorkoutTemplate = { id: number; title: string }
 type TrainingProgram = { id: number; title: string | null }
 
@@ -746,12 +746,16 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
     if (!workout) return <CalendarAddButton onClick={() => { setAssignDate(dateStr); setAssignTemplateId(''); setAssignDialogOpen(true) }} />
     const isCompleted = completedAssignments.has(workout.assignment_id) || (!!workout.id && completedByTemplate.has(`${dateStr}|${workout.id}`)) || completedByDate.has(dateStr)
     const open = () => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }
+    // Finalizada pero sin ninguna serie apuntada: se avisa en el propio calendario
+    // para no confundirla con una sesion hecha y registrada.
+    const completedNoLogs = isCompleted && completedSessions.some(s => s.program_day_assignment_id === workout.assignment_id && s.has_logs === false)
     return (
       <CalendarWorkoutCard
         title={workout.title}
         thumbnail={workout.thumbnail}
         exerciseCount={workout.exercise_count}
         completed={isCompleted}
+        completedNote={completedNoLogs ? 'Sin series registradas' : undefined}
         draggable
         onDragStart={(e) => handleCalDragStart(e, workout.assignment_id)}
         onOpen={open}

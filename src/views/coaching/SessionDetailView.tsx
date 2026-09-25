@@ -89,6 +89,12 @@ type SessionBlock = {
 type SessionData = {
   title: string
   date: string
+  // true si el cliente pulso "Finalizar" (existe reseña), AUNQUE no haya
+  // ninguna serie registrada. No se puede deducir de los logs: un cliente
+  // puede finalizar sin apuntar nada y entonces no hay logs que mostrar.
+  completed?: boolean
+  duration_seconds?: number | null
+  calories_burned?: number | string | null
   difficulty_label: string | null
   comment: string | null
   total_sets: number
@@ -459,6 +465,12 @@ function SessionContent({
   const [availableLoading, setAvailableLoading] = useState(false)
 
   const completed = isSessionCompleted(sessionData)
+  // Finalizada por el cliente pero sin ninguna serie registrada: no hay log
+  // que mostrar, y abrir directamente el editor de la prescripcion hacia
+  // parecer que "no se abre el detalle". Se avisa y el editor queda tras un boton.
+  const [showEditor, setShowEditor] = useState(false)
+  useEffect(() => { setShowEditor(false) }, [programDayAssignmentId])
+  const completedWithoutLogs = !completed && sessionData.completed === true && !!programDayAssignmentId && !showEditor
   const viewerData = useMemo(() => mapSessionToViewer(sessionData), [sessionData])
   const { blocks } = viewerData
 
@@ -717,14 +729,25 @@ function SessionContent({
             <p className='text-xs text-muted-foreground'>{formatDate(sessionData.date)}</p>
           </div>
         </div>
-        <Badge variant={completed ? 'default' : 'secondary'} className='text-xs shrink-0'>
-          {completed ? 'Completada' : 'Programada'}
+        <Badge variant={completed || sessionData.completed ? 'default' : 'secondary'} className='text-xs shrink-0'>
+          {completed || sessionData.completed ? 'Completada' : 'Programada'}
         </Badge>
       </div>
 
       <div className='flex-1 min-h-0 overflow-y-auto pr-1'>
       {completed ? (
         <CompletedView sessionData={sessionData} onNotes={programDayAssignmentId ? handleOpenNotes : undefined} />
+      ) : completedWithoutLogs ? (
+        <div className='flex flex-col items-center justify-center gap-3 py-16 text-center text-muted-foreground'>
+          <p className='text-sm font-medium text-foreground'>El cliente finalizó esta sesión sin registrar ninguna serie.</p>
+          <p className='text-sm'>
+            No hay cargas ni repeticiones que mostrar
+            {sessionData.duration_seconds ? ` · duración ${Math.round(sessionData.duration_seconds / 60)} min` : ''}
+            {sessionData.difficulty_label ? ` · dificultad: ${sessionData.difficulty_label}` : ''}.
+          </p>
+          {sessionData.comment && <p className='text-sm italic'>«{sessionData.comment}»</p>}
+          <Button variant='outline' size='sm' onClick={() => setShowEditor(true)}>Ver / editar la prescripción de esta sesión</Button>
+        </div>
       ) : !programDayAssignmentId ? (
         // Workout suelto sin ninguna serie registrada (el cliente pulso
         // "Finalizar igualmente" sin apuntar nada) - no hay asignacion de

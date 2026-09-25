@@ -25,6 +25,8 @@ type WorkoutCardProps = {
   thumbnail?: string | null
   exerciseCount?: number
   completed?: boolean
+  /** Aviso bajo "Completado" (p. ej. "sin series registradas"). */
+  completedNote?: string
   /** 'client' = entrenamiento creado por el propio cliente desde la app. */
   tone?: 'default' | 'client'
   /** Línea pequeña bajo el título (p. ej. nombre del programa). */
@@ -37,7 +39,7 @@ type WorkoutCardProps = {
 }
 
 /** Tarjeta de sesión de entrenamiento de un día (miniatura, título, ejercicios, estado). */
-export function CalendarWorkoutCard({ title, thumbnail, exerciseCount, completed, tone = 'default', subtitle, draggable, onDragStart, onOpen, menu }: WorkoutCardProps) {
+export function CalendarWorkoutCard({ title, thumbnail, exerciseCount, completed, completedNote, tone = 'default', subtitle, draggable, onDragStart, onOpen, menu }: WorkoutCardProps) {
   const client = tone === 'client' && !completed
   return (
     <div
@@ -67,6 +69,7 @@ export function CalendarWorkoutCard({ title, thumbnail, exerciseCount, completed
           )}
         </div>
         {completed && <p className='text-[10px] font-medium text-green-600 mt-1 flex items-center gap-1'><CheckCircleIcon className='size-3' /> Completado</p>}
+        {completed && completedNote && <p className='text-[10px] text-amber-600 mt-0.5'>{completedNote}</p>}
         {!completed && exerciseCount !== undefined && exerciseCount > 0 && <p className='text-[10px] text-muted-foreground mt-1'>{exerciseCount} {exerciseCount !== 1 ? 'ejercicios' : 'ejercicio'}</p>}
         {subtitle && <p className='text-[10px] text-muted-foreground mt-0.5 truncate'>{subtitle}</p>}
       </div>
