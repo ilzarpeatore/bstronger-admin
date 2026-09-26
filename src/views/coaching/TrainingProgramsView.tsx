@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 
 import { toast } from 'sonner'
+import { MonthWeekCalendar } from '@/components/calendar/MonthWeekCalendar'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -782,176 +783,172 @@ export default function TrainingProgramsView() {
                 <Button variant='outline' size='sm' onClick={() => setCalWeeksPerPage(calWeeksPerPage === 4 ? 5 : 4)}>
                   {calWeeksPerPage} semanas
                 </Button>
-                <div className='flex items-center rounded-md border'>
-                  <Button
-                    variant='ghost' size='sm' className='rounded-r-none h-8 px-2'
-                    disabled={calStartWeek <= 1}
-                    onClick={() => setCalStartWeek(Math.max(1, calStartWeek - calWeeksPerPage))}
-                  >
-                    <ChevronLeftIcon className='size-3' />
-                  </Button>
-                  <span className='text-xs text-muted-foreground px-2 h-8 flex items-center border-x'>
-                    Mes {Math.ceil(calStartWeek / calWeeksPerPage)} de {Math.ceil(calTotalWeeks / calWeeksPerPage)}
-                  </span>
-                  <Button
-                    variant='ghost' size='sm' className='rounded-l-none h-8 px-2'
-                    disabled={calStartWeek + calWeeksPerPage > calTotalWeeks}
-                    onClick={() => setCalStartWeek(calStartWeek + calWeeksPerPage)}
-                  >
-                    <ChevronRightIcon className='size-3' />
-                  </Button>
-                </div>
               </div>
             </div>
 
-            {calendarWeeks.length === 0 ? (
-              <div className='rounded-lg border border-dashed p-12 text-center'>
-                <DumbbellIcon className='size-10 mx-auto text-muted-foreground/40 mb-3' />
-                <p className='text-sm text-muted-foreground'>Aún no se han generado semanas.</p>
-                <Button size='sm' className='mt-3' onClick={handleGenerateWeeks}>
-                  <RefreshCwIcon className='size-3 mr-1' /> Generar semanas
-                </Button>
-              </div>
-            ) : (
-              <div className='space-y-4'>
-                {calendarWeeks.map(week => {
-                  let dayCounter = (week.week_number - 1) * 7
-                  return (
-                    <div key={week.week_number} className={`rounded-lg border bg-card ${week.is_deload ? 'border-amber-400/60' : ''}`}>
-                      <div className={`flex items-center justify-between px-4 py-2.5 border-b ${week.is_deload ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
-                        <div className='flex items-center gap-2'>
-                          <span className='text-sm font-semibold'>Semana {week.week_number}</span>
-                          {week.is_deload && (
-                            <Badge variant='outline' className='gap-1 text-amber-700 dark:text-amber-400 border-amber-400/60'>
-                              <MoonIcon className='size-3' /> Descarga
-                            </Badge>
-                          )}
-                        </div>
-                        <div className='flex items-center gap-1'>
-                          <div className='flex items-center gap-1.5 mr-1' title='Marcar semana de descarga'>
-                            <MoonIcon className='size-3 text-muted-foreground' />
-                            <Switch
-                              checked={!!week.is_deload}
-                              disabled={togglingDeloadWeek === week.week_number}
-                              onCheckedChange={() => handleToggleDeload(week)}
-                            />
-                          </div>
-                          {week.week_number > 1 && (
-                            <Button variant='ghost' size='sm' className='h-6 text-[10px] gap-1' onClick={() => handleSwapWeeks(week.week_number, week.week_number - 1)}>
-                              <ChevronLeftIcon className='size-3' /> Subir
-                            </Button>
-                          )}
-                          {week.week_number < calTotalWeeks && (
-                            <Button variant='ghost' size='sm' className='h-6 text-[10px] gap-1' onClick={() => handleSwapWeeks(week.week_number, week.week_number + 1)}>
-                              Bajar <ChevronRightIcon className='size-3' />
-                            </Button>
-                          )}
-                          <Button variant='ghost' size='sm' className='h-6 text-[10px]' onClick={() => {
-                            const target = prompt(`¿Duplicar la semana ${week.week_number} en qué semana? (1-${calTotalWeeks})`)
-                            if (target) handleDuplicateWeek(week.week_number, Number(target))
-                          }}>
-                            <CopyIcon className='size-3 mr-0.5' /> Copiar
-                          </Button>
-                          <Button variant='ghost' size='sm' className='h-6 text-[10px] text-destructive' onClick={() => {
-                            if (confirm(`¿Vaciar todos los entrenamientos de la semana ${week.week_number}?`)) handleClearWeek(week.week_number)
-                          }}>
-                            Vaciar
-                          </Button>
-                        </div>
-                      </div>
+            {(() => {
+              const weekOf = (wn: number) => calendarWeeks.find(w => w.week_number === wn)
 
-                      <div className='overflow-x-auto'>
-                      <div className='grid grid-cols-7 divide-x min-w-[700px]'>
-                        {week.days.map((day: any) => {
-                          dayCounter++
-                          const workout = day.workouts?.[0]
-                          return (
-                            <div
-                              key={day.day_of_week}
-                              className={`p-2 min-h-[160px] flex flex-col ${clipboardAssignment ? 'hover:bg-primary/5 cursor-pointer' : ''}`}
-                              onDragOver={handleDragOver}
-                              onDrop={(e) => handleDrop(e, week.week_number, day.day_of_week)}
-                              onClick={() => { if (clipboardAssignment) handlePasteAssignment(week.week_number, day.day_of_week) }}
-                            >
-                              <p className='text-[11px] font-medium text-muted-foreground mb-2'>Día {dayCounter}</p>
-                              {workout ? (
-                                <div
-                                  className='group relative rounded-lg border bg-card shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow flex-1'
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, workout.assignment_id)}
-                                >
-                                  <div
-                                    className='absolute left-1.5 top-1.5 z-10 rounded bg-background/90 p-0.5 shadow-sm'
-                                    onClick={(e) => e.stopPropagation()}
-                                    title='Seleccionar para editar varias sesiones a la vez'
-                                  >
-                                    <Checkbox
-                                      checked={selectedAssignments.includes(workout.assignment_id)}
-                                      onCheckedChange={(c) => setSelectedAssignments(prev => c === true ? [...prev, workout.assignment_id] : prev.filter(id => id !== workout.assignment_id))}
-                                      className='cursor-pointer'
-                                    />
-                                  </div>
-                                  {workout.thumbnail ? (
-                                    <div className='h-20 w-full overflow-hidden bg-muted'>
-                                      <img src={workout.thumbnail} alt='' loading='lazy' decoding='async' className='w-full h-full object-cover' />
-                                    </div>
-                                  ) : (
-                                    <div className='h-20 w-full bg-muted flex items-center justify-center'>
-                                      <DumbbellIcon className='size-6 text-muted-foreground/30' />
-                                    </div>
-                                  )}
-
-                                  <div className='px-2.5 py-2'>
-                                    <div className='flex items-start justify-between gap-1'>
-                                      <span
-                                        className='text-xs font-semibold leading-tight cursor-pointer hover:underline line-clamp-2'
-                                        title={workout.title}
-                                        onClick={(e) => { e.stopPropagation(); handleOpenPreview(workout.id) }}
-                                      >
-                                        {workout.title}
-                                      </span>
-                                      <div className='flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0'>
-                                        <button
-                                          className='hover:text-blue-500 p-0.5'
-                                          title='Copiar'
-                                          onClick={(e) => { e.stopPropagation(); handleCopyAssignment(workout.assignment_id, workout.title) }}
-                                        >
-                                          <CopyIcon className='size-3' />
-                                        </button>
-                                        <button
-                                          className='hover:text-destructive p-0.5'
-                                          title='Eliminar'
-                                          onClick={(e) => { e.stopPropagation(); handleRemoveDayAssignment(workout.assignment_id) }}
-                                        >
-                                          <XIcon className='size-3' />
-                                        </button>
-                                      </div>
-                                    </div>
-                                    {workout.exercise_count !== undefined && (
-                                      <p className='text-[10px] text-muted-foreground mt-1'>
-                                        {workout.exercise_count} Ejercicio{workout.exercise_count !== 1 ? 's' : ''}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  className='flex-1 rounded-lg border border-dashed hover:border-primary/50 hover:bg-muted/50 transition-colors flex items-center justify-center text-muted-foreground hover:text-primary'
-                                  onClick={() => openAssignDay(week.week_number, day.day_of_week)}
-                                >
-                                  <PlusIcon className='size-4' />
-                                </button>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                      </div>
+              // Cabecera de cada semana: título, descarga, subir/bajar, copiar y vaciar.
+              const weekHeader = (wn: number) => {
+                const week = weekOf(wn)
+                if (!week) return <div className='px-4 py-2.5 text-sm font-semibold'>Semana {wn}</div>
+                return (
+                  <div className={`flex items-center justify-between px-4 py-2.5 ${week.is_deload ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
+                    <div className='flex items-center gap-2'>
+                      <span className='text-sm font-semibold'>Semana {week.week_number}</span>
+                      {week.is_deload && (
+                        <Badge variant='outline' className='gap-1 text-amber-700 dark:text-amber-400 border-amber-400/60'>
+                          <MoonIcon className='size-3' /> Descarga
+                        </Badge>
+                      )}
                     </div>
-                  )
-                })}
-              </div>
-            )}
+                    <div className='flex items-center gap-1'>
+                      <div className='flex items-center gap-1.5 mr-1' title='Marcar semana de descarga'>
+                        <MoonIcon className='size-3 text-muted-foreground' />
+                        <Switch
+                          checked={!!week.is_deload}
+                          disabled={togglingDeloadWeek === week.week_number}
+                          onCheckedChange={() => handleToggleDeload(week)}
+                        />
+                      </div>
+                      {week.week_number > 1 && (
+                        <Button variant='ghost' size='sm' className='h-6 text-[10px] gap-1' onClick={() => handleSwapWeeks(week.week_number, week.week_number - 1)}>
+                          <ChevronLeftIcon className='size-3' /> Subir
+                        </Button>
+                      )}
+                      {week.week_number < calTotalWeeks && (
+                        <Button variant='ghost' size='sm' className='h-6 text-[10px] gap-1' onClick={() => handleSwapWeeks(week.week_number, week.week_number + 1)}>
+                          Bajar <ChevronRightIcon className='size-3' />
+                        </Button>
+                      )}
+                      <Button variant='ghost' size='sm' className='h-6 text-[10px]' onClick={() => {
+                        const target = prompt(`¿Duplicar la semana ${week.week_number} en qué semana? (1-${calTotalWeeks})`)
+                        if (target) handleDuplicateWeek(week.week_number, Number(target))
+                      }}>
+                        <CopyIcon className='size-3 mr-0.5' /> Copiar
+                      </Button>
+                      <Button variant='ghost' size='sm' className='h-6 text-[10px] text-destructive' onClick={() => {
+                        if (confirm(`¿Vaciar todos los entrenamientos de la semana ${week.week_number}?`)) handleClearWeek(week.week_number)
+                      }}>
+                        Vaciar
+                      </Button>
+                    </div>
+                  </div>
+                )
+              }
+
+              // Contenido de cada día: la sesión asignada (arrastrable) o el botón para asignar una.
+              const renderDay = (ctx: { weekNumber?: number; dayIndex: number }) => {
+                const week = ctx.weekNumber ? weekOf(ctx.weekNumber) : undefined
+                const day = week?.days?.[ctx.dayIndex]
+                if (!week || !day) return null
+                const workout = day.workouts?.[0]
+                return workout ? (
+                  <div
+                    className='group relative rounded-lg border bg-card shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow flex-1'
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, workout.assignment_id)}
+                  >
+                    <div
+                      className='absolute left-1.5 top-1.5 z-10 rounded bg-background/90 p-0.5 shadow-sm'
+                      onClick={(e) => e.stopPropagation()}
+                      title='Seleccionar para editar varias sesiones a la vez'
+                    >
+                      <Checkbox
+                        checked={selectedAssignments.includes(workout.assignment_id)}
+                        onCheckedChange={(c) => setSelectedAssignments(prev => c === true ? [...prev, workout.assignment_id] : prev.filter(id => id !== workout.assignment_id))}
+                        className='cursor-pointer'
+                      />
+                    </div>
+                    {workout.thumbnail ? (
+                      <div className='h-20 w-full overflow-hidden bg-muted'>
+                        <img src={workout.thumbnail} alt='' loading='lazy' decoding='async' className='w-full h-full object-cover' />
+                      </div>
+                    ) : (
+                      <div className='h-20 w-full bg-muted flex items-center justify-center'>
+                        <DumbbellIcon className='size-6 text-muted-foreground/30' />
+                      </div>
+                    )}
+
+                    <div className='px-2.5 py-2'>
+                      <div className='flex items-start justify-between gap-1'>
+                        <span
+                          className='text-xs font-semibold leading-tight cursor-pointer hover:underline line-clamp-2'
+                          title={workout.title}
+                          onClick={(e) => { e.stopPropagation(); handleOpenPreview(workout.id) }}
+                        >
+                          {workout.title}
+                        </span>
+                        <div className='flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0'>
+                          <button
+                            className='hover:text-blue-500 p-0.5'
+                            title='Copiar'
+                            onClick={(e) => { e.stopPropagation(); handleCopyAssignment(workout.assignment_id, workout.title) }}
+                          >
+                            <CopyIcon className='size-3' />
+                          </button>
+                          <button
+                            className='hover:text-destructive p-0.5'
+                            title='Eliminar'
+                            onClick={(e) => { e.stopPropagation(); handleRemoveDayAssignment(workout.assignment_id) }}
+                          >
+                            <XIcon className='size-3' />
+                          </button>
+                        </div>
+                      </div>
+                      {workout.exercise_count !== undefined && (
+                        <p className='text-[10px] text-muted-foreground mt-1'>
+                          {workout.exercise_count} Ejercicio{workout.exercise_count !== 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className='flex-1 rounded-lg border border-dashed hover:border-primary/50 hover:bg-muted/50 transition-colors flex items-center justify-center text-muted-foreground hover:text-primary'
+                    onClick={() => openAssignDay(week.week_number, day.day_of_week)}
+                  >
+                    <PlusIcon className='size-4' />
+                  </button>
+                )
+              }
+
+              return (
+                <MonthWeekCalendar
+                  program={{
+                    totalWeeks: calTotalWeeks,
+                    startWeek: calStartWeek,
+                    onStartWeekChange: setCalStartWeek,
+                    weeksPerPage: calWeeksPerPage,
+                    weekHeader,
+                    weekClassName: (wn) => (weekOf(wn)?.is_deload ? 'border-amber-400/60' : undefined),
+                  }}
+                  hasData={calendarWeeks.length > 0}
+                  emptyState={(
+                    <div className='rounded-lg border border-dashed p-12 text-center'>
+                      <DumbbellIcon className='size-10 mx-auto text-muted-foreground/40 mb-3' />
+                      <p className='text-sm text-muted-foreground'>Aún no se han generado semanas.</p>
+                      <Button size='sm' className='mt-3' onClick={handleGenerateWeeks}>
+                        <RefreshCwIcon className='size-3 mr-1' /> Generar semanas
+                      </Button>
+                    </div>
+                  )}
+                  renderDay={renderDay}
+                  dayProps={(ctx) => {
+                    const day = ctx.weekNumber ? weekOf(ctx.weekNumber)?.days?.[ctx.dayIndex] : undefined
+                    if (!ctx.weekNumber || !day) return {}
+                    const wn = ctx.weekNumber
+                    return {
+                      className: clipboardAssignment ? 'hover:bg-primary/5 cursor-pointer' : undefined,
+                      onDragOver: handleDragOver,
+                      onDrop: (e) => handleDrop(e, wn, day.day_of_week),
+                      onClick: () => { if (clipboardAssignment) handlePasteAssignment(wn, day.day_of_week) },
+                    }
+                  }}
+                />
+              )
+            })()}
           </div>
 
         </CardContent>
