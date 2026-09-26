@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router'
 import WorkoutPreviewModal from '@/components/coaching/WorkoutPreviewModal'
 import { useProgramSessionEditor, distinctPrograms } from '@/components/coaching/useProgramSessionEditor'
 import OnboardingAnswersDialog, { type OnboardingSection } from '@/components/users/OnboardingAnswersDialog'
+import ClientCoachSelector from '@/components/users/ClientCoachSelector'
 import { SessionDetailModal } from '@/views/coaching/SessionDetailView'
 import HabitDialog from '@/components/coaching/HabitDialog'
 import HabitProgressPanel, { type HabitProgressItem } from '@/components/coaching/HabitProgressPanel'
@@ -797,6 +798,9 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
       </div>
 
       <div className='p-3 sm:p-6 space-y-6'>
+        {/* Entrenador asignado (ítem 49): visible en todas las pestañas, con aviso si no hay ninguno. */}
+        <ClientCoachSelector userId={userId} />
+
         {/* ═══ OVERVIEW ═══ */}
         {activeTab === 'overview' && (
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
