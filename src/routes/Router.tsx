@@ -80,6 +80,7 @@ const WorkoutTemplates = Loadable(lazy(() => import('../views/coaching/WorkoutTe
 const TrainingPrograms = Loadable(lazy(() => import('../views/coaching/TrainingProgramsView')));
 const Macrocycles = Loadable(lazy(() => import('../views/coaching/MacrocyclesView')));
 const MacrocycleDashboard = Loadable(lazy(() => import('../views/coaching/MacrocycleDashboardView')));
+const TrainingTechniques = Loadable(lazy(() => import('../views/coaching/TrainingTechniquesView')));
 const Resources = Loadable(lazy(() => import('../views/coaching/ResourcesView')));
 const SessionDetail = Loadable(lazy(() => import('../views/coaching/SessionDetailView')));
 const FormsCheckIns = Loadable(lazy(() => import('../views/forms/FormsCheckInsView')));
@@ -256,6 +257,7 @@ const Router = [
       { path: '/training-programs/:id/asignar-dia/:mode', element: <TrainingPrograms /> },
       { path: '/macrociclos', element: <Macrocycles /> },
       { path: '/macrociclos/dashboard', element: <MacrocycleDashboard /> },
+      { path: '/tecnicas-especiales', element: <TrainingTechniques /> },
       { path: '/resources', element: <Resources /> },
       { path: '/session-detail', element: <SessionDetail /> },
       { path: '/forms-checkins', element: <FormsCheckIns /> },

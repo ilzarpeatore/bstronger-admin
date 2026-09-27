@@ -6,7 +6,16 @@ import { api } from '@/lib/api'
 // servido en GET /admin/training-technique-list. Se guardan en el `prescribed` de cada
 // ejercicio como tecnica / tecnica_series ('todas' | 'ultima') / tecnica_otra.
 
-export type TrainingTechnique = { key: string; label: string; description: string }
+export type TrainingTechnique = {
+  key: string
+  label: string
+  description: string
+  steps?: string[]
+  mistakes?: string[]
+  logging?: string
+  /** true si el coach ha editado los textos por defecto */
+  customized?: boolean
+}
 
 export const OTHER_TECHNIQUE = 'otra'
 
@@ -30,6 +39,12 @@ export function loadTrainingTechniques(): Promise<TrainingTechnique[]> {
       })
   }
   return pending
+}
+
+/** Sustituye la caché tras editar el catálogo en /tecnicas-especiales. */
+export function setTrainingTechniquesCache(list: TrainingTechnique[]) {
+  cache = list.length ? list : null
+  pending = null
 }
 
 export function useTrainingTechniques(): TrainingTechnique[] {

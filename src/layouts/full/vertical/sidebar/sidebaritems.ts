@@ -223,6 +223,7 @@ const SidebarContent: MenuItem[] = [
           { id: uniqueId(), name: "Plantillas de entrenamiento", url: "/workout-templates" },
           { id: uniqueId(), name: "Programas de entrenamiento", url: "/training-programs" },
           { id: uniqueId(), name: "Macrociclos", url: "/macrociclos" },
+          { id: uniqueId(), name: "Técnicas especiales", url: "/tecnicas-especiales" },
           {
             id: uniqueId(),
             name: "Contenido",
