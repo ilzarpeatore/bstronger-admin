@@ -66,12 +66,20 @@ export function visibleFields(optional: readonly FieldKey[] = []): FieldKey[] {
 }
 export const DEFAULT_METRICS = ['reps', 'carga', 'descanso', 'rir']
 
+/**
+ * Técnica especial de un ejercicio en una semana (Bckbs App\Support\TrainingTechniques):
+ * key '' = sin técnica; series 'ultima' = solo la última serie; otra = texto si key es 'otra'.
+ */
+export type TechniqueDraft = { key: string; series: 'todas' | 'ultima'; otra: string }
+export const NO_TECHNIQUE: TechniqueDraft = { key: '', series: 'todas', otra: '' }
+
 export type CellDraft = {
   values: Record<FieldKey, string>
   intensityKey: IntensityKey
   enabledMetrics: string[]
   /** Notas del entrenador para este ejercicio en esta sesión ('' = sin nota). */
   notes: string
+  technique: TechniqueDraft
 }
 
 /** draft[assignment_id][row_key] -- ausente = el ejercicio no está en esa sesión. */
@@ -113,6 +121,9 @@ export function cellFromApi(cell: MatrixCellApi): CellDraft {
     intensityKey,
     enabledMetrics: cell.enabled_metrics && cell.enabled_metrics.length ? [...cell.enabled_metrics] : [...DEFAULT_METRICS],
     notes: str(cell.notes),
+    technique: str(p.tecnica)
+      ? { key: str(p.tecnica), series: str(p.tecnica_series) === 'ultima' ? 'ultima' : 'todas', otra: str(p.tecnica_otra) }
+      : { ...NO_TECHNIQUE },
   }
 }
 
@@ -122,6 +133,7 @@ export function emptyCell(intensityKey: IntensityKey = 'rir'): CellDraft {
     intensityKey,
     enabledMetrics: DEFAULT_METRICS.map(m => (m === 'rir' ? intensityKey : m)),
     notes: '',
+    technique: { ...NO_TECHNIQUE },
   }
 }
 
@@ -137,7 +149,13 @@ export function buildDraft(slot: MatrixSlot): Draft {
   return draft
 }
 
-const cloneCell = (c: CellDraft): CellDraft => ({ values: { ...c.values }, intensityKey: c.intensityKey, enabledMetrics: [...c.enabledMetrics], notes: c.notes })
+const cloneCell = (c: CellDraft): CellDraft => ({
+  values: { ...c.values },
+  intensityKey: c.intensityKey,
+  enabledMetrics: [...c.enabledMetrics],
+  notes: c.notes,
+  technique: { ...c.technique },
+})
 
 export function cloneDraft(d: Draft): Draft {
   const out: Draft = {}
@@ -282,7 +300,19 @@ function prescribedFromCell(cell: CellDraft): Record<string, string> {
   if (trim(cell.values.tempo)) out.tempo = trim(cell.values.tempo)
   if (trim(cell.values.duracion)) out.duracion = trim(cell.values.duracion)
   if (trim(cell.values.intensity)) out[cell.intensityKey] = trim(cell.values.intensity)
-  return out
+  return { ...out, ...techniquePrescribed(cell.technique) }
+}
+
+/** Claves de técnica para `prescribed`; '' = quitar (el backend limpia las demás). */
+function techniquePrescribed(t: TechniqueDraft): Record<string, string> {
+  if (!trim(t.key)) return {}
+  return { tecnica: t.key, tecnica_series: t.series, ...(t.key === 'otra' ? { tecnica_otra: trim(t.otra) } : {}) }
+}
+
+export function techniqueEquals(a: TechniqueDraft, b: TechniqueDraft): boolean {
+  if (trim(a.key) !== trim(b.key)) return false
+  if (!trim(a.key)) return true
+  return a.series === b.series && (a.key !== 'otra' || trim(a.otra) === trim(b.otra))
 }
 
 export function columnLabel(col: MatrixColumn): string {
@@ -350,6 +380,15 @@ export function computeChanges(
         fieldLines.push(`${cur.intensityKey.toUpperCase()} "${trim(before.values.intensity) || '—'}" → "${trim(cur.values.intensity) || '—'}"`)
       }
 
+      if (!techniqueEquals(before.technique, cur.technique)) {
+        const t = techniquePrescribed(cur.technique)
+        patch.tecnica = t.tecnica ?? ''
+        patch.tecnica_series = t.tecnica_series ?? ''
+        patch.tecnica_otra = t.tecnica_otra ?? ''
+        const label = (x: TechniqueDraft) => (trim(x.key) ? `${x.key === 'otra' ? trim(x.otra) || 'otra' : x.key}${x.series === 'ultima' ? ' (última serie)' : ''}` : '—')
+        fieldLines.push(`Técnica ${label(before.technique)} → ${label(cur.technique)}`)
+      }
+
       const notesChanged = trim(before.notes) !== trim(cur.notes)
       if (notesChanged) {
         fieldLines.push(`Notas ${trim(before.notes) ? `"${trim(before.notes).slice(0, 30)}"` : '—'} → ${trim(cur.notes) ? `"${trim(cur.notes).slice(0, 30)}"` : '(sin nota)'}`)
@@ -390,6 +429,7 @@ export function cellIsDirty(orig: MatrixCellApi | undefined, cur: CellDraft | un
   return (
     before.intensityKey !== cur.intensityKey ||
     trim(before.notes) !== trim(cur.notes) ||
+    !techniqueEquals(before.technique, cur.technique) ||
     ALL_FIELD_KEYS.some(f => trim(before.values[f]) !== trim(cur.values[f]))
   )
 }
@@ -403,6 +443,21 @@ export function setNotes(draft: Draft, assignmentId: number, rowKey: string, not
   const cell = next[assignmentId]?.[rowKey]
   if (!cell) return next
   cell.notes = notes
+  return next
+}
+
+/**
+ * Pone (o quita, con NO_TECHNIQUE) la técnica de un ejercicio en una semana y, si
+ * `following`, también en las semanas siguientes en las que ese ejercicio está.
+ */
+export function setTechnique(draft: Draft, slot: MatrixSlot, assignmentId: number, rowKey: string, technique: TechniqueDraft, following = false): Draft {
+  const next = cloneDraft(draft)
+  const from = slot.columns.findIndex(c => c.assignment_id === assignmentId)
+  const targets = following && from >= 0 ? slot.columns.slice(from).map(c => c.assignment_id) : [assignmentId]
+  for (const a of targets) {
+    const cell = next[a]?.[rowKey]
+    if (cell) cell.technique = { ...technique }
+  }
   return next
 }
 

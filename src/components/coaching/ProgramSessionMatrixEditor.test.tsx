@@ -177,6 +177,32 @@ describe('ProgramSessionMatrixEditor — notas, columnas, orden y cascada', () =
     expect(postMock.mock.calls[0][1].changes).toEqual([{ type: 'update', assignment_id: 10, row_id: 1, notes: 'Pausa 1s abajo' }])
   })
 
+  it('técnica: se elige desde el menú de la celda, se marca y viaja en el guardado', async () => {
+    getMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('training-technique-list')
+          ? { data: [{ key: 'rest_pause', label: 'Rest-pause', description: 'Llega al fallo, pausa 15-20 s y continúa.' }, { key: 'otra', label: 'Otra', description: '' }] }
+          : { data: { data: matrix } },
+      ),
+    )
+    const user = userEvent.setup()
+    renderEditor()
+    await screen.findByText('Press banca')
+    await user.click(screen.getAllByTitle('Acciones de esta semana')[0])
+    await user.click(await screen.findByText('Técnica especial…'))
+    await user.selectOptions(await screen.findByLabelText('Técnica'), 'rest_pause')
+    expect(screen.getByText(/pausa 15-20 s/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Solo la última serie' }))
+    await user.click(screen.getByRole('button', { name: 'Aceptar' }))
+    expect(await screen.findByLabelText('Técnica: Rest-pause')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Revisar y guardar' }))
+    await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+    expect(postMock.mock.calls[0][1].changes).toEqual([
+      { type: 'update', assignment_id: 10, row_id: 1, prescribed: { tecnica: 'rest_pause', tecnica_series: 'ultima', tecnica_otra: '' } },
+    ])
+  })
+
   it('orden: bajar un ejercicio genera un reorder por sesión con los ids en el orden nuevo', async () => {
     const user = userEvent.setup()
     renderEditor()
