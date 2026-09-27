@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
-import { RefreshCwIcon, SearchIcon, LayersIcon, UserIcon, LibraryIcon, PencilIcon, PlusIcon } from 'lucide-react'
+import { RefreshCwIcon, SearchIcon, LayersIcon, UserIcon, LibraryIcon, PencilIcon, PlusIcon, BarChart3Icon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -92,6 +92,7 @@ function assignmentStatus(a: MacrocycleAssignment) {
 }
 
 export default function MacrocyclesView() {
+  const navigate = useNavigate()
   const [groups, setGroups] = useState<Macrocycle[]>([])
   const [unassigned, setUnassigned] = useState<ProgramOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -151,6 +152,14 @@ export default function MacrocyclesView() {
   )
 
   const selectedProgram = programOptions.find((p) => p.id === edit?.programId) ?? null
+
+  const openDashboard = (g: Macrocycle) => {
+    const params = new URLSearchParams({
+      programs: g.mesocycles.map((m) => m.id).join(','),
+      name: g.client?.display_name ? `${g.name} · ${g.client.display_name}` : g.name,
+    })
+    navigate(`/macrociclos/dashboard?${params}`)
+  }
 
   const openNew = (macrocycleName = '') => {
     setProgramSearch('')
@@ -265,6 +274,10 @@ export default function MacrocyclesView() {
                   {g.mesocycles.length} {g.mesocycles.length === 1 ? 'mesociclo' : 'mesociclos'}
                 </Badge>
                 {g.total_weeks > 0 && <Badge variant="secondary">{g.total_weeks} semanas</Badge>}
+                <Button size="sm" onClick={() => openDashboard(g)}>
+                  <BarChart3Icon className="mr-1 size-3" />
+                  Dashboard
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => openNew(g.name)}>
                   <PlusIcon className="mr-1 size-3" />
                   Añadir mesociclo
