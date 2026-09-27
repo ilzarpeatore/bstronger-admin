@@ -11,7 +11,7 @@ import {
   InfoIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Line, LineChart, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ReferenceLine, XAxis, YAxis } from 'recharts'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,14 +21,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { api } from '@/lib/api'
+import { techniqueLabel, useTrainingTechniques } from '@/lib/trainingTechniques'
 import {
   computeBuckets,
+  formatWeeks,
   mesoLabel,
   muscleSetsPerWeek,
   musclesOf,
   rangeStatus,
   round1,
   statAvg,
+  techniquesByMeso,
   NO_MUSCLE,
   type Bucket,
   type Granularity,
@@ -63,6 +66,18 @@ const CARGA_CONFIG = {
   subir: { label: 'Subir', theme: { light: '#2a78d6', dark: '#3987e5' } },
   fija: { label: 'Carga fija (kg / %)', theme: { light: '#eda100', dark: '#c98500' } },
 } satisfies ChartConfig
+
+// Paleta categórica de referencia (dataviz, palette.md), en orden fijo: un color por mesociclo en el radar.
+const CATEGORICAL = [
+  { light: '#2a78d6', dark: '#3987e5' },
+  { light: '#eb6834', dark: '#d95926' },
+  { light: '#1baf7a', dark: '#199e70' },
+  { light: '#eda100', dark: '#c98500' },
+  { light: '#e87ba4', dark: '#d55181' },
+  { light: '#008300', dark: '#008300' },
+  { light: '#4a3aa7', dark: '#9085e9' },
+  { light: '#e34948', dark: '#e66767' },
+]
 
 const STATUS: Record<Exclude<RangeStatus, null>, { label: string; color: string; Icon: typeof CheckCircle2Icon }> = {
   ok: { label: 'En rango', color: '#0ca30c', Icon: CheckCircle2Icon },
@@ -223,6 +238,28 @@ export default function MacrocycleDashboardView() {
   const buckets = useMemo(() => (plan ? computeBuckets(plan, granularity, selected) : []), [plan, granularity, selected])
   const weekBuckets = useMemo(() => (plan ? computeBuckets(plan, 'week', selected) : []), [plan, selected])
   const muscles = useMemo(() => musclesOf(buckets, setsMode), [buckets, setsMode])
+  const techniques = useTrainingTechniques()
+  const techniqueUses = useMemo(() => (plan ? techniquesByMeso(plan, selected) : []), [plan, selected])
+
+  // Radar: series por semana de cada grupo muscular, un polígono por mesociclo seleccionado
+  const radar = useMemo(() => {
+    if (!plan) return null
+    const mesoBuckets = computeBuckets(plan, 'meso', selected)
+    const radarMuscles = musclesOf(mesoBuckets, setsMode).filter(m => m !== NO_MUSCLE)
+    const config: ChartConfig = {}
+    mesoBuckets.forEach(b => {
+      const index = plan.programs.findIndex(p => p.id === b.programIds[0])
+      config[`m${b.programIds[0]}`] = { label: b.label, theme: CATEGORICAL[Math.max(0, index) % CATEGORICAL.length] }
+    })
+    const data = radarMuscles.map(m => {
+      const point: Record<string, string | number> = { muscle: m }
+      mesoBuckets.forEach(b => {
+        point[`m${b.programIds[0]}`] = Math.round(muscleSetsPerWeek(b, m, setsMode) * 10) / 10
+      })
+      return point
+    })
+    return { config, data, keys: mesoBuckets.map(b => `m${b.programIds[0]}`) }
+  }, [plan, selected, setsMode])
   const activeMuscle = muscles.includes(muscle) ? muscle : (muscles.find(m => m !== NO_MUSCLE) ?? '')
 
   const bucketLabel = (b: Bucket) => (b.isDeload ? `${b.label} (D)` : b.label)
@@ -471,6 +508,87 @@ export default function MacrocycleDashboardView() {
                   })}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+
+          {/* Radar: reparto por grupo muscular de cada mesociclo */}
+          {radar && radar.data.length >= 3 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Reparto de {setsMode === 'direct' ? 'series directas' : 'series (directas + indirectas)'} por grupo muscular y mesociclo (media por semana)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={radar.config} className="mx-auto aspect-square h-[440px]! max-w-full">
+                  <RadarChart data={radar.data} outerRadius="72%">
+                    <PolarGrid stroke="var(--border)" />
+                    <PolarAngleAxis dataKey="muscle" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                    {/* Eje radial entre los dos primeros radios, para no pisar la etiqueta de arriba */}
+                    <PolarRadiusAxis angle={90 - 180 / radar.data.length} tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} axisLine={false} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    {radar.keys.map(k => (
+                      <Radar
+                        key={k}
+                        dataKey={k}
+                        stroke={`var(--color-${k})`}
+                        strokeWidth={2}
+                        fill={`var(--color-${k})`}
+                        fillOpacity={0.06}
+                        dot={{ r: 3, fill: `var(--color-${k})`, strokeWidth: 0 }}
+                        isAnimationActive={false}
+                      />
+                    ))}
+                  </RadarChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Técnicas especiales por mesociclo */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Técnicas especiales por mesociclo</CardTitle>
+              <p className="text-sm text-muted-foreground">Se marcan en el editor de sesiones (menú de cada semana → «Técnica especial…») o con la columna «tecnica» del Excel.</p>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {techniqueUses.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No hay técnicas especiales planificadas en los mesociclos seleccionados.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Mesociclo</TableHead>
+                      <TableHead>Técnica</TableHead>
+                      <TableHead>Semanas activas</TableHead>
+                      <TableHead>Series</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Ejercicios</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {techniqueUses.map(u => {
+                      const info = techniques.find(t => t.key === u.key)
+                      return (
+                        <TableRow key={`${u.programId}|${u.key}|${u.otra ?? ''}`}>
+                          <TableCell className="font-medium">{u.meso}</TableCell>
+                          <TableCell className="whitespace-nowrap">{techniqueLabel(u.key, u.otra, techniques)}</TableCell>
+                          <TableCell className="whitespace-nowrap tabular-nums">{formatWeeks(u.weeks)}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {u.lastSet === 0 ? 'Todas' : u.allSets === 0 ? 'Última serie' : `Todas (${u.allSets}) / última (${u.lastSet})`}
+                          </TableCell>
+                          <TableCell className="min-w-64 whitespace-normal! text-muted-foreground">{u.key === 'otra' ? '—' : (info?.description ?? '—')}</TableCell>
+                          <TableCell className="min-w-64 whitespace-normal!">
+                            {u.exercises.join(', ')}
+                            {u.muscles.length > 0 && <span className="text-muted-foreground"> ({u.muscles.join(', ')})</span>}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
 

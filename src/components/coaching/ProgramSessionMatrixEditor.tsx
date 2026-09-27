@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, ChevronsRightIcon, Columns3Icon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SlidersHorizontalIcon, StickyNoteIcon, TrashIcon } from 'lucide-react'
+import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, ChevronsRightIcon, Columns3Icon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SlidersHorizontalIcon, StickyNoteIcon, TrashIcon, ZapIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { api } from '@/lib/api'
 import ExercisePickerPanel from '@/components/coaching/ExercisePickerPanel'
 import { cn } from '@/lib/utils'
+import { OTHER_TECHNIQUE, techniqueLabel, useTrainingTechniques, type TrainingTechnique } from '@/lib/trainingTechniques'
 import {
   CARGA_HINTS,
   CASCADE_FIELDS,
@@ -35,6 +36,7 @@ import {
   slotWeeks,
   setIntensityKey,
   setNotes,
+  setTechnique,
   setValue,
   visibleFields,
   type ApiChange,
@@ -46,6 +48,8 @@ import {
   type MatrixRow,
   type MatrixSlot,
   type Substitutions,
+  type TechniqueDraft,
+  NO_TECHNIQUE,
 } from '@/lib/programSessionMatrix'
 
 type MatrixResponse = {
@@ -92,6 +96,9 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   const fields = useMemo(() => visibleFields(optionalFields), [optionalFields])
   const [rowOrder, setRowOrder] = useState<Record<string, string[]>>({})
   const [notesEdit, setNotesEdit] = useState<{ assignmentId: number; rowKey: string; value: string } | null>(null)
+  // Técnica especial de un ejercicio en una semana (y opcionalmente las siguientes)
+  const techniques = useTrainingTechniques()
+  const [techEdit, setTechEdit] = useState<{ assignmentId: number; rowKey: string; exercise: string; week: number; value: TechniqueDraft; following: boolean } | null>(null)
   // Cascada por ejercicio (semana 1 → siguientes)
   const [cascade, setCascade] = useState<{ rowKey: string; steps: Partial<Record<CascadeField, number>>; carga: CargaHint[] } | null>(null)
 
@@ -512,6 +519,8 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                                   dirty={dirty}
                                   isLast={c === slot.columns.length - 1}
                                   onNotes={() => setNotesEdit({ assignmentId: col.assignment_id, rowKey: row.row_key, value: cur.notes })}
+                                  techniqueText={techniqueLabel(cur.technique.key, cur.technique.otra, techniques)}
+                                  onTechnique={() => setTechEdit({ assignmentId: col.assignment_id, rowKey: row.row_key, exercise: row.exercise_title, week: col.week_number, value: { ...cur.technique }, following: false })}
                                   onChange={(field, value) => setSlotDraft(d => setValue(d, col.assignment_id, row.row_key, field, value))}
                                   onKeyDown={(e, f) => onCellKeyDown(e, r, c, f)}
                                   onPaste={(e, f) => onCellPaste(e, r, c, f)}
@@ -574,6 +583,20 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Técnica especial del ejercicio */}
+      <TechniqueDialog
+        edit={techEdit}
+        techniques={techniques}
+        onChange={setTechEdit}
+        onApply={() => {
+          if (techEdit && slot) {
+            const t = techEdit.value.key ? techEdit.value : NO_TECHNIQUE
+            setSlotDraft(d => setTechnique(d, slot, techEdit.assignmentId, techEdit.rowKey, t, techEdit.following))
+          }
+          setTechEdit(null)
+        }}
+      />
 
       {/* Cascada por ejercicio */}
       <Dialog open={!!cascade} onOpenChange={o => { if (!o) setCascade(null) }}>
@@ -766,11 +789,14 @@ function FieldHeaders({ col, draft, slot, fields }: { col: MatrixColumn; draft: 
 }
 
 function CellGroup({
-  cur, fields, dirty, isLast, coords, onChange, onKeyDown, onPaste, onFillRight, onToggleIntensity, onRemove, onNotes,
+  cur, fields, dirty, isLast, coords, onChange, onKeyDown, onPaste, onFillRight, onToggleIntensity, onRemove, onNotes, onTechnique, techniqueText,
 }: {
   cur: NonNullable<Draft[number][string]>
   fields: FieldKey[]
   onNotes: () => void
+  onTechnique: () => void
+  /** Técnica de esta semana ya en texto ('' = ninguna). */
+  techniqueText: string
   dirty: boolean
   isLast: boolean
   coords: { r: number; c: number }
@@ -803,14 +829,21 @@ function CellGroup({
       <td className={cn('border-b px-0.5', dirty && 'bg-amber-100/70 dark:bg-amber-900/25', isLast && 'pr-1')}>
         <DropdownMenu>
           <DropdownMenuTrigger>
-            <span className='relative inline-flex size-6 items-center justify-center rounded-md hover:bg-muted' title={cur.notes.trim() ? 'Acciones de esta semana (tiene notas)' : 'Acciones de esta semana'}>
+            <span
+              className='relative inline-flex size-6 items-center justify-center rounded-md hover:bg-muted'
+              title={['Acciones de esta semana', cur.notes.trim() && 'tiene notas', techniqueText && `técnica: ${techniqueText}${cur.technique.series === 'ultima' ? ' (última serie)' : ''}`].filter(Boolean).join(' · ')}
+            >
               <MoreVerticalIcon className='size-3' />
               {cur.notes.trim() && <span className='absolute right-0.5 top-0.5 size-1.5 rounded-full bg-sky-500' aria-label='Tiene notas' />}
+              {techniqueText && <ZapIcon className='absolute -bottom-0.5 -left-0.5 size-3 fill-violet-500 text-violet-500' aria-label={`Técnica: ${techniqueText}`} />}
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='text-xs'>
             <DropdownMenuItem onClick={onNotes}>
               <StickyNoteIcon className='mr-2 size-3.5' /> {cur.notes.trim() ? 'Editar notas…' : 'Añadir notas…'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onTechnique}>
+              <ZapIcon className='mr-2 size-3.5' /> {techniqueText ? `Técnica: ${techniqueText}…` : 'Técnica especial…'}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onFillRight}>
               <ChevronsRightIcon className='mr-2 size-3.5' /> Copiar a las semanas siguientes
@@ -825,5 +858,83 @@ function CellGroup({
         </DropdownMenu>
       </td>
     </>
+  )
+}
+
+type TechEdit = { assignmentId: number; rowKey: string; exercise: string; week: number; value: TechniqueDraft; following: boolean }
+
+/** Elegir la técnica especial de un ejercicio en una semana (catálogo de Bckbs TrainingTechniques). */
+function TechniqueDialog({
+  edit, techniques, onChange, onApply,
+}: {
+  edit: TechEdit | null
+  techniques: TrainingTechnique[]
+  onChange: (e: TechEdit | null) => void
+  onApply: () => void
+}) {
+  const v = edit?.value ?? NO_TECHNIQUE
+  const set = (patch: Partial<TechniqueDraft>) => edit && onChange({ ...edit, value: { ...edit.value, ...patch } })
+  const selected = techniques.find(t => t.key === v.key)
+  const invalid = v.key === OTHER_TECHNIQUE && !v.otra.trim()
+  return (
+    <Dialog open={!!edit} onOpenChange={o => { if (!o) onChange(null) }}>
+      <DialogContent className='max-w-md!'>
+        <DialogHeader>
+          <DialogTitle>Técnica especial</DialogTitle>
+          <DialogDescription>
+            {edit ? `${edit.exercise} · semana ${edit.week}. ` : ''}El cliente la verá en la app con su explicación.
+          </DialogDescription>
+        </DialogHeader>
+        <div className='space-y-3 text-sm'>
+          <label className='block space-y-1'>
+            <span className='text-xs text-muted-foreground'>Técnica</span>
+            <select
+              className='h-9 w-full rounded-md border bg-transparent px-2'
+              value={v.key}
+              onChange={e => set({ key: e.target.value })}
+              aria-label='Técnica'
+            >
+              <option value=''>Ninguna</option>
+              {techniques.map(t => (
+                <option key={t.key} value={t.key}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+          {selected && selected.key !== OTHER_TECHNIQUE && <p className='text-xs text-muted-foreground'>{selected.description}</p>}
+          {v.key === OTHER_TECHNIQUE && (
+            <label className='block space-y-1'>
+              <span className='text-xs text-muted-foreground'>¿Cuál?</span>
+              <input
+                className='h-9 w-full rounded-md border bg-transparent px-2'
+                maxLength={120}
+                value={v.otra}
+                onChange={e => set({ otra: e.target.value })}
+                placeholder='p. ej. Pausa de 2 s arriba'
+              />
+            </label>
+          )}
+          {v.key && (
+            <div className='space-y-1'>
+              <span className='text-xs text-muted-foreground'>Se aplica a</span>
+              <div className='flex gap-1'>
+                {(['todas', 'ultima'] as const).map(opt => (
+                  <Button key={opt} size='sm' variant={v.series === opt ? 'default' : 'outline'} onClick={() => set({ series: opt })}>
+                    {opt === 'todas' ? 'Todas las series' : 'Solo la última serie'}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          <label className='flex items-center gap-2'>
+            <Switch checked={edit?.following ?? false} onCheckedChange={c => edit && onChange({ ...edit, following: !!c })} />
+            <span>Aplicar también a las semanas siguientes</span>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant='outline' onClick={() => onChange(null)}>Cancelar</Button>
+          <Button onClick={onApply} disabled={invalid}>Aceptar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

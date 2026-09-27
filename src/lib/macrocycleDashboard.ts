@@ -27,6 +27,10 @@ export type PlanRow = {
   carga: string | null
   carga_pct: string | null
   descanso: string | null
+  /** Técnica especial (Bckbs TrainingTechniques): slug u 'otra'; null = ninguna */
+  tecnica?: string | null
+  tecnica_series?: string | null
+  tecnica_otra?: string | null
 }
 
 export type PlanData = {
@@ -241,4 +245,70 @@ export function musclesOf(buckets: Bucket[], mode: SetsMode): string[] {
 export function round1(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return '—'
   return (Math.round(n * 10) / 10).toLocaleString('es-ES')
+}
+
+export type TechniqueUse = {
+  programId: number
+  meso: string
+  /** slug del catálogo, u 'otra' */
+  key: string
+  otra: string | null
+  /** semanas en las que aparece, ordenadas */
+  weeks: number[]
+  exercises: string[]
+  muscles: string[]
+  /** nº de ejercicio-semana con la técnica en todas las series / solo en la última */
+  allSets: number
+  lastSet: number
+}
+
+/** Técnicas especiales planificadas por mesociclo (tabla «Introducción de técnicas por mesociclo»). */
+export function techniquesByMeso(data: PlanData, selectedProgramIds: number[]): TechniqueUse[] {
+  const selected = new Set(selectedProgramIds)
+  const labelOf = new Map(data.programs.map((p, i) => [p.id, mesoLabel(p, i)]))
+  const programIndex = new Map(data.programs.map((p, i) => [p.id, i]))
+  const sessionById = new Map(data.sessions.map(s => [s.assignment_id, s]))
+  const uses = new Map<string, TechniqueUse>()
+
+  for (const row of data.rows) {
+    const key = (row.tecnica ?? '').trim()
+    if (!key) continue
+    const s = sessionById.get(row.assignment_id)
+    if (!s || !selected.has(s.program_id)) continue
+    const otra = key === 'otra' ? (row.tecnica_otra ?? '').trim() || null : null
+    const id = `${s.program_id}|${key}|${otra ?? ''}`
+    let u = uses.get(id)
+    if (!u) {
+      u = { programId: s.program_id, meso: labelOf.get(s.program_id) ?? '?', key, otra, weeks: [], exercises: [], muscles: [], allSets: 0, lastSet: 0 }
+      uses.set(id, u)
+    }
+    if (!u.weeks.includes(s.week)) u.weeks.push(s.week)
+    if (!u.exercises.includes(row.exercise_title)) u.exercises.push(row.exercise_title)
+    if (row.muscle && !u.muscles.includes(row.muscle)) u.muscles.push(row.muscle)
+    if (row.tecnica_series === 'ultima') u.lastSet += 1
+    else u.allSets += 1
+  }
+
+  return [...uses.values()]
+    .map(u => ({ ...u, weeks: [...u.weeks].sort((a, b) => a - b) }))
+    .sort((a, b) => (programIndex.get(a.programId) ?? 0) - (programIndex.get(b.programId) ?? 0) || a.weeks[0] - b.weeks[0] || a.key.localeCompare(b.key))
+}
+
+/** [1,2,3,5] → "S1-S3, S5" */
+export function formatWeeks(weeks: number[]): string {
+  const parts: string[] = []
+  let start: number | null = null
+  let prev: number | null = null
+  for (const w of [...weeks].sort((a, b) => a - b)) {
+    if (start === null) {
+      start = prev = w
+    } else if (w === (prev as number) + 1) {
+      prev = w
+    } else {
+      parts.push(start === prev ? `S${start}` : `S${start}-S${prev}`)
+      start = prev = w
+    }
+  }
+  if (start !== null) parts.push(start === prev ? `S${start}` : `S${start}-S${prev}`)
+  return parts.join(', ')
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   cargaKind,
   computeBuckets,
+  formatWeeks,
+  techniquesByMeso,
   muscleSetsPerWeek,
   musclesOf,
   parseNumeric,
@@ -153,5 +155,41 @@ describe('rangeStatus', () => {
   })
   it('sin referencia → null', () => {
     expect(rangeStatus(5, undefined)).toBeNull()
+  })
+})
+
+describe('técnicas por mesociclo', () => {
+  const withTech: PlanData = {
+    ...data,
+    rows: [
+      ...data.rows,
+      row(1, 'Deltoides lateral', { exercise_title: 'Elevación lateral', series: '3', tecnica: 'rest_pause', tecnica_series: 'ultima' }),
+      row(3, 'Deltoides lateral', { exercise_title: 'Elevación lateral', series: '2', tecnica: 'rest_pause', tecnica_series: 'ultima' }),
+      row(2, 'Cuádriceps', { exercise_title: 'Prensa', tecnica: 'otra', tecnica_otra: 'Pausa abajo' }),
+      row(4, 'Dorsales', { exercise_title: 'Remo', tecnica: 'drop_sets' }),
+    ],
+  }
+
+  it('agrupa por mesociclo y técnica con sus semanas, ejercicios y alcance', () => {
+    const uses = techniquesByMeso(withTech, [10, 20])
+    expect(uses.map(u => [u.meso, u.key, u.otra, formatWeeks(u.weeks)])).toEqual([
+      ['M1', 'otra', 'Pausa abajo', 'S1'],
+      ['M1', 'rest_pause', null, 'S1-S2'],
+      ['M2', 'drop_sets', null, 'S1'],
+    ])
+    const rp = uses.find(u => u.key === 'rest_pause')!
+    expect(rp.exercises).toEqual(['Elevación lateral'])
+    expect(rp.muscles).toEqual(['Deltoides lateral'])
+    expect([rp.allSets, rp.lastSet]).toEqual([0, 2])
+  })
+
+  it('respeta los mesociclos seleccionados', () => {
+    expect(techniquesByMeso(withTech, [20]).map(u => u.key)).toEqual(['drop_sets'])
+  })
+
+  it('formatWeeks comprime semanas seguidas', () => {
+    expect(formatWeeks([5, 1, 2, 3])).toBe('S1-S3, S5')
+    expect(formatWeeks([4])).toBe('S4')
+    expect(formatWeeks([])).toBe('')
   })
 })

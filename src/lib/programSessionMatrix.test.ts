@@ -19,7 +19,9 @@ import {
   removeRow,
   setIntensityKey,
   setNotes,
+  setTechnique,
   setValue,
+  NO_TECHNIQUE,
   shiftNumeric,
   visibleFields,
   type MatrixSlot,
@@ -293,5 +295,62 @@ describe('cascada por ejercicio', () => {
   it('no inventa valores: si la base no tiene el campo relleno lo deja como está', () => {
     const d = cascadeRow(buildDraft(slot), slot, '5#1', { steps: { duracion: 5 }, carga: [] })
     expect(d[11]['5#1']!.values.duracion).toBe('')
+  })
+})
+
+describe('técnica especial', () => {
+  const withTech: MatrixSlot = {
+    ...slot,
+    rows: [
+      {
+        ...slot.rows[0],
+        cells: {
+          ...slot.rows[0].cells,
+          '10': { ...slot.rows[0].cells['10'], prescribed: { series: '4', reps: '6-8', rir: '2', tecnica: 'rest_pause', tecnica_series: 'ultima' } },
+        },
+      },
+      slot.rows[1],
+    ],
+  }
+
+  it('lee la técnica del prescribed', () => {
+    const d = buildDraft(withTech)
+    expect(d[10]['5#1']!.technique).toEqual({ key: 'rest_pause', series: 'ultima', otra: '' })
+    expect(d[11]['5#1']!.technique).toEqual(NO_TECHNIQUE)
+  })
+
+  it('poner técnica genera el cambio y marca la celda', () => {
+    const d = setTechnique(buildDraft(slot), slot, 10, '9#1', { key: 'drop_sets', series: 'todas', otra: '' })
+    const { changes, lines } = computeChanges(slot, d)
+    expect(changes).toEqual([
+      { type: 'update', assignment_id: 10, row_id: 3, prescribed: { tecnica: 'drop_sets', tecnica_series: 'todas', tecnica_otra: '' } },
+    ])
+    expect(lines[0].text).toContain('Técnica — → drop_sets')
+    expect(cellIsDirty(slot.rows[1].cells['10'], d[10]['9#1'])).toBe(true)
+  })
+
+  it('«Otra» manda su texto y quitarla vacía las tres claves', () => {
+    let d = setTechnique(buildDraft(withTech), withTech, 10, '5#1', { key: 'otra', series: 'todas', otra: 'Pausa 2 s' })
+    expect(computeChanges(withTech, d).changes[0]).toMatchObject({ prescribed: { tecnica: 'otra', tecnica_series: 'todas', tecnica_otra: 'Pausa 2 s' } })
+
+    d = setTechnique(buildDraft(withTech), withTech, 10, '5#1', NO_TECHNIQUE)
+    expect(computeChanges(withTech, d).changes[0]).toMatchObject({ prescribed: { tecnica: '', tecnica_series: '', tecnica_otra: '' } })
+  })
+
+  it('sin tocar la técnica no hay cambios', () => {
+    expect(computeChanges(withTech, buildDraft(withTech)).changes).toEqual([])
+  })
+
+  it('«semanas siguientes» la aplica desde esa semana en adelante, solo donde está el ejercicio', () => {
+    const d = setTechnique(buildDraft(slot), slot, 11, '5#1', { key: 'bfr', series: 'todas', otra: '' }, true)
+    expect(d[10]['5#1']!.technique.key).toBe('')
+    expect(d[11]['5#1']!.technique.key).toBe('bfr')
+    expect(d[12]['5#1']!.technique.key).toBe('bfr')
+    expect(d[11]['9#1']).toBeUndefined()
+  })
+
+  it('fillRight copia también la técnica', () => {
+    const d = fillRight(buildDraft(withTech), withTech, '5#1', 0)
+    expect(d[12]['5#1']!.technique).toEqual({ key: 'rest_pause', series: 'ultima', otra: '' })
   })
 })
