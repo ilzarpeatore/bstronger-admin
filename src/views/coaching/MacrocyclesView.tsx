@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 
-import { RefreshCwIcon, SearchIcon, LayersIcon, UserIcon, LibraryIcon, PencilIcon, PlusIcon, BarChart3Icon } from 'lucide-react'
+import { RefreshCwIcon, SearchIcon, LayersIcon, UserIcon, LibraryIcon, PencilIcon, PlusIcon, BarChart3Icon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -11,15 +11,18 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import MacrocycleBuilderDialog, { type BuilderProgram } from '@/components/coaching/MacrocycleBuilderDialog'
 import { api } from '@/lib/api'
 import { fuzzyMatch } from '@/lib/textSearch'
 
 // GET /admin/training-program-macrocycles (Bckbs TrainingProgramController::getMacrocycles):
-// no hay entidad "macrociclo" en la BD. Cada programa pertenece a un
-// macrociclo si se le asignó a mano (macrocycle_name, POST
-// training-program-set-macrocycle) o, si no, según su título ("Macrociclo 2 -
-// Mesociclo 1", "M1 (Be Stronger Macrociclo 2)"...). Se agrupa también por
-// cliente (cada cliente tiene su copia del programa).
+// no hay entidad "macrociclo" en la BD. Un macrociclo es el nombre que el coach
+// pone A MANO a un conjunto de programas (macrocycle_name; POST
+// training-program-set-macrocycle-bulk desde «Nuevo macrociclo», o
+// training-program-set-macrocycle para uno). NADA se deduce del título (2026-09-28:
+// cada mesociclo con un sufijo distinto salía como un macrociclo propio); el título
+// solo sugiere el nº de mesociclo. Se agrupa también por cliente (cada cliente
+// tiene su copia del programa, que hereda el macrociclo).
 type MacrocycleAssignment = {
   id: number
   client_id: number
@@ -55,18 +58,20 @@ type Macrocycle = {
   last_created_at: string
 }
 
-type ProgramOption = {
+// Programa sin macrociclo tal y como lo devuelve `unassigned`
+type UnassignedProgram = {
   id: number
   title: string
-  clientName: string | null
-  current: string | null
+  client: { id: number; display_name: string | null } | null
+  num_weeks: number | null
+  suggested_mesocycle: number | null
 }
 
 type EditState = {
-  programId: number | null
+  programId: number
+  programTitle: string
   macrocycleName: string
   mesocycleNumber: string
-  isManual: boolean
 }
 
 type OwnerFilter = 'all' | 'clients' | 'library'
@@ -94,28 +99,22 @@ function assignmentStatus(a: MacrocycleAssignment) {
 export default function MacrocyclesView() {
   const navigate = useNavigate()
   const [groups, setGroups] = useState<Macrocycle[]>([])
-  const [unassigned, setUnassigned] = useState<ProgramOption[]>([])
+  const [unassigned, setUnassigned] = useState<UnassignedProgram[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [owner, setOwner] = useState<OwnerFilter>('all')
 
   const [edit, setEdit] = useState<EditState | null>(null)
-  const [programSearch, setProgramSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [builder, setBuilder] = useState<{ initialName: string } | null>(null)
+  const [dissolve, setDissolve] = useState<Macrocycle | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const res = await api.get('/admin/training-program-macrocycles')
       setGroups(res.data?.data || res.data || [])
-      setUnassigned(
-        (res.unassigned || []).map((p: { id: number; title: string; client: { display_name: string | null } | null }) => ({
-          id: p.id,
-          title: p.title,
-          clientName: p.client?.display_name ?? null,
-          current: null,
-        })),
-      )
+      setUnassigned(res.unassigned || [])
     } catch {
       toast.error('Error al cargar los macrociclos')
     } finally {
@@ -136,22 +135,43 @@ export default function MacrocyclesView() {
     })
   }, [groups, search, owner])
 
-  // Todos los programas elegibles en el diálogo: los sueltos y los que ya están en algún macrociclo
-  const programOptions = useMemo<ProgramOption[]>(() => {
-    const grouped = groups.flatMap((g) =>
-      g.mesocycles.map((m) => ({ id: m.id, title: m.title, clientName: g.client?.display_name ?? null, current: g.name })),
+  // Programas elegibles en «Nuevo macrociclo»: los que no tienen macrociclo y los que ya están en uno
+  const builderPrograms = useMemo<BuilderProgram[]>(() => {
+    const free: BuilderProgram[] = unassigned.map((p) => ({
+      id: p.id,
+      title: p.title,
+      clientName: p.client?.display_name ?? null,
+      numWeeks: p.num_weeks,
+      currentMacrocycle: null,
+      currentMesocycle: null,
+      suggestedMesocycle: p.suggested_mesocycle,
+    }))
+    const grouped: BuilderProgram[] = groups.flatMap((g) =>
+      g.mesocycles.map((m) => ({
+        id: m.id,
+        title: m.title,
+        clientName: g.client?.display_name ?? null,
+        numWeeks: m.num_weeks,
+        currentMacrocycle: g.name,
+        currentMesocycle: m.mesocycle_number,
+        suggestedMesocycle: m.mesocycle_number,
+      })),
     )
-    return [...unassigned, ...grouped]
+    return [...free, ...grouped]
   }, [groups, unassigned])
 
+  // Nombres existentes y nºs ya usados, para continuar la numeración al añadir a uno
+  const existingMacrocycles = useMemo(() => {
+    const byName = new Map<string, { name: string; mesocycles: number[] }>()
+    for (const g of groups) {
+      const entry = byName.get(g.name.toLowerCase()) ?? { name: g.name, mesocycles: [] }
+      entry.mesocycles.push(...g.mesocycles.map((m) => m.mesocycle_number).filter((n): n is number => n != null))
+      byName.set(g.name.toLowerCase(), entry)
+    }
+    return Array.from(byName.values())
+  }, [groups])
+
   const macrocycleNames = useMemo(() => Array.from(new Set(groups.map((g) => g.name))).sort(), [groups])
-
-  const visibleOptions = useMemo(
-    () => programOptions.filter((p) => !programSearch.trim() || fuzzyMatch(programSearch, p.title, p.clientName)).slice(0, 50),
-    [programOptions, programSearch],
-  )
-
-  const selectedProgram = programOptions.find((p) => p.id === edit?.programId) ?? null
 
   const openDashboard = (g: Macrocycle) => {
     const params = new URLSearchParams({
@@ -161,19 +181,32 @@ export default function MacrocyclesView() {
     navigate(`/macrociclos/dashboard?${params}`)
   }
 
-  const openNew = (macrocycleName = '') => {
-    setProgramSearch('')
-    setEdit({ programId: null, macrocycleName, mesocycleNumber: '', isManual: false })
-  }
-
   const openEdit = (g: Macrocycle, m: Mesocycle) => {
-    setProgramSearch('')
     setEdit({
       programId: m.id,
+      programTitle: m.title,
       macrocycleName: g.name,
       mesocycleNumber: m.mesocycle_number != null ? String(m.mesocycle_number) : '',
-      isManual: m.grouping === 'manual',
     })
+  }
+
+  // Disolver: quita el macrociclo (y el nº) de todos sus mesociclos; los programas no se tocan
+  const dissolveGroup = async () => {
+    if (!dissolve) return
+    setSaving(true)
+    try {
+      await api.post('/admin/training-program-set-macrocycle-bulk', {
+        macrocycle_name: null,
+        items: dissolve.mesocycles.map((m) => ({ id: m.id })),
+      })
+      toast.success(`Macrociclo «${dissolve.name}» disuelto: sus mesociclos quedan sin macrociclo`)
+      setDissolve(null)
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo disolver el macrociclo')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const save = async (clear = false) => {
@@ -189,7 +222,7 @@ export default function MacrocyclesView() {
         macrocycle_name: clear ? null : edit.macrocycleName.trim(),
         mesocycle_number: clear || edit.mesocycleNumber === '' ? null : Number(edit.mesocycleNumber),
       })
-      toast.success(clear ? 'Asignación manual quitada' : 'Mesociclo asignado')
+      toast.success(clear ? 'Mesociclo quitado del macrociclo' : 'Mesociclo guardado')
       setEdit(null)
       await load()
     } catch (e) {
@@ -205,8 +238,8 @@ export default function MacrocyclesView() {
         <div>
           <h1 className="text-2xl font-semibold">Macrociclos</h1>
           <p className="text-sm text-muted-foreground">
-            Mesociclos agrupados por macrociclo: los asignados a mano y, si no, según el título del programa (p. ej.
-            «Macrociclo 2 - Mesociclo 1»).
+            Un macrociclo es el conjunto de mesociclos que tú eliges: nada se agrupa solo por el título del programa.
+            {!loading && unassigned.length > 0 && ` ${unassigned.length} programas sin macrociclo.`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -214,9 +247,9 @@ export default function MacrocyclesView() {
             <RefreshCwIcon className={`mr-2 size-4 ${loading ? 'animate-spin' : ''}`} />
             Recargar
           </Button>
-          <Button onClick={() => openNew()}>
+          <Button onClick={() => setBuilder({ initialName: '' })} disabled={loading}>
             <PlusIcon className="mr-2 size-4" />
-            Asignar mesociclo
+            Nuevo macrociclo
           </Button>
         </div>
       </div>
@@ -245,7 +278,9 @@ export default function MacrocyclesView() {
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No hay macrociclos. Usa «Asignar mesociclo», o pon «Mesociclo N» o «Macrociclo» en el título del programa.
+            {groups.length === 0
+              ? 'Aún no hay macrociclos. Usa «Nuevo macrociclo» y elige los mesociclos que lo forman.'
+              : 'Ningún macrociclo coincide con la búsqueda.'}
           </CardContent>
         </Card>
       ) : (
@@ -278,9 +313,13 @@ export default function MacrocyclesView() {
                   <BarChart3Icon className="mr-1 size-3" />
                   Dashboard
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => openNew(g.name)}>
+                <Button size="sm" variant="outline" onClick={() => setBuilder({ initialName: g.name })}>
                   <PlusIcon className="mr-1 size-3" />
                   Añadir mesociclo
+                </Button>
+                <Button size="sm" variant="ghost" title="Deshacer el macrociclo (los programas no se borran)" onClick={() => setDissolve(g)}>
+                  <Trash2Icon className="mr-1 size-3" />
+                  Disolver
                 </Button>
               </div>
             </CardHeader>
@@ -305,11 +344,6 @@ export default function MacrocyclesView() {
                         <Link to={`/training-programs/${m.id}`} className="hover:underline">
                           {m.title}
                         </Link>
-                        {m.grouping === 'manual' && (
-                          <Badge variant="secondary" className="ml-2">
-                            Manual
-                          </Badge>
-                        )}
                         {!m.activo && (
                           <Badge variant="outline" className="ml-2">
                             Inactivo
@@ -354,64 +388,13 @@ export default function MacrocyclesView() {
       <Dialog open={edit !== null} onOpenChange={(open) => !open && setEdit(null)}>
         <DialogContent className="max-h-[85vh] max-w-xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Asignar mesociclo a un macrociclo</DialogTitle>
+            <DialogTitle>Cambiar el macrociclo de un mesociclo</DialogTitle>
           </DialogHeader>
           {edit && (
             <FieldGroup className="gap-4">
               <Field className="gap-2">
                 <FieldLabel>Programa (mesociclo)</FieldLabel>
-                {selectedProgram ? (
-                  <div className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
-                    <div>
-                      <div className="font-medium">{selectedProgram.title}</div>
-                      <div className="text-muted-foreground">
-                        {selectedProgram.clientName ?? 'Biblioteca'}
-                        {selectedProgram.current && ` · ahora en «${selectedProgram.current}»`}
-                      </div>
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => setEdit({ ...edit, programId: null, isManual: false })}>
-                      Cambiar
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Input
-                      placeholder="Buscar programa por título o cliente…"
-                      value={programSearch}
-                      onChange={(e) => setProgramSearch(e.target.value)}
-                    />
-                    <div className="max-h-60 overflow-y-auto rounded-md border">
-                      {visibleOptions.length === 0 ? (
-                        <p className="p-3 text-sm text-muted-foreground">Ningún programa coincide.</p>
-                      ) : (
-                        visibleOptions.map((p) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            className="block w-full border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted"
-                            onClick={() => {
-                              const inGroup = groups.flatMap((g) => g.mesocycles).find((m) => m.id === p.id)
-                              setEdit({
-                                ...edit,
-                                programId: p.id,
-                                isManual: inGroup?.grouping === 'manual',
-                                mesocycleNumber:
-                                  edit.mesocycleNumber ||
-                                  (inGroup?.mesocycle_number != null ? String(inGroup.mesocycle_number) : ''),
-                              })
-                            }}
-                          >
-                            <div className="font-medium">{p.title}</div>
-                            <div className="text-muted-foreground">
-                              {p.clientName ?? 'Biblioteca'}
-                              {p.current ? ` · en «${p.current}»` : ' · sin macrociclo'}
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </>
-                )}
+                <div className="rounded-md border p-2 text-sm font-medium">{edit.programTitle}</div>
               </Field>
               <Field className="gap-2">
                 <FieldLabel>Macrociclo</FieldLabel>
@@ -444,16 +427,44 @@ export default function MacrocyclesView() {
             </FieldGroup>
           )}
           <DialogFooter className="gap-2">
-            {edit?.isManual && (
-              <Button variant="outline" onClick={() => save(true)} disabled={saving}>
-                Quitar asignación manual
-              </Button>
-            )}
+            <Button variant="outline" onClick={() => save(true)} disabled={saving}>
+              Quitar del macrociclo
+            </Button>
             <Button variant="outline" onClick={() => setEdit(null)} disabled={saving}>
               Cancelar
             </Button>
             <Button onClick={() => save()} disabled={saving || !edit?.programId}>
               {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {builder && (
+        <MacrocycleBuilderDialog
+          programs={builderPrograms}
+          existing={existingMacrocycles}
+          initialName={builder.initialName}
+          onClose={() => setBuilder(null)}
+          onSaved={load}
+        />
+      )}
+
+      <Dialog open={dissolve !== null} onOpenChange={(open) => !open && setDissolve(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Disolver «{dissolve?.name}»</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Sus {dissolve?.mesocycles.length} mesociclos dejan de formar un macrociclo y pasan a «sin macrociclo». Los programas y
+            sus asignaciones a clientes no se tocan.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDissolve(null)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={dissolveGroup} disabled={saving}>
+              {saving ? 'Disolviendo…' : 'Disolver macrociclo'}
             </Button>
           </DialogFooter>
         </DialogContent>
