@@ -16,6 +16,8 @@ import WorkoutTemplateViewer, {
   type WorkoutViewerExercise,
   type ExerciseLibraryFilters,
 } from '@/components/coaching/WorkoutTemplateViewer'
+import ExerciseTechniqueDialog, { techniquePayload, withTechnique } from '@/components/coaching/ExerciseTechniqueDialog'
+import type { TechniqueDraft } from '@/lib/programSessionMatrix'
 import WorkoutTemplatesList from './WorkoutTemplatesList'
 import type { TemplateListItem } from './workoutTemplateGroups'
 
@@ -108,6 +110,7 @@ export default function WorkoutTemplatesView() {
   const [availableLoading, setAvailableLoading] = useState(false)
   const [notesExercise, setNotesExercise] = useState<WorkoutViewerExercise | null>(null)
   const [notesValue, setNotesValue] = useState('')
+  const [techniqueExercise, setTechniqueExercise] = useState<WorkoutViewerExercise | null>(null)
   const [sections, setSections] = useState<SectionTemplate[]>([])
   const [importSectionDialogOpen, setImportSectionDialogOpen] = useState(false)
   const [importSectionId, setImportSectionId] = useState('')
@@ -419,6 +422,18 @@ export default function WorkoutTemplatesView() {
     }
   }
 
+  const handleSaveTechnique = async (t: TechniqueDraft) => {
+    if (!techniqueExercise) return
+    try {
+      await api.post('/admin/workout-template-exercise-technique', { id: techniqueExercise.id, ...techniquePayload(t) })
+      updateExerciseLocally(techniqueExercise.id, { prescribed: withTechnique(techniqueExercise.prescribed as Record<string, any> | null, t) })
+      toast.success(t.key ? 'Técnica guardada' : 'Técnica quitada')
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo guardar la técnica')
+      throw err
+    }
+  }
+
   const handleOpenNotes = (exercise: WorkoutViewerExercise) => {
     setNotesExercise(exercise)
     setNotesValue(exercise.notes || '')
@@ -488,6 +503,7 @@ export default function WorkoutTemplatesView() {
               onUpdateExerciseField={handleUpdateField}
               onUpdateExerciseMetrics={handleUpdateMetrics}
               onExerciseNotes={handleOpenNotes}
+              onExerciseTechnique={ex => setTechniqueExercise(ex)}
               onSearchExercises={fetchAvailableExercises}
               headerExtras={
                 <Button variant='outline' size='sm' className='h-8 text-xs' onClick={() => { fetchSections(); setImportSectionDialogOpen(true) }}>
@@ -497,6 +513,13 @@ export default function WorkoutTemplatesView() {
             />
           )}
         </CardContent>
+
+        <ExerciseTechniqueDialog
+          exercise={techniqueExercise}
+          description='Se guarda en la plantilla: afecta a todos los que la usen.'
+          onClose={() => setTechniqueExercise(null)}
+          onSave={handleSaveTechnique}
+        />
 
         <Dialog open={!!notesExercise} onOpenChange={open => { if (!open) setNotesExercise(null) }}>
           <DialogContent className='max-w-md'>

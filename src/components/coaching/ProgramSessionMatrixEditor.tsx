@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { api } from '@/lib/api'
 import ExercisePickerPanel from '@/components/coaching/ExercisePickerPanel'
+import { TechniqueFields } from '@/components/coaching/ExerciseTechniqueDialog'
 import { cn } from '@/lib/utils'
 import { OTHER_TECHNIQUE, techniqueLabel, useTrainingTechniques, type TrainingTechnique } from '@/lib/trainingTechniques'
 import {
@@ -874,7 +875,6 @@ function TechniqueDialog({
 }) {
   const v = edit?.value ?? NO_TECHNIQUE
   const set = (patch: Partial<TechniqueDraft>) => edit && onChange({ ...edit, value: { ...edit.value, ...patch } })
-  const selected = techniques.find(t => t.key === v.key)
   const invalid = v.key === OTHER_TECHNIQUE && !v.otra.trim()
   return (
     <Dialog open={!!edit} onOpenChange={o => { if (!o) onChange(null) }}>
@@ -886,45 +886,7 @@ function TechniqueDialog({
           </DialogDescription>
         </DialogHeader>
         <div className='space-y-3 text-sm'>
-          <label className='block space-y-1'>
-            <span className='text-xs text-muted-foreground'>Técnica</span>
-            <select
-              className='h-9 w-full rounded-md border bg-transparent px-2'
-              value={v.key}
-              onChange={e => set({ key: e.target.value })}
-              aria-label='Técnica'
-            >
-              <option value=''>Ninguna</option>
-              {techniques.map(t => (
-                <option key={t.key} value={t.key}>{t.label}</option>
-              ))}
-            </select>
-          </label>
-          {selected && selected.key !== OTHER_TECHNIQUE && <p className='text-xs text-muted-foreground'>{selected.description}</p>}
-          {v.key === OTHER_TECHNIQUE && (
-            <label className='block space-y-1'>
-              <span className='text-xs text-muted-foreground'>¿Cuál?</span>
-              <input
-                className='h-9 w-full rounded-md border bg-transparent px-2'
-                maxLength={120}
-                value={v.otra}
-                onChange={e => set({ otra: e.target.value })}
-                placeholder='p. ej. Pausa de 2 s arriba'
-              />
-            </label>
-          )}
-          {v.key && (
-            <div className='space-y-1'>
-              <span className='text-xs text-muted-foreground'>Se aplica a</span>
-              <div className='flex gap-1'>
-                {(['todas', 'ultima'] as const).map(opt => (
-                  <Button key={opt} size='sm' variant={v.series === opt ? 'default' : 'outline'} onClick={() => set({ series: opt })}>
-                    {opt === 'todas' ? 'Todas las series' : 'Solo la última serie'}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
+          <TechniqueFields value={v} techniques={techniques} onChange={set} />
           <label className='flex items-center gap-2'>
             <Switch checked={edit?.following ?? false} onCheckedChange={c => edit && onChange({ ...edit, following: !!c })} />
             <span>Aplicar también a las semanas siguientes</span>

@@ -12,6 +12,8 @@ import WorkoutTemplateViewer, {
   type WorkoutViewerExercise,
   type ExerciseLibraryFilters,
 } from '@/components/coaching/WorkoutTemplateViewer'
+import ExerciseTechniqueDialog, { techniquePayload, withTechnique } from '@/components/coaching/ExerciseTechniqueDialog'
+import type { TechniqueDraft } from '@/lib/programSessionMatrix'
 
 const DEFAULT_THUMBNAIL = 'https://app.hubfit.com/media/workout-thumbnails/default.jpg'
 
@@ -73,6 +75,7 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
   const [availableLoading, setAvailableLoading] = useState(false)
   const [notesExercise, setNotesExercise] = useState<WorkoutViewerExercise | null>(null)
   const [notesValue, setNotesValue] = useState('')
+  const [techniqueExercise, setTechniqueExercise] = useState<WorkoutViewerExercise | null>(null)
 
   const fetchDetail = useCallback(async () => {
     if (!workoutTemplateId) return
@@ -281,6 +284,20 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
     }
   }
 
+  // Técnica especial en la plantilla de este entrenamiento (la misma que ve el
+  // editor de sesiones del programa y la app).
+  const handleSaveTechnique = async (t: TechniqueDraft) => {
+    if (!techniqueExercise) return
+    try {
+      await api.post('/admin/workout-template-exercise-technique', { id: techniqueExercise.id, ...techniquePayload(t) })
+      updateExerciseLocally(techniqueExercise.id, { prescribed: withTechnique(techniqueExercise.prescribed as Record<string, any> | null, t) })
+      toast.success(t.key ? 'Técnica guardada' : 'Técnica quitada')
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo guardar la técnica')
+      throw err
+    }
+  }
+
   const handleOpenNotes = (exercise: WorkoutViewerExercise) => {
     setNotesExercise(exercise)
     setNotesValue(exercise.notes || '')
@@ -370,6 +387,7 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
               onUpdateExerciseField={handleUpdateField}
               onUpdateExerciseMetrics={handleUpdateMetrics}
               onExerciseNotes={handleOpenNotes}
+              onExerciseTechnique={ex => setTechniqueExercise(ex)}
               onSubstituteExercise={handleSubstituteExercise}
               onSearchExercises={fetchAvailableExercises}
               headerExtras={
@@ -383,6 +401,13 @@ export default function WorkoutPreviewModal({ open, onOpenChange, workoutTemplat
           )}
         </div>
       </DialogContent>
+
+      <ExerciseTechniqueDialog
+        exercise={techniqueExercise}
+        description='Se guarda en este entrenamiento.'
+        onClose={() => setTechniqueExercise(null)}
+        onSave={handleSaveTechnique}
+      />
 
       <Dialog open={!!notesExercise} onOpenChange={open => { if (!open) setNotesExercise(null) }}>
         <DialogContent className='max-w-md'>
