@@ -1,7 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 
-import { RefreshCwIcon, SearchIcon, LayersIcon, UserIcon, LibraryIcon, PencilIcon, PlusIcon, BarChart3Icon, Trash2Icon } from 'lucide-react'
+import {
+  RefreshCwIcon,
+  SearchIcon,
+  LayersIcon,
+  UserIcon,
+  LibraryIcon,
+  PencilIcon,
+  PlusIcon,
+  BarChart3Icon,
+  Trash2Icon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -108,6 +120,15 @@ export default function MacrocyclesView() {
   const [saving, setSaving] = useState(false)
   const [builder, setBuilder] = useState<{ initialName: string } | null>(null)
   const [dissolve, setDissolve] = useState<Macrocycle | null>(null)
+  // Macrociclos desplegados (acordeón): por defecto todos cerrados, solo se ve la cabecera
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set())
+  const toggleOpen = (key: string) =>
+    setOpenKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -284,16 +305,25 @@ export default function MacrocyclesView() {
           </CardContent>
         </Card>
       ) : (
-        filtered.map((g) => (
+        filtered.map((g) => {
+          const isOpen = openKeys.has(g.key)
+          return (
           <Card key={g.key}>
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <LayersIcon className="size-5" />
-                {g.name}
+            {/* Acordeón: cerrado solo se ve esta cabecera; al hacer clic en ella se abre la tabla de mesociclos */}
+            <CardHeader
+              className="flex cursor-pointer flex-row flex-wrap items-center justify-between gap-2 space-y-0"
+              onClick={() => toggleOpen(g.key)}
+            >
+              <CardTitle className="text-lg">
+                <button type="button" aria-expanded={isOpen} className="flex items-center gap-2 text-left">
+                  {isOpen ? <ChevronDownIcon className="size-5" /> : <ChevronRightIcon className="size-5" />}
+                  <LayersIcon className="size-5" />
+                  {g.name}
+                </button>
               </CardTitle>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {g.client ? (
-                  <Link to={`/users/${g.client.id}`}>
+                  <Link to={`/users/${g.client.id}`} onClick={(e) => e.stopPropagation()}>
                     <Badge variant="default" className="gap-1">
                       <UserIcon className="size-3" />
                       {g.client.display_name || g.client.email || `Cliente #${g.client.id}`}
@@ -309,20 +339,42 @@ export default function MacrocyclesView() {
                   {g.mesocycles.length} {g.mesocycles.length === 1 ? 'mesociclo' : 'mesociclos'}
                 </Badge>
                 {g.total_weeks > 0 && <Badge variant="secondary">{g.total_weeks} semanas</Badge>}
-                <Button size="sm" onClick={() => openDashboard(g)}>
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openDashboard(g)
+                  }}
+                >
                   <BarChart3Icon className="mr-1 size-3" />
                   Dashboard
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setBuilder({ initialName: g.name })}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setBuilder({ initialName: g.name })
+                  }}
+                >
                   <PlusIcon className="mr-1 size-3" />
                   Añadir mesociclo
                 </Button>
-                <Button size="sm" variant="ghost" title="Deshacer el macrociclo (los programas no se borran)" onClick={() => setDissolve(g)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="Deshacer el macrociclo (los programas no se borran)"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDissolve(g)
+                  }}
+                >
                   <Trash2Icon className="mr-1 size-3" />
                   Disolver
                 </Button>
               </div>
             </CardHeader>
+            {isOpen && (
             <CardContent>
               <Table>
                 <TableHeader>
@@ -381,8 +433,10 @@ export default function MacrocyclesView() {
                 </TableBody>
               </Table>
             </CardContent>
+            )}
           </Card>
-        ))
+          )
+        })
       )}
 
       <Dialog open={edit !== null} onOpenChange={(open) => !open && setEdit(null)}>
