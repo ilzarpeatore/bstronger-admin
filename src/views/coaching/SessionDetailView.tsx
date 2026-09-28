@@ -30,6 +30,8 @@ import WorkoutTemplateViewer, {
   type WorkoutViewerBlock,
   type ExerciseLibraryFilters,
 } from '@/components/coaching/WorkoutTemplateViewer'
+import ExerciseTechniqueDialog, { techniquePayload } from '@/components/coaching/ExerciseTechniqueDialog'
+import type { TechniqueDraft } from '@/lib/programSessionMatrix'
 
 type Prescribed = Record<string, string | number | null | undefined>
 
@@ -461,6 +463,7 @@ function SessionContent({
 }) {
   const [notesDialogExercise, setNotesDialogExercise] = useState<SessionExercise | null>(null)
   const [notesValue, setNotesValue] = useState('')
+  const [techniqueExercise, setTechniqueExercise] = useState<SessionExercise | null>(null)
   const [availableExercises, setAvailableExercises] = useState<WorkoutViewerExercise[]>([])
   const [availableLoading, setAvailableLoading] = useState(false)
 
@@ -613,6 +616,25 @@ function SessionContent({
       prescribed: { ...(existing.prescribed || {}), [field]: value || null },
     })
     scheduleFlush()
+  }
+
+  // Técnica especial solo para este cliente en esta sesión (override): el
+  // backend la fusiona encima de la de la plantilla, y quitarla la tapa.
+  const handleSaveTechnique = async (t: TechniqueDraft) => {
+    if (!techniqueExercise) return
+    try {
+      await api.post('/admin/session-detail-update-override-technique', {
+        program_day_assignment_id: Number(programDayAssignmentId),
+        client_id: Number(clientId),
+        ...overrideIdentity(sessionExerciseKey(techniqueExercise)),
+        ...techniquePayload(t),
+      })
+      toast.success(t.key ? 'Técnica guardada para esta sesión' : 'Técnica quitada de esta sesión')
+      await refreshSession()
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo guardar la técnica')
+      throw err
+    }
   }
 
   const handleOpenNotes = (ex: SessionExercise) => {
@@ -773,6 +795,7 @@ function SessionContent({
             const original = exerciseLookup.get(ex.id)
             if (original) handleOpenNotes(original)
           }}
+          onExerciseTechnique={(ex) => setTechniqueExercise(exerciseLookup.get(ex.id) ?? null)}
           onSearchExercises={fetchAvailableExercises}
           onLoadSuggestionApprove={handleApproveSuggestion}
           onLoadSuggestionEdit={handleOpenEditSuggestion}
@@ -780,6 +803,13 @@ function SessionContent({
         />
       )}
       </div>
+
+      <ExerciseTechniqueDialog
+        exercise={techniqueExercise}
+        description='Solo para este cliente en esta sesión: la plantilla no cambia.'
+        onClose={() => setTechniqueExercise(null)}
+        onSave={handleSaveTechnique}
+      />
 
       <Dialog open={!!notesDialogExercise} onOpenChange={open => { if (!open) setNotesDialogExercise(null) }}>
         <DialogContent className='max-w-md'>

@@ -21,7 +21,9 @@ import {
   PencilIcon,
   RefreshCwIcon,
   PanelLeftIcon,
+  ZapIcon,
 } from 'lucide-react'
+import { TechniqueBadge } from '@/components/coaching/ExerciseTechniqueDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -136,6 +138,10 @@ export type WorkoutTemplateViewerProps = {
   onUpdateExerciseField?: (exercise: WorkoutViewerExercise, blockId: number, field: string, value: string) => void
   onUpdateExerciseMetrics?: (exercise: WorkoutViewerExercise, blockId: number, metrics: string[]) => void
   onExerciseNotes?: (exercise: WorkoutViewerExercise, blockId: number) => void
+  // Técnica especial del ejercicio (rest-pause, drop set...): quien pasa esto
+  // decide dónde se guarda (plantilla o solo este cliente) y abre su diálogo
+  // (ExerciseTechniqueDialog). La técnica ya puesta se ve siempre bajo el nombre.
+  onExerciseTechnique?: (exercise: WorkoutViewerExercise, blockId: number) => void
   // Sustituir ejercicio en sitio (misma fila de workout_template_exercises,
   // solo cambia exercise_id) -- conserva prescribed/enabled_metrics/notes,
   // a diferencia de "eliminar + añadir desde la biblioteca" que los perdía.
@@ -469,6 +475,7 @@ export default function WorkoutTemplateViewer({
   onUpdateExerciseField,
   onUpdateExerciseMetrics,
   onExerciseNotes,
+  onExerciseTechnique,
   onSubstituteExercise,
   onSearchExercises,
   prescribedReadOnly = false,
@@ -1004,6 +1011,7 @@ export default function WorkoutTemplateViewer({
                                     <Badge variant='secondary' className='text-[10px] px-1.5 py-0 h-4 shrink-0'>Personalizado</Badge>
                                   )}
                                 </p>
+                                {ex.prescribed?.tecnica && <TechniqueBadge prescribed={ex.prescribed} />}
                                 {ex.notes && <p className='text-xs text-muted-foreground mt-1'>Note: {ex.notes}</p>}
                                 {ex.client_note && <p className='text-xs text-blue-600 mt-1 flex items-start gap-1'><MessageSquareTextIcon className='size-3 shrink-0 mt-0.5' /> Feedback del cliente: {ex.client_note}</p>}
                               </div>
@@ -1017,6 +1025,18 @@ export default function WorkoutTemplateViewer({
                                     title='Notas del coach'
                                   >
                                     <MessageSquareTextIcon className='size-3.5' />
+                                  </Button>
+                                )}
+                                {onExerciseTechnique && !readOnly && (
+                                  <Button
+                                    variant='ghost'
+                                    size='icon'
+                                    className='size-7'
+                                    onClick={() => onExerciseTechnique(ex, block.id)}
+                                    title={ex.prescribed?.tecnica ? 'Cambiar técnica especial' : 'Técnica especial (rest-pause, drop set...)'}
+                                    aria-label='Técnica especial'
+                                  >
+                                    <ZapIcon className={cn('size-3.5', ex.prescribed?.tecnica && 'fill-violet-500 text-violet-500')} />
                                   </Button>
                                 )}
                                 {onSubstituteExercise && !readOnly && (
