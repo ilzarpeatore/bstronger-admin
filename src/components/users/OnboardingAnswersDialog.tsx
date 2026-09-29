@@ -62,7 +62,9 @@ const TRAINING_FIELDS: Field[] = [
   { key: 'training_experience_months', label: 'Experiencia entrenando (meses)', type: 'int', min: 0 },
   { key: 'training_days_per_week', label: 'Días de entrenamiento por semana', type: 'int', min: 1, max: 7 },
   { key: 'session_duration_preference', label: 'Duración de sesión preferida (min)', type: 'select', options: opts([['30', '30'], ['45', '45'], ['60', '60'], ['90', '90'], ['90_plus', 'Más de 90']]) },
-  { key: 'training_location', label: 'Dónde entrena', type: 'select', options: opts([['full_gym', 'Gimnasio completo'], ['basic_gym', 'Gimnasio básico'], ['home', 'En casa'], ['outdoor', 'Al aire libre'], ['mixed', 'Varios sitios']]) },
+  // Lugar + material en una sola respuesta (2026-09-29). Los 4 últimos valores son de la primera
+  // versión del onboarding y solo aparecen en respuestas antiguas.
+  { key: 'training_location', label: 'Dónde entrena y con qué', type: 'select', options: opts([['full_gym', 'Gimnasio completo'], ['gym_basic', 'Gimnasio con poco material'], ['gym_no_equipment', 'Gimnasio sin material'], ['home_full', 'Casa con mucho material'], ['home_basic', 'Casa con poco material'], ['home_none', 'Casa sin material'], ['basic_gym', 'Gimnasio básico (antiguo)'], ['home', 'En casa (antiguo)'], ['outdoor', 'Al aire libre (antiguo)'], ['mixed', 'Varios sitios (antiguo)']]) },
   { key: 'home_equipment', label: 'Material disponible', type: 'multi', options: opts([['dumbbells', 'Mancuernas'], ['barbell_plates', 'Barra y discos'], ['rack', 'Rack o jaula'], ['bench', 'Banco'], ['pullup_bar', 'Barra de dominadas'], ['kettlebells', 'Kettlebells'], ['bands', 'Bandas elásticas'], ['suspension', 'TRX o anillas'], ['cables', 'Poleas o máquinas'], ['cardio_machine', 'Máquina de cardio'], ['none', 'Nada (peso corporal)']]) },
   { key: 'equipment_notes', label: 'Detalles del material', type: 'text', optional: true, wide: true },
   { key: 'training_mindset', label: 'Mentalidad de entrenamiento', type: 'select', options: opts([['rushed', 'Con prisa'], ['calm', 'Tranquilo'], ['motivated', 'Motivado'], ['unmotivated', 'Desmotivado']]) },
