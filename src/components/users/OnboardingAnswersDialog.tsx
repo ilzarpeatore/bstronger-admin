@@ -45,7 +45,7 @@ const TRAINING_FIELDS: Field[] = [
   { key: 'current_routine_style', label: 'Rutina actual', type: 'select', options: opts([['improvised', 'Improvisada'], ['copied', 'Copiada'], ['structured', 'Estructurada'], ['always_same', 'Siempre la misma'], ['very_varied', 'Muy variada']]) },
   { key: 'weekly_split_preference', label: 'Split semanal preferido', type: 'select', options: opts([['upper_lower', 'Torso / pierna'], ['push_pull', 'Empuje / tirón'], ['full_body', 'Cuerpo completo'], ['no_preference', 'Sin preferencia']]) },
   { key: 'technique_level', label: 'Nivel de técnica (1-10)', type: 'int', min: 1, max: 10 },
-  { key: 'realistic_goal', label: 'Objetivo realista', type: 'text', wide: true },
+  { key: 'realistic_goal', label: 'Cómo entrenaba antes', type: 'text', wide: true },
 ]
 
 const NUTRITION_FIELDS: Field[] = [

@@ -1400,7 +1400,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Rutina actual</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.current_routine_style)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Split semanal preferido</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.weekly_split_preference)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Nivel de técnica</span><span className='font-medium'>{onboarding.training_questionnaire.technique_level ?? '—'}/10</span></div>
-                <div className='flex items-center justify-between'><span className='text-muted-foreground'>Objetivo realista</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.realistic_goal)}</span></div>
+                <div className='flex items-center justify-between'><span className='text-muted-foreground'>Cómo entrenaba antes</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.realistic_goal)}</span></div>
               </div>) : <p className='text-center text-muted-foreground text-sm py-6'>Sin respuestas del cuestionario de entrenamiento todavía</p>}
             </CardContent></Card>
 
