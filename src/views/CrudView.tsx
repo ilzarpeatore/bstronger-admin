@@ -17,7 +17,10 @@ import { TableRowsSkeleton } from '@/components/shared/skeletons'
 type CrudField = {
   name: string
   label: string
-  type?: 'text' | 'textarea' | 'select' | 'number' | 'email' | 'password' | 'file' | 'slug' | 'boolean'
+  // 'multiselect' (2026-09-30): lista de ids (p. ej. hábitos y recursos de un
+  // pack). Pide `endpoint` tal cual, sin añadir per_page, y acepta respuesta
+  // plana o paginada ({data: [...]} o {data: {data: [...]}}).
+  type?: 'text' | 'textarea' | 'select' | 'multiselect' | 'number' | 'email' | 'password' | 'file' | 'slug' | 'boolean'
   required?: boolean
   options?: { label: string; value: string }[]
   // Alternativa a `options` estático: carga las opciones desde un endpoint real
@@ -104,10 +107,10 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
     const loadFieldOptions = async () => {
       const newOptions: Record<string, { label: string; value: string | number }[]> = {}
       for (const f of fields) {
-        if (f.type === 'select' && f.endpoint) {
+        if ((f.type === 'select' || f.type === 'multiselect') && f.endpoint) {
           try {
-            const res = await api.get(`${f.endpoint}?per_page=-1`)
-            const data = res.data || res
+            const res = await api.get(f.type === 'multiselect' ? f.endpoint : `${f.endpoint}?per_page=-1`)
+            const data = f.type === 'multiselect' ? (res.data?.data ?? res.data ?? res) : (res.data || res)
             newOptions[f.name] = Array.isArray(data)
               ? data.map((item: any) => ({
                   label: item[f.optionLabel || 'title'],
@@ -119,7 +122,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
       }
       setFieldOptions(newOptions)
     }
-    if (fields.some(f => f.type === 'select' && f.endpoint)) loadFieldOptions()
+    if (fields.some(f => (f.type === 'select' || f.type === 'multiselect') && f.endpoint)) loadFieldOptions()
   }, [fields])
 
   const fetchItems = useCallback(async () => {
@@ -163,7 +166,9 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
   const openEdit = useCallback((item: any) => {
     setEditingItem(item)
     const data: Record<string, any> = {}
-    fields.forEach(f => { data[f.name] = f.type === 'boolean' ? !!item[f.name] : (item[f.name] ?? '') })
+    fields.forEach(f => {
+      data[f.name] = f.type === 'boolean' ? !!item[f.name] : f.type === 'multiselect' ? (item[f.name] ?? []) : (item[f.name] ?? '')
+    })
     setFormData(data)
     setFieldErrors({})
     setDialogOpen(true)
@@ -421,6 +426,32 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
                     checked={!!formData[field.name]}
                     onCheckedChange={v => setFormData(prev => ({ ...prev, [field.name]: v }))}
                   />
+                ) : field.type === 'multiselect' ? (
+                  <div className='flex max-h-44 flex-col gap-1.5 overflow-y-auto rounded-md border p-2'>
+                    {(field.options ?? fieldOptions[field.name] ?? []).length === 0 && (
+                      <span className='text-muted-foreground text-sm'>{field.placeholder || 'Sin opciones'}</span>
+                    )}
+                    {(field.options ?? fieldOptions[field.name] ?? []).map(opt => {
+                      const selected: (string | number)[] = Array.isArray(formData[field.name]) ? formData[field.name] : []
+                      const checked = selected.some(v => String(v) === String(opt.value))
+                      return (
+                        <label key={opt.value} className='flex items-center gap-2 text-sm'>
+                          <input
+                            type='checkbox'
+                            checked={checked}
+                            onChange={e => setFormData(prev => {
+                              const current: (string | number)[] = Array.isArray(prev[field.name]) ? prev[field.name] : []
+                              const next = e.target.checked
+                                ? [...current, opt.value]
+                                : current.filter(v => String(v) !== String(opt.value))
+                              return { ...prev, [field.name]: next }
+                            })}
+                          />
+                          {opt.label}
+                        </label>
+                      )
+                    })}
+                  </div>
                 ) : field.type === 'select' ? (
                   <Select
                     value={formData[field.name] || ''}

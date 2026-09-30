@@ -8,6 +8,10 @@ const PlanView = () => (
     fields={[
       { name: 'name', label: 'Nombre', required: true },
       { name: 'description', label: 'Descripción', type: 'textarea' },
+      // Packs vendidos en la web (bckbs/docs/PACKS_WEB.md)
+      { name: 'sold_on_web', label: 'Se vende en la web', type: 'boolean', placeholder: 'Aparece en bestronger.es/packs y se puede comprar con Stripe' },
+      { name: 'short_description', label: 'Descripción corta (web)', placeholder: 'Una frase para la tarjeta del pack' },
+      { name: 'image_url', label: 'Imagen (URL)', placeholder: 'https://…' },
       { name: 'is_active', label: 'Activo', type: 'boolean', placeholder: 'Desmarcar para desactivar el plan' },
       { name: 'is_archived', label: 'Archivado', type: 'boolean', placeholder: 'Marcar para archivar y ocultar de la venta' },
       { name: 'price', label: 'Precio', type: 'number', required: true },
@@ -52,6 +56,24 @@ const PlanView = () => (
         placeholder: 'Ninguno',
       },
       {
+        name: 'habit_template_ids',
+        label: 'Hábitos incluidos',
+        type: 'multiselect',
+        endpoint: '/admin/habit-list?templates=1',
+        optionLabel: 'title',
+        optionValue: 'id',
+        placeholder: 'No hay plantillas de hábitos',
+      },
+      {
+        name: 'resource_ids',
+        label: 'Recursos incluidos',
+        type: 'multiselect',
+        endpoint: '/admin/admin-resource-list?per_page=250',
+        optionLabel: 'title',
+        optionValue: 'id',
+        placeholder: 'No hay recursos',
+      },
+      {
         name: 'grants_full_workout_library',
         label: 'Acceso total a entrenamientos',
         type: 'boolean',
@@ -67,6 +89,11 @@ const PlanView = () => (
     columns={[
       { id: 'id', header: 'ID', accessorKey: 'id' },
       { id: 'name', header: 'Plan', accessorKey: 'name' },
+      {
+        id: 'sold_on_web',
+        header: 'Web',
+        cell: ({ row }) => row.original.sold_on_web ? <Badge variant='default'>En venta</Badge> : '—',
+      },
       { id: 'price', header: 'Precio', cell: ({ row }) => `${row.original.price} ${row.original.currency}` },
       { id: 'invoice', header: 'Facturación', cell: ({ row }) => `${row.original.invoice_period} ${row.original.invoice_interval}` },
       {

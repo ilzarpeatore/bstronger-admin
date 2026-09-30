@@ -50,6 +50,7 @@ import {
   CheckSquare,
   ShoppingCart,
   CreditCard,
+  Gift,
   MessageSquare,
   Dumbbell,
   UtensilsCrossed,
@@ -314,6 +315,12 @@ const SidebarContent: MenuItem[] = [
         name: "Suscripciones",
         icon: CreditCard,
         url: "/subscriptions",
+      },
+      {
+        id: uniqueId(),
+        name: "Compras de packs",
+        icon: Gift,
+        url: "/pack-purchases",
       },
       {
         id: uniqueId(),

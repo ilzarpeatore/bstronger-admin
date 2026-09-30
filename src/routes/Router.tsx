@@ -61,6 +61,7 @@ const Products = Loadable(lazy(() => import('../views/commerce/ProductView')));
 const ProductCategories = Loadable(lazy(() => import('../views/commerce/ProductCategoryView')));
 const Plans = Loadable(lazy(() => import('../views/commerce/PackageView')));
 const Subscriptions = Loadable(lazy(() => import('../views/commerce/SubscriptionView')));
+const PackPurchases = Loadable(lazy(() => import('../views/commerce/PackPurchasesView')));
 
 // mightyfitness settings/tasks
 const Settings = Loadable(lazy(() => import('../views/settings/SettingsView')));
@@ -239,6 +240,7 @@ const Router = [
       { path: '/product-categories', element: <ProductCategories /> },
       { path: '/plans', element: <Plans /> },
       { path: '/subscriptions', element: <Subscriptions /> },
+      { path: '/pack-purchases', element: <PackPurchases /> },
       { path: '/revenue', element: <Navigate to="/subscriptions" replace /> },
       { path: '/transactions', element: <Navigate to="/subscriptions" replace /> },
 
