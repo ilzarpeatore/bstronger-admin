@@ -1,4 +1,4 @@
-import { LifeBuoy, BookOpen } from 'lucide-react';
+import { LifeBuoy } from 'lucide-react';
 import { Link } from 'react-router';
 import { SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarGroupContent, SidebarGroup } from "@/components/ui/sidebar"
 
@@ -7,13 +7,8 @@ export function NavUser() {
     const navItems = [
         {
             title: "Centro de ayuda",
-            url: "https://demos.shadcndashboard.dev/theme-pages/faq",
+            url: "https://bestronger.es/contacto",
             icon: LifeBuoy,
-        },
-        {
-            title: "Documentación",
-            url: "https://shadcndashboard.dev/docs",
-            icon: BookOpen,
         },
     ]
 
