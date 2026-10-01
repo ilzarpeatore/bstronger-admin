@@ -12,13 +12,13 @@ import { PERMISSIONS } from '../constants/permissions';
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
 
-// mightyfitness auth
+// auth
 const Login = Loadable(lazy(() => import('../views/authentication/login')));
 
-// mightyfitness dashboard
+// dashboard
 const Dashboard = Loadable(lazy(() => import('../views/dashboard')));
 
-// mightyfitness users/security
+// users/security
 const Users = Loadable(lazy(() => import('../views/users/UsersView')));
 const PersonalClientInvites = Loadable(lazy(() => import('../views/users/PersonalClientInvitesView')));
 const OnboardingList = Loadable(lazy(() => import('../views/users/OnboardingListView')));
@@ -31,7 +31,7 @@ const LoginDevices = Loadable(lazy(() => import('../views/security/LoginDevicesV
 const AuditLog = Loadable(lazy(() => import('../views/security/AuditLogView')));
 const TwoFactor = Loadable(lazy(() => import('../views/security/TwoFactorView')));
 
-// mightyfitness fitness library
+// fitness library
 const Exercises = Loadable(lazy(() => import('../views/fitness/ExerciseView')));
 const BodyParts = Loadable(lazy(() => import('../views/fitness/BodyPartView')));
 const Equipment = Loadable(lazy(() => import('../views/fitness/EquipmentView')));
@@ -42,7 +42,7 @@ const WorkoutTypes = Loadable(lazy(() => import('../views/fitness/WorkoutTypeVie
 const Workouts = Loadable(lazy(() => import('../views/fitness/WorkoutView')));
 const Tags = Loadable(lazy(() => import('../views/fitness/TagsView')));
 
-// mightyfitness diet/recipes
+// diet/recipes
 const DietMealItems = Loadable(lazy(() => import('../views/diet/DietMealItemsView')));
 // Catálogo de dietas de la app (tabla `diets`, lo que lista DietList en la app). `/diets` son las plantillas de menú.
 const LegacyDiets = Loadable(lazy(() => import('../views/diet/DietView')));
@@ -56,7 +56,7 @@ const MeasurementUnits = Loadable(lazy(() => import('../views/recipes/Measuremen
 const UnitConversions = Loadable(lazy(() => import('../views/recipes/UnitConversionView')));
 const AssignDiets = Loadable(lazy(() => import('../views/assignments/AssignDietView')));
 
-// mightyfitness commerce
+// commerce
 const Products = Loadable(lazy(() => import('../views/commerce/ProductView')));
 const ProductCategories = Loadable(lazy(() => import('../views/commerce/ProductCategoryView')));
 const Plans = Loadable(lazy(() => import('../views/commerce/PackageView')));
@@ -68,12 +68,12 @@ const AbandonedCarts = Loadable(lazy(() => import('../views/marketing/AbandonedC
 const Newsletter = Loadable(lazy(() => import('../views/marketing/NewsletterView')));
 const ContactMessages = Loadable(lazy(() => import('../views/marketing/ContactMessagesView')));
 
-// mightyfitness settings/tasks
+// settings/tasks
 const Settings = Loadable(lazy(() => import('../views/settings/SettingsView')));
 const AppSettings = Loadable(lazy(() => import('../views/settings/AppSettingsView')));
 const Tasks = Loadable(lazy(() => import('../views/tasks/TasksView')));
 
-// mightyfitness coaching/community/assignments
+// coaching/community/assignments
 const AssignWorkouts = Loadable(lazy(() => import('../views/assignments/AssignWorkoutView')));
 const Informes = Loadable(lazy(() => import('../views/reports')));
 const ClientCalendar = Loadable(lazy(() => import('../views/coaching/ClientCalendarView')));
@@ -105,7 +105,7 @@ const ProgressionDecisions = Loadable(lazy(() => import('../views/coaching/Progr
 // enlazaba a /coach-exceptions sin que esa ruta existiera.
 const CoachExceptions = Loadable(lazy(() => import('../views/coaching/CoachExceptionsView')));
 
-// mightyfitness content
+// content
 const Quotes = Loadable(lazy(() => import('../views/content/QuotesView')));
 const BannerSliders = Loadable(lazy(() => import('../views/content/BannerSliderView')));
 const PushNotifications = Loadable(lazy(() => import('../views/content/PushNotificationView')));

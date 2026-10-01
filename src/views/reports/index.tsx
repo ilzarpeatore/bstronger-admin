@@ -64,7 +64,7 @@ export default function ReportsView() {
   const [loading, setLoading] = useState(false)
 
   // FIX (auditoría 2026-09-13): "Gimnasio" y "Programa" eran filtros de la
-  // plantilla original (MightyFitness, nombres inventados) sin aplicación
+  // plantilla original (nombres inventados) sin aplicación
   // en este negocio (servicio presencial 1:1, no cadena de gimnasios) --
   // quitados. "Coach" ahora carga la lista real (mismo endpoint que
   // CoachExceptionsView) y el backend sí filtra por coach_id.

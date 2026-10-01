@@ -78,7 +78,7 @@ const LoginForm = () => {
 
         <Field>
           <Button className="w-full" type="submit" disabled={loading}>
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión en MightyFitness'}
+            {loading ? 'Iniciando sesión...' : 'Iniciar sesión en Be Stronger'}
           </Button>
         </Field>
       </FieldGroup>

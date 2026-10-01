@@ -26,7 +26,7 @@ type Plan = {
   prorate_extend_due: number | null
   active_subscribers_limit: number | null
   sort_order: number
-  // MightyFitness extensions
+  // Extensiones propias sobre la plantilla original
   training_program_id: number | null
   meal_plan_template_id: number | null
   grants_full_workout_library: boolean

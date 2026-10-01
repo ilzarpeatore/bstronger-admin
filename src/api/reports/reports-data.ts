@@ -38,7 +38,7 @@ const coaches = [
   { id: 3, name: 'Luis Rodríguez' },
   { id: 4, name: 'María López' },
 ]
-const gyms = ['MightyFitness Central', 'MightyFitness Norte', 'MightyFitness Sur', 'Online']
+const gyms = ['Be Stronger Central', 'Be Stronger Norte', 'Be Stronger Sur', 'Online']
 const programs = ['Premium', 'Básico', 'Pro', 'Elite']
 const clients = Array.from({ length: 120 }, (_, i) => ({
   id: i + 1,
@@ -135,9 +135,9 @@ export const ReportsHandlers = [
         ]
       : groupBy === 'gym'
         ? [
-            { label: 'MightyFitness Central', value: 42 },
-            { label: 'MightyFitness Norte', value: 35 },
-            { label: 'MightyFitness Sur', value: 28 },
+            { label: 'Be Stronger Central', value: 42 },
+            { label: 'Be Stronger Norte', value: 35 },
+            { label: 'Be Stronger Sur', value: 28 },
             { label: 'Online', value: 37 },
           ]
         : groupBy === 'coach'
