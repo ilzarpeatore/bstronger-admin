@@ -63,6 +63,10 @@ const Plans = Loadable(lazy(() => import('../views/commerce/PackageView')));
 const Subscriptions = Loadable(lazy(() => import('../views/commerce/SubscriptionView')));
 const PackPurchases = Loadable(lazy(() => import('../views/commerce/PackPurchasesView')));
 const Packs = Loadable(lazy(() => import('../views/commerce/packs/PacksView')));
+const WebAnalytics = Loadable(lazy(() => import('../views/marketing/WebAnalyticsView')));
+const AbandonedCarts = Loadable(lazy(() => import('../views/marketing/AbandonedCartsView')));
+const Newsletter = Loadable(lazy(() => import('../views/marketing/NewsletterView')));
+const ContactMessages = Loadable(lazy(() => import('../views/marketing/ContactMessagesView')));
 
 // mightyfitness settings/tasks
 const Settings = Loadable(lazy(() => import('../views/settings/SettingsView')));
@@ -243,6 +247,10 @@ const Router = [
       { path: '/subscriptions', element: <Subscriptions /> },
       { path: '/packs', element: <Packs /> },
       { path: '/pack-purchases', element: <PackPurchases /> },
+      { path: '/analytics', element: <WebAnalytics /> },
+      { path: '/abandoned-carts', element: <AbandonedCarts /> },
+      { path: '/newsletter', element: <Newsletter /> },
+      { path: '/contact-messages', element: <ContactMessages /> },
       { path: '/revenue', element: <Navigate to="/subscriptions" replace /> },
       { path: '/transactions', element: <Navigate to="/subscriptions" replace /> },
 
