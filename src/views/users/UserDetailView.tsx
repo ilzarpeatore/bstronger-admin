@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router'
 import WorkoutPreviewModal from '@/components/coaching/WorkoutPreviewModal'
 import { useProgramSessionEditor, distinctPrograms } from '@/components/coaching/useProgramSessionEditor'
 import OnboardingAnswersDialog, { type OnboardingSection } from '@/components/users/OnboardingAnswersDialog'
+import OnboardingExtraFields from '@/components/users/OnboardingExtraFields'
 import ClientCoachSelector from '@/components/users/ClientCoachSelector'
 import { SessionDetailModal } from '@/views/coaching/SessionDetailView'
 import HabitDialog from '@/components/coaching/HabitDialog'
@@ -93,9 +94,9 @@ type ClientBodyMetric = { id: number; client_id: number; metric_type: string; va
 type BodyMetricChart = { unit: string | null; data: { value: number; date: string; notes: string | null }[] }
 type TaskItem = { id: number; author_id: number; client_id: number | null; title: string; description: string | null; due_date: string | null; priority: string; status: string; created_at: string; author?: { id: number; first_name: string; last_name: string }; client?: { id: number; first_name: string; last_name: string } | null }
 type ResourceItem = { id: number; coach_id: number; title: string; type: string; content: string | null; external_url: string | null; scope: string; created_at: string; coach?: { id: number; first_name: string; last_name: string }; assigned_clients?: { id: number; first_name?: string; last_name?: string; email?: string }[] }
-type ParQAnswers = { parq_heart_condition: boolean | null; parq_chest_pain_activity: boolean | null; parq_chest_pain_rest_last_month: boolean | null; parq_dizziness_balance: boolean | null; parq_bone_joint_problem: boolean | null; parq_bp_or_heart_medication: boolean | null; parq_reason_not_to_exercise: boolean | null; parq_fitness_level: number | null; parq_medical_history: string | null; parq_goals: string | null }
-type TrainingQuestionnaireAnswers = { goal_type: string | null; activity_level: string | null; lifestyle_type: string | null; training_experience_months: number | null; training_days_per_week: number | null; session_duration_preference: string | null; training_mindset: string | null; previous_coaching: string | null; current_routine_style: string | null; weekly_split_preference: string | null; technique_level: number | null; realistic_goal: string | null }
-type NutritionQuestionnaireAnswers = { allergies_intolerances: string | null; medications?: string | null; supplements?: string | null; disliked_foods: string | null; liked_foods: string | null; current_meals_per_day: number | null; desired_meals_per_day: number | null; typical_day_meals: string | null; favorite_meats: string | null; favorite_fish: string | null; favorite_fruits_vegetables: string | null; favorite_combined_dishes: string | null }
+type ParQAnswers = { parq_heart_condition: boolean | null; parq_chest_pain_activity: boolean | null; parq_chest_pain_rest_last_month: boolean | null; parq_dizziness_balance: boolean | null; parq_bone_joint_problem: boolean | null; parq_bp_or_heart_medication: boolean | null; parq_reason_not_to_exercise: boolean | null; parq_fitness_level: number | null; parq_medical_history: string | null; parq_goals: string | null } & Record<string, unknown>
+type TrainingQuestionnaireAnswers = { goal_type: string | null; activity_level: string | null; lifestyle_type: string | null; training_experience_months: number | null; training_days_per_week: number | null; session_duration_preference: string | null; training_mindset: string | null; previous_coaching: string | null; current_routine_style: string | null; weekly_split_preference: string | null; technique_level: number | null; realistic_goal: string | null } & Record<string, unknown>
+type NutritionQuestionnaireAnswers = { allergies_intolerances: string | null; medications?: string | null; supplements?: string | null; disliked_foods: string | null; liked_foods: string | null; current_meals_per_day: number | null; desired_meals_per_day: number | null; typical_day_meals: string | null; favorite_meats: string | null; favorite_fish: string | null; favorite_fruits_vegetables: string | null; favorite_combined_dishes: string | null } & Record<string, unknown>
 type OnboardingDetail = { gender?: string | null; flagged_for_review: boolean; flagged_for_review_at: string | null; onboarding_completed: boolean; onboarding_completed_at: string | null; par_q: ParQAnswers | null; training_questionnaire: TrainingQuestionnaireAnswers | null; nutrition_questionnaire: NutritionQuestionnaireAnswers | null }
 
 // Feed de logros (achievement_events) -- historial de hitos detectados por el
@@ -1369,7 +1370,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
           {onboardingLoading ? <div className='flex justify-center py-12'><div className='h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent' /></div> : onboarding ? (<>
             <Card><CardContent className='pt-4 flex flex-wrap items-center gap-4'>
               <div className='flex items-center gap-2'><span className='text-sm text-muted-foreground'>Estado:</span><Badge variant={onboarding.onboarding_completed ? 'default' : 'secondary'}>{onboarding.onboarding_completed ? 'Completado' : 'Pendiente'}</Badge>{onboarding.onboarding_completed_at && <span className='text-xs text-muted-foreground'>{new Date(onboarding.onboarding_completed_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}</div>
-              {onboarding.flagged_for_review && <div className='flex items-center gap-2'><Badge variant='destructive' className='gap-1'><AlertTriangleIcon className='size-3' /> Marcado para revisión (riesgo cardíaco PAR-Q)</Badge>{onboarding.flagged_for_review_at && <span className='text-xs text-muted-foreground'>{new Date(onboarding.flagged_for_review_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}</div>}
+              {onboarding.flagged_for_review && <div className='flex items-center gap-2'><Badge variant='destructive' className='gap-1'><AlertTriangleIcon className='size-3' /> Marcado para revisión (PAR-Q)</Badge>{onboarding.flagged_for_review_at && <span className='text-xs text-muted-foreground'>{new Date(onboarding.flagged_for_review_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}</div>}
             </CardContent></Card>
 
             <Card><CardHeader className='flex flex-row items-center justify-between gap-2'><CardTitle className='text-base flex items-center gap-2'><HeartIcon className='size-4' /> PAR-Q (cuestionario de salud)</CardTitle><Button variant='outline' size='sm' onClick={() => setOnbEdit('par_q')}><PencilIcon className='size-3.5 mr-1' /> Editar</Button></CardHeader><CardContent>
@@ -1384,6 +1385,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Nivel de forma física autopercibido</span><span className='font-medium'>{onboarding.par_q.parq_fitness_level ?? '—'}/10</span></div>
                 {onboarding.par_q.parq_medical_history && <div className='sm:col-span-2 pt-2 border-t'><p className='text-muted-foreground mb-1'>Historial médico</p><p className='whitespace-pre-wrap'>{onboarding.par_q.parq_medical_history}</p></div>}
                 {onboarding.par_q.parq_goals && <div className='sm:col-span-2 pt-2 border-t'><p className='text-muted-foreground mb-1'>Objetivos</p><p className='whitespace-pre-wrap'>{onboarding.par_q.parq_goals}</p></div>}
+                <OnboardingExtraFields section='par_q' data={onboarding.par_q} />
               </div>) : <p className='text-center text-muted-foreground text-sm py-6'>Sin respuestas de PAR-Q todavía</p>}
             </CardContent></Card>
 
@@ -1400,7 +1402,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Rutina actual</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.current_routine_style)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Split semanal preferido</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.weekly_split_preference)}</span></div>
                 <div className='flex items-center justify-between'><span className='text-muted-foreground'>Nivel de técnica</span><span className='font-medium'>{onboarding.training_questionnaire.technique_level ?? '—'}/10</span></div>
-                <div className='flex items-center justify-between'><span className='text-muted-foreground'>Objetivo realista</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.realistic_goal)}</span></div>
+                <div className='flex items-center justify-between'><span className='text-muted-foreground'>Cómo entrenaba antes</span><span className='font-medium'>{prettify(onboarding.training_questionnaire.realistic_goal)}</span></div>
+                <OnboardingExtraFields section='training' data={onboarding.training_questionnaire} />
               </div>) : <p className='text-center text-muted-foreground text-sm py-6'>Sin respuestas del cuestionario de entrenamiento todavía</p>}
             </CardContent></Card>
 
@@ -1418,6 +1421,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                 {onboarding.nutrition_questionnaire.favorite_fish && <div><p className='text-muted-foreground mb-1'>Pescados favoritos</p><p className='whitespace-pre-wrap'>{onboarding.nutrition_questionnaire.favorite_fish}</p></div>}
                 {onboarding.nutrition_questionnaire.favorite_fruits_vegetables && <div><p className='text-muted-foreground mb-1'>Frutas/verduras favoritas</p><p className='whitespace-pre-wrap'>{onboarding.nutrition_questionnaire.favorite_fruits_vegetables}</p></div>}
                 {onboarding.nutrition_questionnaire.favorite_combined_dishes && <div><p className='text-muted-foreground mb-1'>Platos combinados favoritos</p><p className='whitespace-pre-wrap'>{onboarding.nutrition_questionnaire.favorite_combined_dishes}</p></div>}
+                <OnboardingExtraFields section='nutrition' data={onboarding.nutrition_questionnaire} />
               </div>) : <p className='text-center text-muted-foreground text-sm py-6'>Sin respuestas del cuestionario de nutrición todavía</p>}
             </CardContent></Card>
           </>) : <p className='text-center text-muted-foreground text-sm py-12'>No se pudo cargar el onboarding</p>}
