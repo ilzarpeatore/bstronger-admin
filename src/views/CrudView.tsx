@@ -49,6 +49,9 @@ type CrudViewProps = {
   columns: ColumnDef<any, any>[]
   paginated?: boolean
   filters?: FilterConfig[]
+  // Parámetros fijos del listado (p. ej. { is_pack: '0' } en Planes): solo
+  // filtran el GET, no se mandan al crear/editar.
+  listParams?: Record<string, string>
 }
 
 type Pagination = {
@@ -59,8 +62,9 @@ type Pagination = {
 }
 
 const EMPTY_FILTERS: FilterConfig[] = []
+const EMPTY_PARAMS: Record<string, string> = {}
 
-export default function CrudView({ title, endpoint, fields, columns, paginated = false, filters = EMPTY_FILTERS }: CrudViewProps) {
+export default function CrudView({ title, endpoint, fields, columns, paginated = false, filters = EMPTY_FILTERS, listParams = EMPTY_PARAMS }: CrudViewProps) {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -128,7 +132,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
   const fetchItems = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
+      const params = new URLSearchParams(listParams)
       if (paginated) {
         params.set('per_page', String(perPage))
         params.set('page', String(page))
@@ -147,7 +151,7 @@ export default function CrudView({ title, endpoint, fields, columns, paginated =
     } finally {
       setLoading(false)
     }
-  }, [endpoint, search, paginated, perPage, page, filterValues, filters])
+  }, [endpoint, search, paginated, perPage, page, filterValues, filters, listParams])
 
   useEffect(() => { fetchItems() }, [fetchItems])
 

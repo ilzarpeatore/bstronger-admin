@@ -1,17 +1,18 @@
 import CrudView from '@/views/CrudView'
 import { Badge } from '@/components/ui/badge'
 
+// Solo planes de suscripción: los packs de pago único tienen su propia
+// página (PacksView, /packs) con un formulario sin campos de facturación.
+const PLAN_LIST_PARAMS = { is_pack: '0' }
+
 const PlanView = () => (
   <CrudView
     title='Planes'
     endpoint='/admin/plans'
+    listParams={PLAN_LIST_PARAMS}
     fields={[
       { name: 'name', label: 'Nombre', required: true },
       { name: 'description', label: 'Descripción', type: 'textarea' },
-      // Packs vendidos en la web (bckbs/docs/PACKS_WEB.md)
-      { name: 'sold_on_web', label: 'Se vende en la web', type: 'boolean', placeholder: 'Aparece en bestronger.es/packs y se puede comprar con Stripe' },
-      { name: 'short_description', label: 'Descripción corta (web)', placeholder: 'Una frase para la tarjeta del pack' },
-      { name: 'image_url', label: 'Imagen (URL)', placeholder: 'https://…' },
       { name: 'is_active', label: 'Activo', type: 'boolean', placeholder: 'Desmarcar para desactivar el plan' },
       { name: 'is_archived', label: 'Archivado', type: 'boolean', placeholder: 'Marcar para archivar y ocultar de la venta' },
       { name: 'price', label: 'Precio', type: 'number', required: true },
@@ -89,11 +90,6 @@ const PlanView = () => (
     columns={[
       { id: 'id', header: 'ID', accessorKey: 'id' },
       { id: 'name', header: 'Plan', accessorKey: 'name' },
-      {
-        id: 'sold_on_web',
-        header: 'Web',
-        cell: ({ row }) => row.original.sold_on_web ? <Badge variant='default'>En venta</Badge> : '—',
-      },
       { id: 'price', header: 'Precio', cell: ({ row }) => `${row.original.price} ${row.original.currency}` },
       { id: 'invoice', header: 'Facturación', cell: ({ row }) => `${row.original.invoice_period} ${row.original.invoice_interval}` },
       {

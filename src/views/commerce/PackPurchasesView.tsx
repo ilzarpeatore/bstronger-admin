@@ -44,6 +44,7 @@ type PackPurchase = {
   redeem_code: string
   user: { id: number; name: string; email: string } | null
   started: boolean
+  reminders_sent?: number
   claimed_at: string | null
   created_at: string | null
 }
@@ -215,6 +216,10 @@ export default function PackPurchasesView() {
                           {p.started ? 'Pack activo' : 'Empieza al terminar el cuestionario'}
                         </div>
                       </div>
+                    ) : p.status === 'paid' ? (
+                      <span className="text-xs text-muted-foreground">
+                        Sin registrar{p.reminders_sent ? ` · ${p.reminders_sent} recordatorio${p.reminders_sent > 1 ? 's' : ''}` : ''}
+                      </span>
                     ) : (
                       '—'
                     )}
