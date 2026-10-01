@@ -1,10 +1,15 @@
 import CrudView from '@/views/CrudView'
 import { Badge } from '@/components/ui/badge'
 
+// Solo planes de suscripción: los packs de pago único tienen su propia
+// página (PacksView, /packs) con un formulario sin campos de facturación.
+const PLAN_LIST_PARAMS = { is_pack: '0' }
+
 const PlanView = () => (
   <CrudView
     title='Planes'
     endpoint='/admin/plans'
+    listParams={PLAN_LIST_PARAMS}
     fields={[
       { name: 'name', label: 'Nombre', required: true },
       { name: 'description', label: 'Descripción', type: 'textarea' },
@@ -50,6 +55,24 @@ const PlanView = () => (
         optionLabel: 'title',
         optionValue: 'id',
         placeholder: 'Ninguno',
+      },
+      {
+        name: 'habit_template_ids',
+        label: 'Hábitos incluidos',
+        type: 'multiselect',
+        endpoint: '/admin/habit-list?templates=1',
+        optionLabel: 'title',
+        optionValue: 'id',
+        placeholder: 'No hay plantillas de hábitos',
+      },
+      {
+        name: 'resource_ids',
+        label: 'Recursos incluidos',
+        type: 'multiselect',
+        endpoint: '/admin/admin-resource-list?per_page=250',
+        optionLabel: 'title',
+        optionValue: 'id',
+        placeholder: 'No hay recursos',
       },
       {
         name: 'grants_full_workout_library',
