@@ -17,7 +17,6 @@ import { Mailbox } from 'lucide-react';
 import { profileDD } from "./data";
 import { Link, useNavigate } from "react-router";
 import avatar from '@/assets/images/profile/avtar.webp';
-import Buynow from '@/assets/images/backgrounds/sidebarbuynow.svg';
 import { useAuth } from "@/context/auth-context/AuthContext";
 
 export default function ProfileSheet() {
@@ -113,21 +112,6 @@ export default function ProfileSheet() {
         <SheetFooter className="px-0 pb-6">
           <div className="border-t border-border w-full">
             <div className="rounded-sm pt-6 flex flex-col justify-center items-center gap-3">
-              <div>
-                <img
-                  src={Buynow}
-                  alt="login-bg"
-                />
-              </div>
-
-              <div className="text-center">
-                <h5 className="text-xl font-semibold">
-                  Consigue el panel ShadcnDashboard
-                </h5>
-                <p className="text-sm text-muted-foreground">
-                  Personaliza tu panel de control
-                </p>
-              </div>
 
               <Button
                 variant="secondary"

@@ -59,7 +59,7 @@ const AuthLogin = () => {
 
         <div className="text-center flex flex-col gap-1">
           <p className="text-2xl font-medium text-foreground">
-            Bienvenido a ShadcnDashboard
+            Bienvenido a Be Stronger
           </p>
           <p className="text-sm font-normal text-muted-foreground">
             Inicia sesión en tu cuenta ahora

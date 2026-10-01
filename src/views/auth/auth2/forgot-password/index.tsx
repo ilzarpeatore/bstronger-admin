@@ -33,7 +33,7 @@ const BoxedForgotpwd = () => {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="example@shadcndashboard.com"
+                    placeholder="example@bestronger.es"
 
                     required
                   />

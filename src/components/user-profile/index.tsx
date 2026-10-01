@@ -1,7 +1,7 @@
 
 // FIX (auditoría 2026-09-13): esta página era 100% mock -- datos de la
 // plantilla original (Mathew Anderson, redes sociales de wrappixel/
-// shadcndashboard) que nunca se cargaban del backend, y "Guardar" solo
+// plantilla original) que nunca se cargaban del backend, y "Guardar" solo
 // actualizaba estado local en memoria (se perdía al recargar). El backend
 // real (Admin\AuthController) ya tenía GET /admin/me, POST
 // /admin/update-profile y POST /admin/change-password -- solo faltaba
