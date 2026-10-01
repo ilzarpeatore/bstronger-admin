@@ -80,6 +80,23 @@ export const api = {
 
   delete: <T = any>(endpoint: string) => apiFetch<T>(endpoint, { method: 'DELETE' }),
 
+  /** Descarga un fichero (p. ej. CSV) autenticado y lo guarda con `filename`. */
+  download: async (endpoint: string, filename: string) => {
+    const token = getToken()
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      throw new ApiError(response.status, await response.json().catch(() => null))
+    }
+    const url = URL.createObjectURL(await response.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
   upload: <T = any>(endpoint: string, formData: FormData, method: 'POST' | 'PUT' = 'POST') => {
     if (method === 'PUT') {
       formData.append('_method', 'PUT')

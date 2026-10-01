@@ -77,6 +77,10 @@ import {
   ArrowLeftRight,
   History,
   AlertTriangle,
+  TrendingUp,
+  ShoppingBasket,
+  Mail,
+  Inbox,
   LucideIcon,
 } from "lucide-react"
 
@@ -290,6 +294,35 @@ const SidebarContent: MenuItem[] = [
         name: "Horarios de clases",
         icon: Calendar,
         url: "/class-schedules",
+      },
+    ],
+  },
+  {
+    heading: "Marketing",
+    items: [
+      {
+        id: uniqueId(),
+        name: "Analítica web",
+        icon: TrendingUp,
+        url: "/analytics",
+      },
+      {
+        id: uniqueId(),
+        name: "Cestas abandonadas",
+        icon: ShoppingBasket,
+        url: "/abandoned-carts",
+      },
+      {
+        id: uniqueId(),
+        name: "Newsletter",
+        icon: Mail,
+        url: "/newsletter",
+      },
+      {
+        id: uniqueId(),
+        name: "Mensajes de contacto",
+        icon: Inbox,
+        url: "/contact-messages",
       },
     ],
   },
