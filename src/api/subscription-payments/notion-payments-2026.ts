@@ -27,7 +27,3 @@ export const notionPayments2026: NotionPaymentClient[] = [
   { name: 'Usama El Moukhlofi', monthly_fee: 65, months: {} },
 ]
 
-// Compara nombres sin tildes, mayúsculas ni espacios de más.
-export function normalizeName(name: string) {
-  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
-}
