@@ -1,7 +1,7 @@
 import { fuzzyMatch } from '@/lib/textSearch'
 
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon, Table2Icon as TableIcon } from 'lucide-react'
+import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon, LayersIcon, Table2Icon as TableIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -265,6 +265,9 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   // (mismo gesto que el "Calendario del programa" de /training-programs/:id).
   const [calSelected, setCalSelected] = useState<number[]>([])
   const [calBulkBusy, setCalBulkBusy] = useState(false)
+  // Días desplegados: los que tienen más de un entrenamiento asignado y el
+  // coach ha abierto para verlos (y quitar) uno a uno.
+  const [calExpandedDays, setCalExpandedDays] = useState<string[]>([])
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewTemplateId, setPreviewTemplateId] = useState<number>(0)
   const [trainingSubTab, setTrainingSubTab] = useState<'calendar' | 'history' | 'completed' | 'feedback' | 'volume' | 'adherence'>('calendar')
@@ -437,13 +440,20 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   useEffect(() => { if (activeTab !== 'overview') fetchTabData(activeTab) }, [activeTab, fetchTabData])
   useEffect(() => { if (activeTab === 'overview') Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchReadinessScores(), fetchAchievementEvents()]) }, [activeTab, fetchNotes, fetchAssignedForms, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchPhotos, fetchBodyMetricTypes, fetchReadinessScores, fetchAchievementEvents])
   useEffect(() => { if (activeTab === 'training') fetchCalendar() }, [calYear, calMonth, fetchCalendar, activeTab])
-  // La selección múltiple solo vive sobre lo que está cargado: al cambiar de
-  // mes, o al recargar tras quitar sesiones, se descarta lo que ya no está.
+  // La selección y los días desplegados solo viven sobre lo que está cargado:
+  // al cambiar de mes, o al recargar tras quitar sesiones, se descarta lo que
+  // ya no está (un día que se queda con una sola sesión deja de desplegarse).
   useEffect(() => {
     setCalSelected(prev => {
       if (prev.length === 0) return prev
       const visible = new Set(calDays.flatMap(d => d.workouts.map(w => w.assignment_id)))
       const next = prev.filter(id => visible.has(id))
+      return next.length === prev.length ? prev : next
+    })
+    setCalExpandedDays(prev => {
+      if (prev.length === 0) return prev
+      const withSeveral = new Set(calDays.filter(d => d.workouts.length > 1).map(d => d.date))
+      const next = prev.filter(d => withSeveral.has(d))
       return next.length === prev.length ? prev : next
     })
   }, [calDays])
@@ -778,21 +788,23 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const activeLimitations = limitations.filter(l => l.status === 'active')
   const latestPhotos = photos.slice(0, 4)
 
-  // Realizado = el mismo criterio con el que se pinta en verde: por asignación,
-  // por plantilla+día, o porque el cliente cerró ese día. Es también lo que no
-  // se puede quitar del calendario (el backend lo vuelve a comprobar).
+  const workoutsOn = (dateStr: string) => calDayMap.get(dateStr)?.workouts || []
+
+  // Realizado = el mismo criterio con el que se pinta en verde. El tercer caso
+  // (el cliente cerró ese día pero la reseña no dice cuál sesión era) solo
+  // vale si ese día tiene UNA sola sesión: con varias no se puede saber a cuál
+  // se refiere, y dar por hechas las otras escondería lo que queda pendiente.
+  // El backend aplica exactamente la misma regla antes de borrar nada.
   const isWorkoutDone = (workout: CalendarWorkout, dateStr: string) =>
     completedAssignments.has(workout.assignment_id)
     || (!!workout.id && completedByTemplate.has(`${dateStr}|${workout.id}`))
-    || completedByDate.has(dateStr)
+    || (completedByDate.has(dateStr) && workoutsOn(dateStr).length === 1)
 
   /** assignment_id de las sesiones PENDIENTES de esos días (lo vaciable). */
   const pendingIdsOn = (dates: string[]) => dates.flatMap(d =>
-    (calDayMap.get(d)?.workouts || []).filter(w => !isWorkoutDone(w, d)).map(w => w.assignment_id))
+    workoutsOn(d).filter(w => !isWorkoutDone(w, d)).map(w => w.assignment_id))
 
-  const renderCalendarDay = ({ date: dateStr }: CalendarDayContext) => {
-    const workout = calDayMap.get(dateStr)?.workouts?.[0]
-    if (!workout) return <CalendarAddButton onClick={() => { setAssignDate(dateStr); setAssignTemplateId(''); setAssignDialogOpen(true) }} />
+  const renderWorkoutCard = (workout: CalendarWorkout, dateStr: string) => {
     const isCompleted = isWorkoutDone(workout, dateStr)
     const open = () => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }
     // Finalizada pero sin ninguna serie apuntada: se avisa en el propio calendario
@@ -800,11 +812,13 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
     const completedNoLogs = isCompleted && completedSessions.some(s => s.program_day_assignment_id === workout.assignment_id && s.has_logs === false)
     return (
       <CalendarWorkoutCard
+        key={workout.assignment_id}
         title={workout.title}
         thumbnail={workout.thumbnail}
         exerciseCount={workout.exercise_count}
         completed={isCompleted}
         completedNote={completedNoLogs ? 'Sin series registradas' : undefined}
+        subtitle={workout.program_title}
         draggable
         onDragStart={(e) => handleCalDragStart(e, workout.assignment_id)}
         onOpen={open}
@@ -824,6 +838,36 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
           <DropdownMenuItem onClick={() => handleRemoveAssignment(workout.assignment_id)} className='text-destructive focus:text-destructive'><XIcon className='size-3 mr-1.5' /> Quitar</DropdownMenuItem>
         </>}
       />
+    )
+  }
+
+  // Un día puede tener varias sesiones (p. ej. la del programa + una suelta del
+  // calendario personal). Plegado se ve solo la primera, con el contador en la
+  // cabecera del día (renderCalendarDayExtra); desplegado se ven todas, cada
+  // una con su checkbox y su menú para quitarla por separado.
+  const renderCalendarDay = ({ date: dateStr }: CalendarDayContext) => {
+    const workouts = workoutsOn(dateStr)
+    if (workouts.length === 0) return <CalendarAddButton onClick={() => { setAssignDate(dateStr); setAssignTemplateId(''); setAssignDialogOpen(true) }} />
+    if (workouts.length === 1 || !calExpandedDays.includes(dateStr)) return renderWorkoutCard(workouts[0], dateStr)
+    return <div className='flex flex-col gap-1.5'>{workouts.map(w => renderWorkoutCard(w, dateStr))}</div>
+  }
+
+  /** El contador «N» junto al número del día, que despliega y pliega el día. */
+  const renderCalendarDayExtra = ({ date: dateStr }: CalendarDayContext) => {
+    const total = workoutsOn(dateStr).length
+    if (total < 2) return null
+    const expanded = calExpandedDays.includes(dateStr)
+    return (
+      <button
+        type='button'
+        title={expanded ? 'Plegar el día' : `${total} entrenamientos este día — pulsa para verlos todos`}
+        aria-expanded={expanded}
+        aria-label={`${total} entrenamientos el ${dateStr}`}
+        className={cn('flex items-center gap-0.5 rounded-full border px-1.5 text-[9px] font-semibold leading-4 transition-colors', expanded ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted hover:bg-primary/10 hover:text-primary')}
+        onClick={(e) => { e.stopPropagation(); setCalExpandedDays(prev => expanded ? prev.filter(d => d !== dateStr) : [...prev, dateStr]) }}
+      >
+        <LayersIcon className='size-2.5' />{total}
+      </button>
     )
   }
 
@@ -1052,6 +1096,7 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                     <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border bg-card' /> Pendiente</span>
                   </>}
                   renderDay={renderCalendarDay}
+                  dayHeaderExtra={renderCalendarDayExtra}
                   weekHeader={({ dates }) => {
                     // Solo lo PENDIENTE de esta semana: es lo único que se
                     // puede seleccionar o vaciar (lo realizado no se toca).
