@@ -36,15 +36,20 @@ type WorkoutCardProps = {
   onOpen: () => void
   /** Contenido del menú "⋮" (DropdownMenuItem...). Sin menu no se pinta el botón. */
   menu?: ReactNode
+  /**
+   * Checkbox de selección múltiple, flotando sobre la miniatura (mismo sitio
+   * que en el "Calendario del programa"). El clic no llega a `onOpen`.
+   */
+  selection?: ReactNode
 }
 
 /** Tarjeta de sesión de entrenamiento de un día (miniatura, título, ejercicios, estado). */
-export function CalendarWorkoutCard({ title, thumbnail, exerciseCount, completed, completedNote, tone = 'default', subtitle, draggable, onDragStart, onOpen, menu }: WorkoutCardProps) {
+export function CalendarWorkoutCard({ title, thumbnail, exerciseCount, completed, completedNote, tone = 'default', subtitle, draggable, onDragStart, onOpen, menu, selection }: WorkoutCardProps) {
   const client = tone === 'client' && !completed
   return (
     <div
       className={cn(
-        'group rounded-lg border shadow-sm overflow-hidden hover:shadow-md transition-shadow flex-1',
+        'group relative rounded-lg border shadow-sm overflow-hidden hover:shadow-md transition-shadow flex-1',
         completed ? 'border-green-500/50 bg-green-500/10 cursor-pointer'
           : client ? 'border-purple-500/50 bg-purple-500/10 cursor-pointer'
             : draggable ? 'bg-card cursor-grab active:cursor-grabbing' : 'bg-card cursor-pointer',
@@ -53,6 +58,14 @@ export function CalendarWorkoutCard({ title, thumbnail, exerciseCount, completed
       onDragStart={onDragStart}
       onClick={(e) => { e.stopPropagation(); onOpen() }}
     >
+      {selection && (
+        <div
+          className='absolute left-1.5 top-1.5 z-10 rounded bg-background/90 p-0.5 shadow-sm'
+          onClick={(e) => e.stopPropagation()}
+        >
+          {selection}
+        </div>
+      )}
       {thumbnail
         ? <div className={cn('h-16 w-full overflow-hidden', completed ? 'bg-green-500/20' : 'bg-muted')}><img src={thumbnail} alt='' loading='lazy' decoding='async' className='w-full h-full object-cover' /></div>
         : <div className={cn('h-16 w-full flex items-center justify-center', completed ? 'bg-green-500/20 text-green-600' : 'bg-muted text-muted-foreground/30')}><DumbbellIcon className='size-5' /></div>}

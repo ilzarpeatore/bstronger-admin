@@ -61,6 +61,13 @@ type BaseProps = {
   emptyState?: ReactNode
   legend?: ReactNode
   renderDay: (ctx: CalendarDayContext) => ReactNode
+  /**
+   * Cabecera de cada fila de semana en modo FECHAS (rango, acciones de la
+   * semana...). En modo programa la aporta `program.weekHeader`, que recibe el
+   * nº de semana en vez de las fechas; `dates` son solo los días reales de la
+   * fila (sin los huecos del inicio/fin de mes).
+   */
+  weekHeader?: (ctx: { weekIndex: number; dates: string[] }) => ReactNode
   /** Contenido extra a la derecha del número de día (p. ej. acciones de semana). */
   dayHeaderExtra?: (ctx: CalendarDayContext) => ReactNode
   dayProps?: (ctx: CalendarDayContext) => CalendarDayProps
@@ -86,7 +93,7 @@ type Props = DateProps | ProgramProps
 const DAYS_PER_WEEK = 7
 
 export function MonthWeekCalendar(props: Props) {
-  const { loading = false, hasData = true, emptyState, legend, renderDay, dayHeaderExtra, dayProps, program } = props
+  const { loading = false, hasData = true, emptyState, legend, renderDay, weekHeader, dayHeaderExtra, dayProps, program } = props
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
   const [weekIndexState, setWeekIndex] = useState(0)
   const year = props.year ?? 0
@@ -189,6 +196,7 @@ export function MonthWeekCalendar(props: Props) {
     visible.forEach(({ w, wi }) => {
       rows.push({
         key: `d${wi}`,
+        header: weekHeader?.({ weekIndex: wi, dates: w.filter((ds): ds is string => !!ds) }),
         cells: w.map((ds, di) => (ds ? { date: ds, isToday: ds === today, weekIndex: wi, dayIndex: di } : null)),
       })
     })

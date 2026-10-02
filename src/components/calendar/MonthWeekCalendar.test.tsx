@@ -36,6 +36,36 @@ describe('MonthWeekCalendar', () => {
     expect(onMonthChange).toHaveBeenLastCalledWith(2026, 10)
   })
 
+  it('pinta la cabecera de cada semana en modo fechas con solo los días reales de la fila', () => {
+    render(
+      <MonthWeekCalendar
+        year={2026}
+        month={9}
+        onMonthChange={() => {}}
+        renderDay={() => null}
+        weekHeader={({ weekIndex, dates }) => <div>fila {weekIndex}: {dates[0]}..{dates[dates.length - 1]} ({dates.length})</div>}
+      />,
+    )
+    // Septiembre 2026 empieza en martes: la primera fila solo tiene 6 días reales.
+    expect(screen.getByText('fila 0: 2026-09-01..2026-09-06 (6)')).toBeInTheDocument()
+    expect(screen.getByText('fila 1: 2026-09-07..2026-09-13 (7)')).toBeInTheDocument()
+  })
+
+  it('en vista Semana la cabecera es solo la de la semana visible', async () => {
+    render(
+      <MonthWeekCalendar
+        year={2026}
+        month={9}
+        onMonthChange={() => {}}
+        renderDay={() => null}
+        weekHeader={({ weekIndex }) => <div>fila {weekIndex}</div>}
+      />,
+    )
+    await userEvent.click(screen.getByText('Semana'))
+    expect(screen.getByText('fila 0')).toBeInTheDocument()
+    expect(screen.queryByText('fila 1')).toBeNull()
+  })
+
   it('muestra emptyState en vez de la cuadrícula cuando no hay datos', () => {
     render(<MonthWeekCalendar year={2026} month={9} onMonthChange={() => {}} hasData={false} emptyState={<p>vacío</p>} renderDay={() => null} />)
     expect(screen.getByText('vacío')).toBeInTheDocument()

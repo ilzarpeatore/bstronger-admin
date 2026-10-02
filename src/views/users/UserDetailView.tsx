@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -22,7 +23,7 @@ import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { MonthWeekCalendar, type CalendarDayContext } from '@/components/calendar/MonthWeekCalendar'
 import { CalendarAddButton, CalendarWorkoutCard } from '@/components/calendar/CalendarDayParts'
-import { getMonthGrid } from '@/lib/calendarGrid'
+import { getMonthGrid, formatWeekRange } from '@/lib/calendarGrid'
 import { fetchExerciseBodyparts, primaryBodypart, getMuscleCatalogStats, fetchExerciseCatalogEntries, type MuscleCatalogStats, type CatalogEntry } from '@/lib/muscle-groups'
 import { useNavigate } from 'react-router'
 import WorkoutPreviewModal from '@/components/coaching/WorkoutPreviewModal'
@@ -260,6 +261,10 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const [trainingPrograms, setTrainingPrograms] = useState<TrainingProgram[]>([])
   const [calClipboard, setCalClipboard] = useState<{ assignment_id: number; workout_title: string } | null>(null)
   const [calDraggedId, setCalDraggedId] = useState<number | null>(null)
+  // Selección múltiple de sesiones del calendario para quitarlas de golpe
+  // (mismo gesto que el "Calendario del programa" de /training-programs/:id).
+  const [calSelected, setCalSelected] = useState<number[]>([])
+  const [calBulkBusy, setCalBulkBusy] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewTemplateId, setPreviewTemplateId] = useState<number>(0)
   const [trainingSubTab, setTrainingSubTab] = useState<'calendar' | 'history' | 'completed' | 'feedback' | 'volume' | 'adherence'>('calendar')
@@ -432,6 +437,16 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   useEffect(() => { if (activeTab !== 'overview') fetchTabData(activeTab) }, [activeTab, fetchTabData])
   useEffect(() => { if (activeTab === 'overview') Promise.all([fetchNotes(), fetchAssignedForms(), fetchGoals(), fetchLimitations(), fetchBodyMetrics(), fetchPhotos(), fetchBodyMetricTypes(), fetchReadinessScores(), fetchAchievementEvents()]) }, [activeTab, fetchNotes, fetchAssignedForms, fetchGoals, fetchLimitations, fetchBodyMetrics, fetchPhotos, fetchBodyMetricTypes, fetchReadinessScores, fetchAchievementEvents])
   useEffect(() => { if (activeTab === 'training') fetchCalendar() }, [calYear, calMonth, fetchCalendar, activeTab])
+  // La selección múltiple solo vive sobre lo que está cargado: al cambiar de
+  // mes, o al recargar tras quitar sesiones, se descarta lo que ya no está.
+  useEffect(() => {
+    setCalSelected(prev => {
+      if (prev.length === 0) return prev
+      const visible = new Set(calDays.flatMap(d => d.workouts.map(w => w.assignment_id)))
+      const next = prev.filter(id => visible.has(id))
+      return next.length === prev.length ? prev : next
+    })
+  }, [calDays])
   // Editor de sesiones (ejercicios x semanas) sobre la copia del programa de ESTE cliente; no afecta a nadie más.
   const { openEditor: openProgramEditor, editorElement: programEditorElement } = useProgramSessionEditor(fetchCalendar)
   const clientPrograms = useMemo(() => distinctPrograms(calDays.flatMap(d => d.workouts).filter(w => !w.is_personal), w => (w.training_program_id ? { id: w.training_program_id, title: w.program_title } : null)), [calDays])
@@ -463,7 +478,27 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const handleAssignDirect = async () => { if (!assignDate || !assignTemplateId) return; try { await api.post('/admin/client-calendar-assign-direct', { client_id: Number(userId), date: assignDate, workout_template_id: Number(assignTemplateId) }); toast.success('Entrenamiento importado'); setAssignDialogOpen(false); fetchCalendar() } catch (err: any) { toast.error(err?.message || 'Error') } }
   const handleImportProgram = async () => { if (!importProgramId || !importStartDate) return; try { await api.post('/admin/client-calendar-import-program', { client_id: Number(userId), training_program_id: Number(importProgramId), start_date: importStartDate }); toast.success('Programa asignado'); setImportDialogOpen(false); fetchCalendar() } catch (err: any) { toast.error(err?.message || 'Error') } }
   const handleAssignDiet = async () => { if (!assignDietId || !assignDietStartDate) return; setAssigningDiet(true); try { const selected = dietOptions.find(d => String(d.id) === assignDietId); await api.post(`/admin/meal-plan-templates/${assignDietId}/import-to-calendar`, { client_id: Number(userId), start_date: assignDietStartDate, ...(selected?.type === 'weekday' ? { weeks: Number(assignDietWeeks) || 1 } : {}) }); toast.success('Dieta asignada'); setAssignDietDialogOpen(false); setAssignDietId(''); setAssignDietStartDate(''); setAssignDietWeeks('1'); const res = await api.get(`/admin/users/${userId}/meal-plan-template-assignments`).catch(() => ({ data: { data: [] } })); setDiets(res.data?.data || res.data || []) } catch (err: any) { toast.error(err?.response?.data?.message || err?.message || 'Error') } finally { setAssigningDiet(false) } }
-  const handleRemoveAssignment = async (id: number) => { if (!confirm('¿Quitar este entrenamiento del calendario del cliente?')) return; try { await api.post('/admin/client-calendar-remove', { assignment_id: id }); toast.success('Eliminado'); fetchCalendar() } catch { toast.error('Error') } }
+  const handleRemoveAssignment = async (id: number) => { if (!confirm('¿Quitar este entrenamiento del calendario del cliente?')) return; try { await api.post('/admin/client-calendar-remove', { assignment_id: id }); toast.success('Eliminado'); setCalSelected(prev => prev.filter(x => x !== id)); fetchCalendar() } catch { toast.error('Error') } }
+  // Vaciado en bloque (selección, semana o todo el calendario). El backend es
+  // quien decide qué se puede quitar: respeta lo ya realizado y lo que
+  // pertenezca a un programa compartido con otros clientes, y devuelve en el
+  // mensaje qué ha quitado y qué ha respetado.
+  const handleCalBulkRemove = async (payload: Record<string, unknown>, confirmMessage: string) => {
+    if (!confirm(confirmMessage)) return
+    setCalBulkBusy(true)
+    try {
+      const res = await api.post('/admin/client-calendar-bulk-remove', { client_id: Number(userId), ...payload })
+      const removed = res.data?.deleted ?? 0
+      if (removed > 0) toast.success(res.message || 'Calendario actualizado')
+      else toast.info(res.message || 'No había nada que quitar')
+      setCalSelected([])
+      fetchCalendar()
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo vaciar el calendario')
+    } finally {
+      setCalBulkBusy(false)
+    }
+  }
   const handleCalCopy = (id: number, title: string) => { setCalClipboard({ assignment_id: id, workout_title: title }); toast.info('Copiado — haz clic en un día para pegar') }
   const handleCalPaste = async (dateStr: string) => { if (!calClipboard) return; try { await api.post('/admin/session-detail-duplicate', { assignment_id: calClipboard.assignment_id, new_date: dateStr, client_id: Number(userId) }); toast.success('Pegado'); setCalClipboard(null); fetchCalendar() } catch (err: any) { toast.error(err?.response?.data?.message || 'Error') } }
   const handleCalDragStart = (e: React.DragEvent, id: number) => { setCalDraggedId(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(id)) }
@@ -743,10 +778,22 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
   const activeLimitations = limitations.filter(l => l.status === 'active')
   const latestPhotos = photos.slice(0, 4)
 
+  // Realizado = el mismo criterio con el que se pinta en verde: por asignación,
+  // por plantilla+día, o porque el cliente cerró ese día. Es también lo que no
+  // se puede quitar del calendario (el backend lo vuelve a comprobar).
+  const isWorkoutDone = (workout: CalendarWorkout, dateStr: string) =>
+    completedAssignments.has(workout.assignment_id)
+    || (!!workout.id && completedByTemplate.has(`${dateStr}|${workout.id}`))
+    || completedByDate.has(dateStr)
+
+  /** assignment_id de las sesiones PENDIENTES de esos días (lo vaciable). */
+  const pendingIdsOn = (dates: string[]) => dates.flatMap(d =>
+    (calDayMap.get(d)?.workouts || []).filter(w => !isWorkoutDone(w, d)).map(w => w.assignment_id))
+
   const renderCalendarDay = ({ date: dateStr }: CalendarDayContext) => {
     const workout = calDayMap.get(dateStr)?.workouts?.[0]
     if (!workout) return <CalendarAddButton onClick={() => { setAssignDate(dateStr); setAssignTemplateId(''); setAssignDialogOpen(true) }} />
-    const isCompleted = completedAssignments.has(workout.assignment_id) || (!!workout.id && completedByTemplate.has(`${dateStr}|${workout.id}`)) || completedByDate.has(dateStr)
+    const isCompleted = isWorkoutDone(workout, dateStr)
     const open = () => { if (isCompleted) handleCalOpenSession(workout, dateStr); else handleCalOpenUpcoming(workout, dateStr) }
     // Finalizada pero sin ninguna serie apuntada: se avisa en el propio calendario
     // para no confundirla con una sesion hecha y registrada.
@@ -761,6 +808,14 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
         draggable
         onDragStart={(e) => handleCalDragStart(e, workout.assignment_id)}
         onOpen={open}
+        selection={isCompleted ? undefined : (
+          <Checkbox
+            checked={calSelected.includes(workout.assignment_id)}
+            onCheckedChange={(c) => setCalSelected(prev => c === true ? [...prev, workout.assignment_id] : prev.filter(id => id !== workout.assignment_id))}
+            className='cursor-pointer'
+            aria-label={`Seleccionar ${workout.title}`}
+          />
+        )}
         menu={<>
           <DropdownMenuItem onClick={open}><SearchIcon className='size-3 mr-1.5' /> {isCompleted ? 'Ver sesión' : 'Abrir'}</DropdownMenuItem>
           {!isCompleted && !workout.is_personal && workout.training_program_id ? <DropdownMenuItem onClick={() => openProgramEditor(workout.training_program_id as number, [workout.assignment_id])}><TableIcon className='size-3 mr-1.5' /> Editar esta sesión en todas las semanas</DropdownMenuItem> : null}
@@ -978,7 +1033,12 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
           <div className='space-y-4'>
             {trainingSubTab === 'calendar' && (<Card>
               <CardHeader className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-3'><div className='flex items-center gap-3 flex-wrap'><CalendarIcon className='size-5 text-muted-foreground' /><CardTitle className='text-base'>Calendario de entrenamiento</CardTitle>{calClipboard && <span className='text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1'><CopyIcon className='size-3' /> Copiado</span>}</div>
-                <div className='flex items-center gap-2 flex-wrap'>{clientPrograms.length === 1 && <Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => openProgramEditor(clientPrograms[0].id)}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</Button>}{clientPrograms.length > 1 && <DropdownMenu><DropdownMenuTrigger render={<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' />}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</DropdownMenuTrigger><DropdownMenuContent align='end'>{clientPrograms.map(p => <DropdownMenuItem key={p.id} onClick={() => openProgramEditor(p.id)}>{p.title}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>}<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => { setAssignDate(''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3.5 mr-1' /> Importar workout</Button><Button size='sm' className='flex-1 sm:flex-initial' onClick={() => { setImportStartDate(''); setImportProgramId(''); setImportDialogOpen(true) }}><DownloadIcon className='size-3.5 mr-1' /> Asignar programa</Button></div></CardHeader>
+                <div className='flex items-center gap-2 flex-wrap'>{calSelected.length > 0 && (<>
+                  <Button variant='destructive' size='sm' disabled={calBulkBusy} onClick={() => handleCalBulkRemove({ scope: 'selection', assignment_ids: calSelected }, `¿Quitar del calendario ${calSelected.length} entrenamiento(s) seleccionado(s)?`)}><TrashIcon className='size-3.5 mr-1' /> Quitar seleccionados ({calSelected.length})</Button>
+                  <Button variant='ghost' size='sm' onClick={() => setCalSelected([])}>Deseleccionar</Button>
+                </>)}{clientPrograms.length === 1 && <Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => openProgramEditor(clientPrograms[0].id)}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</Button>}{clientPrograms.length > 1 && <DropdownMenu><DropdownMenuTrigger render={<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' />}><TableIcon className='size-3.5 mr-1' /> Editar sesiones del programa</DropdownMenuTrigger><DropdownMenuContent align='end'>{clientPrograms.map(p => <DropdownMenuItem key={p.id} onClick={() => openProgramEditor(p.id)}>{p.title}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>}<Button variant='outline' size='sm' className='flex-1 sm:flex-initial' onClick={() => { setAssignDate(''); setAssignTemplateId(''); setAssignDialogOpen(true) }}><PlusIcon className='size-3.5 mr-1' /> Importar workout</Button><Button size='sm' className='flex-1 sm:flex-initial' onClick={() => { setImportStartDate(''); setImportProgramId(''); setImportDialogOpen(true) }}><DownloadIcon className='size-3.5 mr-1' /> Asignar programa</Button>
+                  <Button variant='outline' size='sm' disabled={calBulkBusy} className='flex-1 sm:flex-initial text-destructive hover:text-destructive' onClick={() => handleCalBulkRemove({ scope: 'all' }, 'Esto quita del calendario de este cliente TODOS los entrenamientos pendientes, de todos los meses (pasados y futuros). Los que ya están realizados se mantienen. ¿Vaciar el calendario completo?')}><TrashIcon className='size-3.5 mr-1' /> Vaciar calendario</Button>
+                </div></CardHeader>
               <CardContent>
                 <MonthWeekCalendar
                   year={calYear}
@@ -992,6 +1052,35 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
                     <span className='flex items-center gap-1'><span className='inline-block size-2.5 rounded-sm border bg-card' /> Pendiente</span>
                   </>}
                   renderDay={renderCalendarDay}
+                  weekHeader={({ dates }) => {
+                    // Solo lo PENDIENTE de esta semana: es lo único que se
+                    // puede seleccionar o vaciar (lo realizado no se toca).
+                    const pending = pendingIdsOn(dates)
+                    const allSelected = pending.length > 0 && pending.every(id => calSelected.includes(id))
+                    return (
+                      <div className='flex items-center justify-between gap-2 px-3 py-2'>
+                        <div className='flex items-center gap-2'>
+                          {pending.length > 0 && (
+                            <Checkbox
+                              checked={allSelected}
+                              onCheckedChange={(c) => setCalSelected(prev => c === true
+                                ? Array.from(new Set([...prev, ...pending]))
+                                : prev.filter(id => !pending.includes(id)))}
+                              className='cursor-pointer'
+                              aria-label='Seleccionar los entrenamientos pendientes de esta semana'
+                            />
+                          )}
+                          <span className='text-xs font-medium text-muted-foreground'>{formatWeekRange(dates)}</span>
+                          {pending.length > 0 && <Badge variant='outline' className='text-[10px]'>{pending.length} pendiente{pending.length !== 1 ? 's' : ''}</Badge>}
+                        </div>
+                        {pending.length > 0 && dates.length > 0 && (
+                          <Button variant='ghost' size='sm' disabled={calBulkBusy} className='h-6 text-[10px] text-destructive hover:text-destructive' onClick={() => handleCalBulkRemove({ scope: 'week', from: dates[0], to: dates[dates.length - 1] }, `¿Vaciar esta semana (${formatWeekRange(dates)})? Se quitan los ${pending.length} entrenamiento(s) pendiente(s); lo ya realizado se mantiene.`)}>
+                            <TrashIcon className='size-3 mr-0.5' /> Vaciar semana
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  }}
                   dayProps={(ctx) => ({ className: cn(calClipboard && 'hover:bg-primary/5 cursor-pointer'), onDragOver: handleCalDragOver, onDrop: (e) => handleCalDrop(e, ctx.date), onClick: () => { if (calClipboard) handleCalPaste(ctx.date) } })}
                 />
               </CardContent>
