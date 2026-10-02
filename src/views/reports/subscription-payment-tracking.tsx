@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, Pencil, TrendingUp, Users2, Wallet, BarChart3 } from 'lucide-react'
+import { Check, Pencil, TrendingUp, Users2, Wallet, BarChart3, UserPlus, Upload, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,9 @@ import { DashboardCard } from '@/components/shared/dashboard-card'
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import type { ClientPaymentRow, SubscriptionPaymentsPayload, SubscriptionPaymentsSummary } from '@/types/apps/subscription-payments'
+import AddExternalClientDialog from './add-external-client-dialog'
+import NotionImportDialog from './notion-import-dialog'
+import { clientKey, clientSource, monthPaymentUrl } from './payment-client-utils'
 
 const MONTHS_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -28,7 +32,10 @@ export default function SubscriptionPaymentTracking() {
   const [summary, setSummary] = useState<SubscriptionPaymentsSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [openCell, setOpenCell] = useState<string | null>(null)
-  const [openTariff, setOpenTariff] = useState<number | null>(null)
+  const [openTariff, setOpenTariff] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const [savingCell, setSavingCell] = useState<string | null>(null)
 
   useEffect(() => {
@@ -60,29 +67,29 @@ export default function SubscriptionPaymentTracking() {
   const togglePaid = async (client: ClientPaymentRow, month: number) => {
     if (!payload) return
     const current = client.months[month]
-    const key = `${client.id}-${month}`
+    const key = `${clientKey(client)}-${month}`
     setSavingCell(key)
 
     const optimistic: ClientPaymentRow['months'][number] = { ...current, paid: !current.paid, paid_at: !current.paid ? new Date().toISOString().slice(0, 10) : null }
     setPayload({
       ...payload,
-      clients: payload.clients.map((c) => c.id === client.id ? { ...c, months: { ...c.months, [month]: optimistic } } : c),
+      clients: payload.clients.map((c) => clientKey(c) === clientKey(client) ? { ...c, months: { ...c.months, [month]: optimistic } } : c),
     })
 
     try {
-      const res = await api.put(`/admin/subscription-payments/${client.id}/${year}/${month}`, {
+      const res = await api.put(monthPaymentUrl(client, year, month), {
         paid: !current.paid,
         amount: current.amount,
       })
       setPayload((prev) => prev && ({
         ...prev,
-        clients: prev.clients.map((c) => c.id === client.id ? { ...c, months: { ...c.months, [month]: { paid: res.data.paid, amount: res.data.amount, paid_at: res.data.paid_at, notes: res.data.notes } } } : c),
+        clients: prev.clients.map((c) => clientKey(c) === clientKey(client) ? { ...c, months: { ...c.months, [month]: { paid: res.data.paid, amount: res.data.amount, paid_at: res.data.paid_at, notes: res.data.notes } } } : c),
       }))
       fetchSummaryOnly()
     } catch {
       setPayload((prev) => prev && ({
         ...prev,
-        clients: prev.clients.map((c) => c.id === client.id ? { ...c, months: { ...c.months, [month]: current } } : c),
+        clients: prev.clients.map((c) => clientKey(c) === clientKey(client) ? { ...c, months: { ...c.months, [month]: current } } : c),
       }))
     } finally {
       setSavingCell(null)
@@ -97,22 +104,38 @@ export default function SubscriptionPaymentTracking() {
   }, [year])
 
   const saveMonthAmount = async (client: ClientPaymentRow, month: number, amount: number, paid: boolean, paidAt: string | null) => {
-    const res = await api.put(`/admin/subscription-payments/${client.id}/${year}/${month}`, { paid, amount, paid_at: paidAt })
+    const res = await api.put(monthPaymentUrl(client, year, month), { paid, amount, paid_at: paidAt })
     setPayload((prev) => prev && ({
       ...prev,
-      clients: prev.clients.map((c) => c.id === client.id ? { ...c, months: { ...c.months, [month]: { paid: res.data.paid, amount: res.data.amount, paid_at: res.data.paid_at, notes: res.data.notes } } } : c),
+      clients: prev.clients.map((c) => clientKey(c) === clientKey(client) ? { ...c, months: { ...c.months, [month]: { paid: res.data.paid, amount: res.data.amount, paid_at: res.data.paid_at, notes: res.data.notes } } } : c),
     }))
     setOpenCell(null)
     fetchSummaryOnly()
   }
 
   const saveTariff = async (client: ClientPaymentRow, fee: number) => {
-    await api.put(`/admin/users/${client.id}/monthly-fee`, { monthly_fee: fee })
+    if (clientSource(client) === 'external') {
+      await api.put(`/admin/subscription-payments/external/${client.id}`, { monthly_fee: fee })
+    } else {
+      await api.put(`/admin/users/${client.id}/monthly-fee`, { monthly_fee: fee })
+    }
     setPayload((prev) => prev && ({
       ...prev,
-      clients: prev.clients.map((c) => c.id === client.id ? { ...c, monthly_fee: fee } : c),
+      clients: prev.clients.map((c) => clientKey(c) === clientKey(client) ? { ...c, monthly_fee: fee } : c),
     }))
     setOpenTariff(null)
+  }
+
+  const deleteExternal = async (client: ClientPaymentRow) => {
+    if (!window.confirm(`¿Eliminar a ${client.name} y todos sus pagos registrados? Esta acción no se puede deshacer.`)) return
+    await api.delete(`/admin/subscription-payments/external/${client.id}`)
+    fetchData()
+  }
+
+  const handleImported = (importedYear: number, applied: number) => {
+    setNotice(`Importación de Notion completada: ${applied} mensualidades aplicadas.`)
+    if (importedYear !== year) setYear(importedYear)
+    else fetchData()
   }
 
   const chartData = useMemo(() => summary?.monthly.map((m) => ({ label: m.label.slice(0, 3), total: m.total })) ?? [], [summary])
@@ -124,15 +147,35 @@ export default function SubscriptionPaymentTracking() {
           <h3 className="text-base font-semibold">Seguimiento de pagos de suscripción</h3>
           <p className="text-sm text-muted-foreground">Marca manualmente qué clientes han pagado cada mes y ajusta importes puntuales</p>
         </div>
-        <Select value={String(year)} onValueChange={(v) => v && setYear(Number(v))}>
+        <div className="flex items-center flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2 cursor-pointer">
+            <Upload size={16} />
+            Importar de Notion
+          </Button>
+          <Button onClick={() => setAddOpen(true)} className="gap-2 cursor-pointer">
+            <UserPlus size={16} />
+            Añadir cliente
+          </Button>
+          <Select value={String(year)} onValueChange={(v) => v && setYear(Number(v))}>
           <SelectTrigger className="w-[110px] cursor-pointer">
             <SelectValue placeholder="Año" />
           </SelectTrigger>
           <SelectContent>
             {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
           </SelectContent>
-        </Select>
+          </Select>
+        </div>
       </div>
+
+      <AddExternalClientDialog open={addOpen} onOpenChange={setAddOpen} onCreated={fetchData} />
+      <NotionImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={handleImported} />
+
+      {notice && (
+        <div className="flex items-center justify-between gap-3 border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm">
+          <span className="flex items-center gap-2"><Check size={14} className="text-emerald-600 dark:text-emerald-400" />{notice}</span>
+          <button onClick={() => setNotice(null)} className="text-xs text-muted-foreground hover:text-foreground cursor-pointer">Cerrar</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="h-[400px] rounded-none bg-muted/50 animate-pulse flex items-center justify-center">
@@ -189,14 +232,27 @@ export default function SubscriptionPaymentTracking() {
                   </thead>
                   <tbody>
                     {payload.clients.map((client) => (
-                      <tr key={client.id} className="hover:bg-muted/30 transition-colors group">
+                      <tr key={clientKey(client)} className="hover:bg-muted/30 transition-colors group">
                         <td className="sticky left-0 z-10 bg-background group-hover:bg-muted/30 px-4 py-2.5 border-b border-r border-border whitespace-nowrap">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="font-medium truncate">{client.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{client.email}</p>
+                              <p className="font-medium truncate flex items-center gap-1.5">
+                                {client.name}
+                                {clientSource(client) === 'external' && <Badge variant="outline" className="text-[10px]">No registrado</Badge>}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">{client.email || '—'}</p>
                             </div>
-                            <Popover open={openTariff === client.id} onOpenChange={(open) => setOpenTariff(open ? client.id : null)}>
+                            <div className="flex items-center gap-1 shrink-0">
+                            {clientSource(client) === 'external' && (
+                              <button
+                                onClick={() => deleteExternal(client)}
+                                title="Eliminar cliente no registrado"
+                                className="text-muted-foreground hover:text-destructive cursor-pointer p-1"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                            <Popover open={openTariff === clientKey(client)} onOpenChange={(open) => setOpenTariff(open ? clientKey(client) : null)}>
                               <PopoverTrigger render={
                                 <button className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-semibold shrink-0 cursor-pointer hover:bg-muted">
                                   {currency.format(client.monthly_fee)}
@@ -207,11 +263,12 @@ export default function SubscriptionPaymentTracking() {
                                 <TariffForm client={client} onSave={saveTariff} />
                               </PopoverContent>
                             </Popover>
+                            </div>
                           </div>
                         </td>
                         {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
                           const status = client.months[month]
-                          const cellKey = `${client.id}-${month}`
+                          const cellKey = `${clientKey(client)}-${month}`
                           return (
                             <td key={month} className="px-2 py-2.5 border-b border-border text-center align-middle">
                               <div className="flex flex-col items-center gap-1.5">

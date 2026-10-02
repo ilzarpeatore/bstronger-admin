@@ -5,10 +5,17 @@ export type MonthPaymentStatus = {
   notes: string | null
 }
 
+// 'user': cliente registrado en la app (tabla users).
+// 'external': cliente que solo existe en el seguimiento de pagos (no tiene
+// cuenta), creado a mano o importado de Notion.
+export type PaymentClientSource = 'user' | 'external'
+
 export type ClientPaymentRow = {
   id: number
+  // Opcional: si el backend no lo envía, se trata como 'user'.
+  source?: PaymentClientSource
   name: string
-  email: string
+  email: string | null
   status: string
   monthly_fee: number
   months: Record<number, MonthPaymentStatus>
