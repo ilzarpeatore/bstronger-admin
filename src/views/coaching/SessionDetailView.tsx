@@ -8,6 +8,7 @@ import {
   TimerIcon,
   MessageSquareTextIcon,
   BarChart3Icon,
+  VideoIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -30,7 +31,7 @@ import WorkoutTemplateViewer, {
   type WorkoutViewerBlock,
   type ExerciseLibraryFilters,
 } from '@/components/coaching/WorkoutTemplateViewer'
-import ExerciseTechniqueDialog, { techniquePayload } from '@/components/coaching/ExerciseTechniqueDialog'
+import ExerciseTechniqueDialog, { RecordingBadge, techniquePayload } from '@/components/coaching/ExerciseTechniqueDialog'
 import type { TechniqueDraft } from '@/lib/programSessionMatrix'
 
 type Prescribed = Record<string, string | number | null | undefined>
@@ -42,6 +43,8 @@ type LoggedSet = {
   rpe_rir: string | number | null
   one_rm: number
   volume: number
+  /** «Pedir grabación»: el cliente marcó en la app que se grabó esta serie. */
+  grabado?: boolean
 }
 
 type LoadSuggestion = {
@@ -390,6 +393,7 @@ function CompletedView({
                         </Button>
                       )}
                     </div>
+                    {ex.prescribed?.grabar && <RecordingBadge prescribed={ex.prescribed} />}
                     {ex.notes && <p className='text-xs text-muted-foreground mt-0.5'>Nota del coach: {ex.notes}</p>}
                     {ex.client_note && (
                       <p className='text-xs text-blue-600 mt-0.5'>
@@ -421,7 +425,17 @@ function CompletedView({
                       <tbody className='divide-y'>
                         {ex.sets.map((set, idx) => (
                           <tr key={idx} className={idx === ex.sets.length - 1 ? 'bg-muted/20' : ''}>
-                            <td className='px-2 py-2 text-center'>{set.set}</td>
+                            <td className='px-2 py-2 text-center'>
+                              <span className='inline-flex items-center gap-1'>
+                                {set.set}
+                                {set.grabado && (
+                                  <span title='El cliente marcó esta serie como grabada' className='inline-flex items-center gap-0.5 text-rose-600'>
+                                    <VideoIcon className='size-3' aria-label='Grabada' />
+                                    <span className='text-[10px]'>Grabada</span>
+                                  </span>
+                                )}
+                              </span>
+                            </td>
                             <td className='px-2 py-2 text-center'>{set.weight} kg</td>
                             <td className='px-2 py-2 text-center'>{set.reps}</td>
                             <td className='px-2 py-2 text-center'>{set.rpe_rir ?? '-'}</td>
@@ -629,7 +643,7 @@ function SessionContent({
         ...overrideIdentity(sessionExerciseKey(techniqueExercise)),
         ...techniquePayload(t),
       })
-      toast.success(t.key ? 'Técnica guardada para esta sesión' : 'Técnica quitada de esta sesión')
+      toast.success(t.key || t.recording?.on ? 'Cambios guardados para esta sesión' : 'Técnica y grabación quitadas de esta sesión')
       await refreshSession()
     } catch (err: any) {
       toast.error(err?.message || 'No se pudo guardar la técnica')

@@ -427,7 +427,7 @@ export default function WorkoutTemplatesView() {
     try {
       await api.post('/admin/workout-template-exercise-technique', { id: techniqueExercise.id, ...techniquePayload(t) })
       updateExerciseLocally(techniqueExercise.id, { prescribed: withTechnique(techniqueExercise.prescribed as Record<string, any> | null, t) })
-      toast.success(t.key ? 'Técnica guardada' : 'Técnica quitada')
+      toast.success(t.key || t.recording?.on ? 'Guardado' : 'Técnica y grabación quitadas')
     } catch (err: any) {
       toast.error(err?.message || 'No se pudo guardar la técnica')
       throw err

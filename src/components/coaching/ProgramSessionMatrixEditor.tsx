@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, ChevronsRightIcon, Columns3Icon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SlidersHorizontalIcon, StickyNoteIcon, TrashIcon, ZapIcon } from 'lucide-react'
+import { AlertTriangleIcon, ArrowDownIcon, ArrowUpIcon, ChevronsRightIcon, Columns3Icon, LinkIcon, MoonIcon, MoreVerticalIcon, PlusIcon, RepeatIcon, SlidersHorizontalIcon, StickyNoteIcon, TrashIcon, VideoIcon, ZapIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +37,7 @@ import {
   slotWeeks,
   setIntensityKey,
   setNotes,
+  recordingSummary,
   setTechnique,
   setValue,
   visibleFields,
@@ -592,7 +593,8 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
         onChange={setTechEdit}
         onApply={() => {
           if (techEdit && slot) {
-            const t = techEdit.value.key ? techEdit.value : NO_TECHNIQUE
+            // Sin técnica se conserva igualmente la petición de grabación
+            const t = techEdit.value.key ? techEdit.value : { ...NO_TECHNIQUE, recording: techEdit.value.recording }
             setSlotDraft(d => setTechnique(d, slot, techEdit.assignmentId, techEdit.rowKey, t, techEdit.following))
           }
           setTechEdit(null)
@@ -808,6 +810,7 @@ function CellGroup({
   onToggleIntensity: () => void
   onRemove: () => void
 }) {
+  const recordingText = recordingSummary(cur.technique.recording)
   return (
     <>
       {fields.map((f, fi) => (
@@ -832,11 +835,12 @@ function CellGroup({
           <DropdownMenuTrigger>
             <span
               className='relative inline-flex size-6 items-center justify-center rounded-md hover:bg-muted'
-              title={['Acciones de esta semana', cur.notes.trim() && 'tiene notas', techniqueText && `técnica: ${techniqueText}${cur.technique.series === 'ultima' ? ' (última serie)' : ''}`].filter(Boolean).join(' · ')}
+              title={['Acciones de esta semana', cur.notes.trim() && 'tiene notas', techniqueText && `técnica: ${techniqueText}${cur.technique.series === 'ultima' ? ' (última serie)' : ''}`, recordingText && `grabar: ${recordingText}`].filter(Boolean).join(' · ')}
             >
               <MoreVerticalIcon className='size-3' />
               {cur.notes.trim() && <span className='absolute right-0.5 top-0.5 size-1.5 rounded-full bg-sky-500' aria-label='Tiene notas' />}
               {techniqueText && <ZapIcon className='absolute -bottom-0.5 -left-0.5 size-3 fill-violet-500 text-violet-500' aria-label={`Técnica: ${techniqueText}`} />}
+              {recordingText && <VideoIcon className='absolute -bottom-0.5 -right-0.5 size-3 text-rose-500' aria-label={`Grabar: ${recordingText}`} />}
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align='end' className='text-xs'>
@@ -845,6 +849,9 @@ function CellGroup({
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onTechnique}>
               <ZapIcon className='mr-2 size-3.5' /> {techniqueText ? `Técnica: ${techniqueText}…` : 'Técnica especial…'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onTechnique}>
+              <VideoIcon className='mr-2 size-3.5' /> {recordingText ? `Grabar: ${recordingText}…` : 'Pedir grabación…'}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onFillRight}>
               <ChevronsRightIcon className='mr-2 size-3.5' /> Copiar a las semanas siguientes
@@ -880,7 +887,7 @@ function TechniqueDialog({
     <Dialog open={!!edit} onOpenChange={o => { if (!o) onChange(null) }}>
       <DialogContent className='max-w-md!'>
         <DialogHeader>
-          <DialogTitle>Técnica especial</DialogTitle>
+          <DialogTitle>Técnica especial y grabación</DialogTitle>
           <DialogDescription>
             {edit ? `${edit.exercise} · semana ${edit.week}. ` : ''}El cliente la verá en la app con su explicación.
           </DialogDescription>
