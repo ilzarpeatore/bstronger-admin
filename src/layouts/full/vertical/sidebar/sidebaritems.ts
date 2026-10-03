@@ -101,6 +101,14 @@ const SidebarContent: MenuItem[] = [
         url: "/tasks",
       },
       {
+        // Bandeja del chat cliente <-> entrenador. Cada coach ve solo los hilos
+        // de sus clientes; el filtro lo hace el backend, no esta entrada.
+        id: uniqueId(),
+        name: "Chat",
+        icon: MessageSquare,
+        url: "/chat",
+      },
+      {
         id: uniqueId(),
         name: "Informes",
         icon: BarChart3,

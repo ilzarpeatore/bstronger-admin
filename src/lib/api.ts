@@ -78,6 +78,8 @@ export const api = {
 
   put: <T = any>(endpoint: string, body: any) => apiFetch<T>(endpoint, { method: 'PUT', body }),
 
+  patch: <T = any>(endpoint: string, body: any) => apiFetch<T>(endpoint, { method: 'PATCH', body }),
+
   delete: <T = any>(endpoint: string) => apiFetch<T>(endpoint, { method: 'DELETE' }),
 
   /** Descarga un fichero (p. ej. CSV) autenticado y lo guarda con `filename`. */

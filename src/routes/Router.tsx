@@ -73,6 +73,9 @@ const Settings = Loadable(lazy(() => import('../views/settings/SettingsView')));
 const AppSettings = Loadable(lazy(() => import('../views/settings/AppSettingsView')));
 const Tasks = Loadable(lazy(() => import('../views/tasks/TasksView')));
 
+// chat cliente <-> entrenador (docs/PLAN_CHAT_BACKEND.md en el repo bsa)
+const ChatInbox = Loadable(lazy(() => import('../views/chat/ChatInboxView')));
+
 // coaching/community/assignments
 const AssignWorkouts = Loadable(lazy(() => import('../views/assignments/AssignWorkoutView')));
 const Informes = Loadable(lazy(() => import('../views/reports')));
@@ -282,6 +285,7 @@ const Router = [
       { path: '/exercise-substitutions', element: <ExerciseSubstitutions /> },
       { path: '/progression-decisions', element: <ProgressionDecisions /> },
       { path: '/coach-exceptions', element: <CoachExceptions /> },
+      { path: '/chat', element: <ChatInbox /> },
 
       { path: '/settings', element: <Settings /> },
       { path: '/settings/:tab', element: <Settings /> },
