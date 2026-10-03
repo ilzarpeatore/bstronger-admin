@@ -203,6 +203,25 @@ describe('ProgramSessionMatrixEditor — notas, columnas, orden y cascada', () =
     ])
   })
 
+  it('pedir grabación: desde el menú de la celda, se marca con la cámara y viaja en el guardado', async () => {
+    const user = userEvent.setup()
+    renderEditor()
+    await screen.findByText('Press banca')
+    await user.click(screen.getAllByTitle('Acciones de esta semana')[0])
+    await user.click(await screen.findByText('Pedir grabación…'))
+    await user.click((await screen.findAllByRole('switch'))[0])
+    await user.click(screen.getByRole('button', { name: 'Solo la primera' }))
+    await user.type(screen.getByPlaceholderText('p. ej. de lado, que se vea la cadera'), 'De lado')
+    await user.click(screen.getByRole('button', { name: 'Aceptar' }))
+    expect(await screen.findByLabelText('Grabar: primera serie · De lado')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Revisar y guardar' }))
+    await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(postMock).toHaveBeenCalledTimes(1))
+    expect(postMock.mock.calls[0][1].changes).toEqual([
+      { type: 'update', assignment_id: 10, row_id: 1, prescribed: { grabar: '1', grabar_series: 'primera', grabar_nota: 'De lado' } },
+    ])
+  })
+
   it('orden: bajar un ejercicio genera un reorder por sesión con los ids en el orden nuevo', async () => {
     const user = userEvent.setup()
     renderEditor()

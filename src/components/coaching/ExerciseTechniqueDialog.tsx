@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react'
 
-import { ZapIcon } from 'lucide-react'
+import { VideoIcon, ZapIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { NO_TECHNIQUE, type TechniqueDraft } from '@/lib/programSessionMatrix'
+import { Switch } from '@/components/ui/switch'
+import {
+  NO_RECORDING,
+  NO_TECHNIQUE,
+  RECORDING_SERIES_LABELS,
+  recordingFromPrescribed,
+  recordingSummary,
+  type RecordingDraft,
+  type RecordingSeries,
+  type TechniqueDraft,
+} from '@/lib/programSessionMatrix'
 import { OTHER_TECHNIQUE, techniqueLabel, type TrainingTechnique, useTrainingTechniques } from '@/lib/trainingTechniques'
 
 // Técnica especial de UN ejercicio (rest-pause, drop set...), para los editores
@@ -13,17 +23,22 @@ import { OTHER_TECHNIQUE, techniqueLabel, type TrainingTechnique, useTrainingTec
 // «Editar solo este día» y las plantillas. El editor de sesiones del programa
 // (ProgramSessionMatrixEditor) usa los mismos campos (TechniqueFields) con su
 // propio diálogo, que además puede aplicarla a las semanas siguientes.
+// En el mismo diálogo va «Pedir grabación» (grabar / grabar_series / grabar_nota en el
+// `prescribed`, Bckbs App\Support\RecordingRequests): viaja en el campo `recording`.
 
-type Prescribed = Record<string, string | number | null | undefined> | null | undefined
+type Prescribed = Record<string, string | number | boolean | null | undefined> | null | undefined
 
 /** Técnica guardada en el `prescribed` de un ejercicio (claves tecnica / tecnica_series / tecnica_otra). */
 export function techniqueFromPrescribed(prescribed: Prescribed): TechniqueDraft {
   const key = String(prescribed?.tecnica ?? '').trim()
-  if (!key) return { ...NO_TECHNIQUE }
+  const recording = recordingFromPrescribed(prescribed)
+  const withRecording = recording.on ? { recording } : {}
+  if (!key) return { ...NO_TECHNIQUE, ...withRecording }
   return {
     key,
     series: prescribed?.tecnica_series === 'ultima' ? 'ultima' : 'todas',
     otra: String(prescribed?.tecnica_otra ?? ''),
+    ...withRecording,
   }
 }
 
@@ -33,6 +48,15 @@ export function withTechnique<T extends Record<string, unknown>>(prescribed: T |
   delete rest.tecnica
   delete rest.tecnica_series
   delete rest.tecnica_otra
+  delete rest.grabar
+  delete rest.grabar_series
+  delete rest.grabar_nota
+  const r = t.recording
+  if (r?.on) {
+    rest.grabar = true
+    rest.grabar_series = r.series
+    if (r.nota.trim()) rest.grabar_nota = r.nota.trim()
+  }
   if (!t.key) return rest as T
   return {
     ...rest,
@@ -48,10 +72,13 @@ export function techniquePayload(t: TechniqueDraft) {
     tecnica: t.key || null,
     tecnica_series: t.key ? t.series : null,
     tecnica_otra: t.key === OTHER_TECHNIQUE ? t.otra.trim() : null,
+    grabar: !!t.recording?.on,
+    grabar_series: t.recording?.on ? t.recording.series : null,
+    grabar_nota: t.recording?.on ? t.recording.nota.trim() || null : null,
   }
 }
 
-/** Selector de técnica + «¿Cuál?» (si es Otra) + a qué series se aplica. */
+/** Selector de técnica + «¿Cuál?» (si es Otra) + a qué series se aplica + «Pedir grabación». */
 export function TechniqueFields({
   value, techniques, onChange,
 }: {
@@ -101,7 +128,46 @@ export function TechniqueFields({
           </div>
         </div>
       )}
+      <RecordingFields value={value.recording ?? NO_RECORDING} onChange={recording => onChange({ recording })} />
     </>
+  )
+}
+
+/** «Pedir grabación»: interruptor, qué series grabar y nota para el cliente. */
+export function RecordingFields({ value, onChange }: { value: RecordingDraft; onChange: (r: RecordingDraft) => void }) {
+  return (
+    <div className='space-y-2 border-t pt-3'>
+      <label className='flex items-center gap-2'>
+        <Switch checked={value.on} onCheckedChange={c => onChange({ ...value, on: !!c })} aria-label='Pedir grabación' />
+        <VideoIcon className='size-3.5 text-rose-500' />
+        <span>Pedir grabación</span>
+      </label>
+      {value.on && (
+        <>
+          <div className='space-y-1'>
+            <span className='text-xs text-muted-foreground'>Qué series grabar</span>
+            <div className='flex flex-wrap gap-1'>
+              {(Object.keys(RECORDING_SERIES_LABELS) as RecordingSeries[]).map(opt => (
+                <Button key={opt} size='sm' variant={value.series === opt ? 'default' : 'outline'} onClick={() => onChange({ ...value, series: opt })}>
+                  {RECORDING_SERIES_LABELS[opt]}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <label className='block space-y-1'>
+            <span className='text-xs text-muted-foreground'>Nota para el cliente (opcional)</span>
+            <input
+              className='h-9 w-full rounded-md border bg-transparent px-2'
+              maxLength={200}
+              value={value.nota}
+              onChange={e => onChange({ ...value, nota: e.target.value })}
+              placeholder='p. ej. de lado, que se vea la cadera'
+            />
+          </label>
+          <p className='text-xs text-muted-foreground'>El cliente verá un aviso al abrir la sesión y marcará las series que se ha grabado.</p>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -115,6 +181,19 @@ export function TechniqueBadge({ prescribed }: { prescribed: Prescribed }) {
       <ZapIcon className='size-3 fill-violet-500 text-violet-500' />
       {techniqueLabel(t.key, t.otra, techniques)}
       {t.series === 'ultima' && <span className='text-muted-foreground'>· última serie</span>}
+    </Badge>
+  )
+}
+
+/** Aviso 🎥 bajo el nombre del ejercicio cuando el coach pide grabarlo. */
+export function RecordingBadge({ prescribed }: { prescribed: Prescribed }) {
+  const r = recordingFromPrescribed(prescribed)
+  if (!r.on) return null
+  return (
+    <Badge variant='secondary' className='mt-1 gap-1 text-[11px] font-normal' title='Se pide al cliente que se grabe'>
+      <VideoIcon className='size-3 text-rose-500' aria-label='Pedir grabación' />
+      Grabar
+      <span className='text-muted-foreground'>· {recordingSummary(r)}</span>
     </Badge>
   )
 }
@@ -143,7 +222,11 @@ export default function ExerciseTechniqueDialog({
   const save = async () => {
     setSaving(true)
     try {
-      await onSave({ ...value, otra: value.otra.trim() })
+      await onSave({
+        ...value,
+        otra: value.otra.trim(),
+        ...(value.recording ? { recording: { ...value.recording, nota: value.recording.nota.trim() } } : {}),
+      })
       onClose()
     } catch {
       // onSave ya avisa del error; el diálogo se queda abierto para reintentar
@@ -156,7 +239,7 @@ export default function ExerciseTechniqueDialog({
     <Dialog open={!!exercise} onOpenChange={o => { if (!o) onClose() }}>
       <DialogContent className='max-w-md!'>
         <DialogHeader>
-          <DialogTitle>Técnica especial</DialogTitle>
+          <DialogTitle>Técnica especial y grabación</DialogTitle>
           <DialogDescription>
             {exercise ? `${exercise.title}. ` : ''}{description} El cliente la verá en la app con su explicación.
           </DialogDescription>

@@ -23,7 +23,7 @@ import {
   PanelLeftIcon,
   ZapIcon,
 } from 'lucide-react'
-import { TechniqueBadge } from '@/components/coaching/ExerciseTechniqueDialog'
+import { RecordingBadge, TechniqueBadge } from '@/components/coaching/ExerciseTechniqueDialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -1012,6 +1012,7 @@ export default function WorkoutTemplateViewer({
                                   )}
                                 </p>
                                 {ex.prescribed?.tecnica && <TechniqueBadge prescribed={ex.prescribed} />}
+                                {ex.prescribed?.grabar && <RecordingBadge prescribed={ex.prescribed} />}
                                 {ex.notes && <p className='text-xs text-muted-foreground mt-1'>Note: {ex.notes}</p>}
                                 {ex.client_note && <p className='text-xs text-blue-600 mt-1 flex items-start gap-1'><MessageSquareTextIcon className='size-3 shrink-0 mt-0.5' /> Feedback del cliente: {ex.client_note}</p>}
                               </div>
@@ -1033,7 +1034,7 @@ export default function WorkoutTemplateViewer({
                                     size='icon'
                                     className='size-7'
                                     onClick={() => onExerciseTechnique(ex, block.id)}
-                                    title={ex.prescribed?.tecnica ? 'Cambiar técnica especial' : 'Técnica especial (rest-pause, drop set...)'}
+                                    title={ex.prescribed?.tecnica || ex.prescribed?.grabar ? 'Cambiar técnica especial / grabación' : 'Técnica especial (rest-pause, drop set...) o pedir grabación'}
                                     aria-label='Técnica especial'
                                   >
                                     <ZapIcon className={cn('size-3.5', ex.prescribed?.tecnica && 'fill-violet-500 text-violet-500')} />
