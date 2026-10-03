@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw'
+import { nameScore } from 'src/views/reports/payment-client-utils'
 
 const MONTH_LABELS: Record<number, string> = {
   1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
@@ -14,6 +15,15 @@ const clients: MockClient[] = [
   { id: 203, source: 'user', name: 'Lucía Vidal', email: 'lucia.vidal@example.com', status: 'active', monthly_fee: 60 },
   { id: 204, source: 'user', name: 'Diego Ramos', email: 'diego.ramos@example.com', status: 'active', monthly_fee: 50 },
   { id: 205, source: 'user', name: 'Sara Molina', email: 'sara.molina@example.com', status: 'active', monthly_fee: 60 },
+]
+
+// Usuarios de la app que aún no están en el seguimiento de pagos (para
+// probar "Revisar duplicados": p. ej. Hamza Bilbao de Notion = Hamsa Dris Bakkali).
+const otherUsers: MockClient[] = [
+  { id: 301, source: 'user', name: 'Hamsa Dris Bakkali', email: 'hamsa@example.com', status: 'active', monthly_fee: 0 },
+  { id: 302, source: 'user', name: 'Antonio Pérez', email: 'toni@example.com', status: 'active', monthly_fee: 0 },
+  { id: 303, source: 'user', name: 'Nerea Sánchez', email: 'nerea@example.com', status: 'active', monthly_fee: 0 },
+  { id: 304, source: 'user', name: 'Borja Betanzos', email: 'borja@example.com', status: 'active', monthly_fee: 0 },
 ]
 let nextExternalId = 1
 
@@ -127,6 +137,50 @@ export const SubscriptionPaymentsHandlers = [
     }
     clients.push(client)
     return HttpResponse.json({ data: client }, { status: 201 })
+  }),
+
+  http.get('*/admin/subscription-payments/merge-candidates', () => {
+    const users = [...clients.filter((c) => c.source === 'user'), ...otherUsers]
+    const data = clients.filter((c) => c.source === 'external').map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      monthly_fee: c.monthly_fee,
+      payments_count: Array.from(records.keys()).filter((k) => k.startsWith(`external:${c.id}:`)).length,
+      candidates: users
+        .map((u) => ({ id: u.id, name: u.name, email: u.email, is_personal_client: clients.includes(u), score: nameScore(c.name, u.name) }))
+        .filter((u) => u.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5),
+    }))
+    return HttpResponse.json({ data })
+  }),
+
+  http.post('*/admin/subscription-payments/external/:id/merge', async ({ request, params }) => {
+    const external = findClient('external', Number(params.id))
+    const { user_id } = (await request.json()) as { user_id: number }
+    let user = findClient('user', user_id)
+    if (!user) {
+      const index = otherUsers.findIndex((u) => u.id === user_id)
+      if (index !== -1) { user = otherUsers.splice(index, 1)[0]; clients.push(user) }
+    }
+    if (!external || !user) return HttpResponse.json({ message: 'Cliente no encontrado.' }, { status: 404 })
+
+    let moved = 0
+    let skipped = 0
+    Array.from(records.entries()).forEach(([k, record]) => {
+      if (!k.startsWith(`external:${external.id}:`)) return
+      const [, , year, month] = k.split(':').map(Number)
+      const target = key('user', user.id, year, month)
+      const existing = records.get(target)
+      records.delete(k)
+      if (existing && (existing.paid || !record.paid)) { skipped++; return }
+      records.set(target, record)
+      moved++
+    })
+    if (!user.monthly_fee) user.monthly_fee = external.monthly_fee
+    clients.splice(clients.indexOf(external), 1)
+    return HttpResponse.json({ data: { user_id: user.id, moved, skipped } })
   }),
 
   http.put('*/admin/subscription-payments/external/:id/:year/:month', ({ request, params }) => saveMonth('external', request, params)),

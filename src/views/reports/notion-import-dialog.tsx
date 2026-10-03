@@ -4,16 +4,17 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { NOTION_PAYMENTS_YEAR, normalizeName, notionPayments2026 } from '@/api/subscription-payments/notion-payments-2026'
+import { NOTION_PAYMENTS_YEAR, notionPayments2026 } from '@/api/subscription-payments/notion-payments-2026'
 import type { ClientPaymentRow, SubscriptionPaymentsPayload } from '@/types/apps/subscription-payments'
-import { clientKey, monthPaymentUrl } from './payment-client-utils'
+import { bestNameMatch, clientKey, monthPaymentUrl } from './payment-client-utils'
 
 const NEW_CLIENT = '__new__'
 const MONTHS_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 })
 
 // Aplica las mensualidades de Notion (año NOTION_PAYMENTS_YEAR). Cada nombre
-// se empareja con un cliente del panel (usuario o externo) por nombre; si no
+// se empareja con un cliente del panel (usuario o externo) por nombre
+// aproximado (ver nameScore: "Hamza Bilbao" → "Hamsa Dris Bakkali"); si no
 // hay coincidencia, se puede elegir uno a mano o crearlo como cliente externo.
 // Los meses que ya están pagados con el mismo importe se saltan, así que
 // repetir la importación no duplica nada.
@@ -37,8 +38,10 @@ export default function NotionImportDialog({ open, onOpenChange, onImported }: {
     api.get(`/admin/subscription-payments?year=${year}`).then((res) => {
       const list: ClientPaymentRow[] = (res.data as SubscriptionPaymentsPayload)?.clients ?? []
       setClients(list)
-      const byName = new Map(list.map((c) => [normalizeName(c.name), clientKey(c)]))
-      setTargets(Object.fromEntries(notionPayments2026.map((n) => [n.name, byName.get(normalizeName(n.name)) ?? NEW_CLIENT])))
+      setTargets(Object.fromEntries(notionPayments2026.map((n) => {
+        const match = bestNameMatch(n.name, list)
+        return [n.name, match ? clientKey(match) : NEW_CLIENT]
+      })))
     }).catch(() => setError('No se pudieron cargar los clientes del panel.'))
   }, [open, year])
 

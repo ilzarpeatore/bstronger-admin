@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, Pencil, TrendingUp, Users2, Wallet, BarChart3, UserPlus, Upload, Trash2 } from 'lucide-react'
+import { Check, Pencil, TrendingUp, Users2, Wallet, BarChart3, UserPlus, Upload, Trash2, Merge } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import type { ClientPaymentRow, SubscriptionPaymentsPayload, SubscriptionPaymentsSummary } from '@/types/apps/subscription-payments'
 import AddExternalClientDialog from './add-external-client-dialog'
 import NotionImportDialog from './notion-import-dialog'
+import MergeDuplicatesDialog from './merge-duplicates-dialog'
 import { clientKey, clientSource, monthPaymentUrl } from './payment-client-utils'
 
 const MONTHS_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -35,6 +36,7 @@ export default function SubscriptionPaymentTracking() {
   const [openTariff, setOpenTariff] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [savingCell, setSavingCell] = useState<string | null>(null)
 
@@ -148,6 +150,10 @@ export default function SubscriptionPaymentTracking() {
           <p className="text-sm text-muted-foreground">Marca manualmente qué clientes han pagado cada mes y ajusta importes puntuales</p>
         </div>
         <div className="flex items-center flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setMergeOpen(true)} className="gap-2 cursor-pointer">
+            <Merge size={16} />
+            Revisar duplicados
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2 cursor-pointer">
             <Upload size={16} />
             Importar de Notion
@@ -169,6 +175,11 @@ export default function SubscriptionPaymentTracking() {
 
       <AddExternalClientDialog open={addOpen} onOpenChange={setAddOpen} onCreated={fetchData} />
       <NotionImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={handleImported} />
+      <MergeDuplicatesDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        onMerged={(merged) => { setNotice(`${merged} clientes no registrados fusionados con su usuario real.`); fetchData() }}
+      />
 
       {notice && (
         <div className="flex items-center justify-between gap-3 border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm">
