@@ -70,8 +70,70 @@ export const DEFAULT_METRICS = ['reps', 'carga', 'descanso', 'rir']
  * Técnica especial de un ejercicio en una semana (Bckbs App\Support\TrainingTechniques):
  * key '' = sin técnica; series 'ultima' = solo la última serie; otra = texto si key es 'otra'.
  */
-export type TechniqueDraft = { key: string; series: 'todas' | 'ultima'; otra: string }
+export type TechniqueDraft = {
+  key: string
+  series: 'todas' | 'ultima'
+  otra: string
+  /** «Pedir grabación» de ese ejercicio esa semana; ausente = no se pide. */
+  recording?: RecordingDraft
+}
 export const NO_TECHNIQUE: TechniqueDraft = { key: '', series: 'todas', otra: '' }
+
+/**
+ * «Pedir grabación» (Bckbs App\Support\RecordingRequests): viaja con la técnica en el
+ * `prescribed` como grabar (true) / grabar_series ('todas' | 'primera' | 'ultima') / grabar_nota.
+ */
+export type RecordingSeries = 'todas' | 'primera' | 'ultima'
+export type RecordingDraft = { on: boolean; series: RecordingSeries; nota: string }
+export const NO_RECORDING: RecordingDraft = { on: false, series: 'todas', nota: '' }
+export const RECORDING_SERIES_LABELS: Record<RecordingSeries, string> = {
+  todas: 'Todas las series',
+  primera: 'Solo la primera',
+  ultima: 'Solo la última',
+}
+
+/** true, 1, "1", "true"... (el backend guarda `true`; la matriz puede devolverlo como texto). */
+export function isTruthyFlag(v: unknown): boolean {
+  if (typeof v === 'boolean') return v
+  if (typeof v === 'number') return v !== 0
+  if (typeof v !== 'string') return false
+  const s = v.trim().toLowerCase()
+  return s !== '' && !['0', 'false', 'no'].includes(s)
+}
+
+/** Petición de grabación guardada en un `prescribed`. */
+export function recordingFromPrescribed(p: Record<string, unknown> | null | undefined): RecordingDraft {
+  if (!p || !isTruthyFlag(p.grabar)) return { ...NO_RECORDING }
+  const series = String(p.grabar_series ?? '')
+  return {
+    on: true,
+    series: series === 'primera' || series === 'ultima' ? series : 'todas',
+    nota: p.grabar_nota === null || p.grabar_nota === undefined ? '' : String(p.grabar_nota),
+  }
+}
+
+/** Claves de grabación para `prescribed` (vacío si no se pide). */
+export function recordingPrescribed(r: RecordingDraft | undefined): Record<string, string> {
+  if (!r?.on) return {}
+  const nota = (r.nota ?? '').trim()
+  return { grabar: '1', grabar_series: r.series, ...(nota ? { grabar_nota: nota } : {}) }
+}
+
+export function recordingEquals(a: RecordingDraft | undefined, b: RecordingDraft | undefined): boolean {
+  const x = a ?? NO_RECORDING
+  const y = b ?? NO_RECORDING
+  if (x.on !== y.on) return false
+  if (!x.on) return true
+  return x.series === y.series && (x.nota ?? '').trim() === (y.nota ?? '').trim()
+}
+
+/** «🎥 última serie · de lado» -- texto corto de la petición ('' si no hay). */
+export function recordingSummary(r: RecordingDraft | undefined): string {
+  if (!r?.on) return ''
+  const series = r.series === 'todas' ? 'todas las series' : r.series === 'primera' ? 'primera serie' : 'última serie'
+  const nota = (r.nota ?? '').trim()
+  return nota ? `${series} · ${nota}` : series
+}
 
 export type CellDraft = {
   values: Record<FieldKey, string>
@@ -121,9 +183,12 @@ export function cellFromApi(cell: MatrixCellApi): CellDraft {
     intensityKey,
     enabledMetrics: cell.enabled_metrics && cell.enabled_metrics.length ? [...cell.enabled_metrics] : [...DEFAULT_METRICS],
     notes: str(cell.notes),
-    technique: str(p.tecnica)
-      ? { key: str(p.tecnica), series: str(p.tecnica_series) === 'ultima' ? 'ultima' : 'todas', otra: str(p.tecnica_otra) }
-      : { ...NO_TECHNIQUE },
+    technique: {
+      ...(str(p.tecnica)
+        ? { key: str(p.tecnica), series: str(p.tecnica_series) === 'ultima' ? 'ultima' : 'todas', otra: str(p.tecnica_otra) }
+        : { ...NO_TECHNIQUE }),
+      ...(isTruthyFlag(p.grabar) ? { recording: recordingFromPrescribed(p) } : {}),
+    },
   }
 }
 
@@ -300,7 +365,7 @@ function prescribedFromCell(cell: CellDraft): Record<string, string> {
   if (trim(cell.values.tempo)) out.tempo = trim(cell.values.tempo)
   if (trim(cell.values.duracion)) out.duracion = trim(cell.values.duracion)
   if (trim(cell.values.intensity)) out[cell.intensityKey] = trim(cell.values.intensity)
-  return { ...out, ...techniquePrescribed(cell.technique) }
+  return { ...out, ...techniquePrescribed(cell.technique), ...recordingPrescribed(cell.technique.recording) }
 }
 
 /** Claves de técnica para `prescribed`; '' = quitar (el backend limpia las demás). */
@@ -389,6 +454,15 @@ export function computeChanges(
         fieldLines.push(`Técnica ${label(before.technique)} → ${label(cur.technique)}`)
       }
 
+      if (!recordingEquals(before.technique.recording, cur.technique.recording)) {
+        const r = recordingPrescribed(cur.technique.recording)
+        patch.grabar = r.grabar ?? ''
+        patch.grabar_series = r.grabar_series ?? ''
+        patch.grabar_nota = r.grabar_nota ?? ''
+        const label = (x: RecordingDraft | undefined) => recordingSummary(x) || 'no'
+        fieldLines.push(`Grabar ${label(before.technique.recording)} → ${label(cur.technique.recording)}`)
+      }
+
       const notesChanged = trim(before.notes) !== trim(cur.notes)
       if (notesChanged) {
         fieldLines.push(`Notas ${trim(before.notes) ? `"${trim(before.notes).slice(0, 30)}"` : '—'} → ${trim(cur.notes) ? `"${trim(cur.notes).slice(0, 30)}"` : '(sin nota)'}`)
@@ -430,6 +504,7 @@ export function cellIsDirty(orig: MatrixCellApi | undefined, cur: CellDraft | un
     before.intensityKey !== cur.intensityKey ||
     trim(before.notes) !== trim(cur.notes) ||
     !techniqueEquals(before.technique, cur.technique) ||
+    !recordingEquals(before.technique.recording, cur.technique.recording) ||
     ALL_FIELD_KEYS.some(f => trim(before.values[f]) !== trim(cur.values[f]))
   )
 }

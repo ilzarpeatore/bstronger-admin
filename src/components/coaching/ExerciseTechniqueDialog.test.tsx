@@ -23,8 +23,41 @@ describe('técnica especial de un ejercicio', () => {
     expect(withTechnique(p, { key: 'rest_pause', series: 'ultima', otra: 'Pausa' })).toEqual({ series: '3', reps: '8', tecnica: 'rest_pause', tecnica_series: 'ultima' })
     expect(withTechnique(p, { key: '', series: 'todas', otra: '' })).toEqual({ series: '3', reps: '8' })
 
-    expect(techniquePayload({ key: '', series: 'ultima', otra: 'x' })).toEqual({ tecnica: null, tecnica_series: null, tecnica_otra: null })
-    expect(techniquePayload({ key: 'otra', series: 'todas', otra: ' Pausa 2 s ' })).toEqual({ tecnica: 'otra', tecnica_series: 'todas', tecnica_otra: 'Pausa 2 s' })
+    const noRec = { grabar: false, grabar_series: null, grabar_nota: null }
+    expect(techniquePayload({ key: '', series: 'ultima', otra: 'x' })).toEqual({ tecnica: null, tecnica_series: null, tecnica_otra: null, ...noRec })
+    expect(techniquePayload({ key: 'otra', series: 'todas', otra: ' Pausa 2 s ' })).toEqual({ tecnica: 'otra', tecnica_series: 'todas', tecnica_otra: 'Pausa 2 s', ...noRec })
+  })
+
+  it('lee, pone y quita la grabación junto a la técnica', () => {
+    const p = { series: '3', grabar: true, grabar_series: 'ultima', grabar_nota: 'De lado' }
+    expect(techniqueFromPrescribed(p)).toEqual({ key: '', series: 'todas', otra: '', recording: { on: true, series: 'ultima', nota: 'De lado' } })
+
+    const rec = { on: true, series: 'primera' as const, nota: ' de frente ' }
+    expect(withTechnique({ series: '3' }, { key: 'rest_pause', series: 'todas', otra: '', recording: rec })).toEqual({
+      series: '3', tecnica: 'rest_pause', tecnica_series: 'todas', grabar: true, grabar_series: 'primera', grabar_nota: 'de frente',
+    })
+    expect(withTechnique(p, { key: '', series: 'todas', otra: '' })).toEqual({ series: '3' })
+    expect(techniquePayload({ key: '', series: 'todas', otra: '', recording: rec })).toEqual({
+      tecnica: null, tecnica_series: null, tecnica_otra: null, grabar: true, grabar_series: 'primera', grabar_nota: 'de frente',
+    })
+  })
+
+  it('el diálogo pide grabación con series y nota', async () => {
+    const onSave = vi.fn(async () => {})
+    render(
+      <ExerciseTechniqueDialog
+        exercise={{ title: 'Sentadilla', prescribed: { series: '3' } }}
+        description='Plantilla.'
+        onClose={() => {}}
+        onSave={onSave}
+      />,
+    )
+    await userEvent.click((await screen.findAllByRole('switch'))[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Solo la última' }))
+    await userEvent.type(screen.getByPlaceholderText('p. ej. de lado, que se vea la cadera'), ' de lado ')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(onSave).toHaveBeenCalledWith({ key: '', series: 'todas', otra: '', recording: { on: true, series: 'ultima', nota: 'de lado' } })
   })
 
   it('el diálogo parte de la técnica actual y guarda la elegida', async () => {

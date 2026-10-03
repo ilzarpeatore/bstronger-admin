@@ -31,6 +31,10 @@ export type PlanRow = {
   tecnica?: string | null
   tecnica_series?: string | null
   tecnica_otra?: string | null
+  /** «Pedir grabación» (Bckbs RecordingRequests) */
+  grabar?: boolean
+  grabar_series?: string | null
+  grabar_nota?: string | null
 }
 
 export type PlanData = {

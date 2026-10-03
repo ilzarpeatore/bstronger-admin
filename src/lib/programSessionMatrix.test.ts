@@ -22,6 +22,8 @@ import {
   setTechnique,
   setValue,
   NO_TECHNIQUE,
+  recordingFromPrescribed,
+  recordingSummary,
   shiftNumeric,
   visibleFields,
   type MatrixSlot,
@@ -352,5 +354,56 @@ describe('técnica especial', () => {
   it('fillRight copia también la técnica', () => {
     const d = fillRight(buildDraft(withTech), withTech, '5#1', 0)
     expect(d[12]['5#1']!.technique).toEqual({ key: 'rest_pause', series: 'ultima', otra: '' })
+  })
+})
+
+describe('pedir grabación', () => {
+  const withRec: MatrixSlot = {
+    ...slot,
+    rows: [
+      {
+        ...slot.rows[0],
+        cells: {
+          ...slot.rows[0].cells,
+          '10': { ...slot.rows[0].cells['10'], prescribed: { series: '4', reps: '6-8', rir: '2', grabar: true, grabar_series: 'ultima', grabar_nota: 'De lado' } },
+        },
+      },
+      slot.rows[1],
+    ],
+  }
+
+  it('lee la grabación del prescribed (true o "1")', () => {
+    expect(recordingFromPrescribed({ grabar: true, grabar_series: 'primera' })).toEqual({ on: true, series: 'primera', nota: '' })
+    expect(recordingFromPrescribed({ grabar: '1' })).toEqual({ on: true, series: 'todas', nota: '' })
+    expect(recordingFromPrescribed({ grabar: false, grabar_series: 'ultima' }).on).toBe(false)
+    const d = buildDraft(withRec)
+    expect(d[10]['5#1']!.technique).toEqual({ ...NO_TECHNIQUE, recording: { on: true, series: 'ultima', nota: 'De lado' } })
+    expect(d[11]['5#1']!.technique.recording).toBeUndefined()
+    expect(recordingSummary(d[10]['5#1']!.technique.recording)).toBe('última serie · De lado')
+  })
+
+  it('pedirla sin técnica solo manda las claves de grabación', () => {
+    const d = setTechnique(buildDraft(slot), slot, 10, '9#1', { ...NO_TECHNIQUE, recording: { on: true, series: 'primera', nota: ' de frente ' } })
+    const { changes, lines } = computeChanges(slot, d)
+    expect(changes).toEqual([
+      { type: 'update', assignment_id: 10, row_id: 3, prescribed: { grabar: '1', grabar_series: 'primera', grabar_nota: 'de frente' } },
+    ])
+    expect(lines[0].text).toContain('Grabar no → primera serie · de frente')
+    expect(cellIsDirty(slot.rows[1].cells['10'], d[10]['9#1'])).toBe(true)
+  })
+
+  it('quitarla vacía sus tres claves; sin tocarla no hay cambios', () => {
+    expect(computeChanges(withRec, buildDraft(withRec)).changes).toEqual([])
+    const d = setTechnique(buildDraft(withRec), withRec, 10, '5#1', { ...NO_TECHNIQUE, recording: { on: false, series: 'ultima', nota: 'De lado' } })
+    expect(computeChanges(withRec, d).changes[0]).toEqual({
+      type: 'update', assignment_id: 10, row_id: 1, prescribed: { grabar: '', grabar_series: '', grabar_nota: '' },
+    })
+  })
+
+  it('un ejercicio añadido lleva la grabación en su prescribed', () => {
+    const d = addCell(buildDraft(slot), 11, '9#1')
+    d[11]['9#1']!.technique = { ...NO_TECHNIQUE, recording: { on: true, series: 'todas', nota: '' } }
+    const add = computeChanges(slot, d).changes.find(c => c.type === 'add')
+    expect(add?.prescribed).toMatchObject({ grabar: '1', grabar_series: 'todas' })
   })
 })
