@@ -14,11 +14,19 @@ import { NavUser } from './NavUser';
 import { Badge } from 'src/components/ui/badge';
 import sidebaritems from './sidebaritems';
 import { filterSidebarByPermission } from './filterSidebarByPermission';
+import { withChatUnreadBadge } from './withChatUnreadBadge';
+import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
 import { useAuth } from '@/context/auth-context/AuthContext';
 
 const SidebarLayout = ({ ...props }: React.ComponentProps<typeof Sidebar>) => {
   const { hasPermission } = useAuth();
-  const menu = filterSidebarByPermission(sidebaritems, hasPermission);
+  const chatUnread = useChatUnreadCount();
+  // Primero se filtra por permisos y despues se decora: si la entrada de chat
+  // no es visible para este usuario, no hay nada que marcar.
+  const menu = withChatUnreadBadge(
+    filterSidebarByPermission(sidebaritems, hasPermission),
+    chatUnread,
+  );
 
   return (
      <Sidebar
