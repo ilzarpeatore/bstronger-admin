@@ -58,7 +58,7 @@ const slot: MatrixSlot = {
 describe('buildDraft', () => {
   it('lee series/reps/carga/descanso y la intensidad según enabled_metrics (RIR o RPE)', () => {
     const d = buildDraft(slot)
-    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '45', intensity: '2', descanso: '120', tempo: '', duracion: '' })
+    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '45', intensity: '2', descanso: '120', tempo: '', tiempo: '', distancia: '' })
     expect(d[11]['5#1']!.intensityKey).toBe('rpe')
     expect(d[11]['5#1']!.values.intensity).toBe('8')
   })
@@ -154,7 +154,7 @@ describe('pegar desde Excel', () => {
     // Empieza en fila 0, semana 1, campo "series": 5 campos (semana 1) + 2 de la semana 2.
     const grid = [['4', '6-8', '50', '2', '90', '5', '10-12'], ['3', '12']]
     const d = applyPaste(buildDraft(slot), slot, { rowIndex: 0, colIndex: 0, fieldIndex: 0 }, grid)
-    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '50', intensity: '2', descanso: '90', tempo: '', duracion: '' })
+    expect(d[10]['5#1']!.values).toEqual({ series: '4', reps: '6-8', carga: '50', intensity: '2', descanso: '90', tempo: '', tiempo: '', distancia: '' })
     expect(d[11]['5#1']!.values.series).toBe('5')
     expect(d[11]['5#1']!.values.reps).toBe('10-12')
     expect(d[10]['9#1']!.values.series).toBe('3')
@@ -212,7 +212,7 @@ describe('tempo, duración y notas', () => {
   it('cellIsDirty detecta cambios de nota y de tempo', () => {
     const d = setNotes(buildDraft(slot), 10, '5#1', 'nueva')
     expect(cellIsDirty(slot.rows[0].cells['10'], d[10]['5#1'])).toBe(true)
-    expect(cellIsDirty(slot.rows[0].cells['10'], setValue(buildDraft(slot), 10, '5#1', 'duracion', '30')[10]['5#1'])).toBe(true)
+    expect(cellIsDirty(slot.rows[0].cells['10'], setValue(buildDraft(slot), 10, '5#1', 'tiempo', '30')[10]['5#1'])).toBe(true)
   })
   it('pegar usa los campos visibles (con tempo) para saltar de semana', () => {
     const fields = visibleFields(['tempo'])
@@ -295,8 +295,8 @@ describe('cascada por ejercicio', () => {
   })
 
   it('no inventa valores: si la base no tiene el campo relleno lo deja como está', () => {
-    const d = cascadeRow(buildDraft(slot), slot, '5#1', { steps: { duracion: 5 }, carga: [] })
-    expect(d[11]['5#1']!.values.duracion).toBe('')
+    const d = cascadeRow(buildDraft(slot), slot, '5#1', { steps: { tiempo: 5 }, carga: [] })
+    expect(d[11]['5#1']!.values.tiempo).toBe('')
   })
 })
 
@@ -405,5 +405,45 @@ describe('pedir grabación', () => {
     d[11]['9#1']!.technique = { ...NO_TECHNIQUE, recording: { on: true, series: 'todas', nota: '' } }
     const add = computeChanges(slot, d).changes.find(c => c.type === 'add')
     expect(add?.prescribed).toMatchObject({ grabar: '1', grabar_series: 'todas' })
+  })
+})
+
+describe('tiempo / duracion (alias de lectura, se escribe tiempo)', () => {
+  const legacy: MatrixSlot = {
+    ...slot,
+    rows: [{
+      row_key: '7#1', exercise_id: 7, exercise_title: 'Plancha', block_title: 'Core',
+      cells: {
+        '10': { id: 20, block_id: 1, sequence: 1, prescribed: { series: '3', duracion: '45' }, enabled_metrics: ['duracion', 'rir'], notes: null },
+        '11': { id: 21, block_id: 2, sequence: 1, prescribed: { series: '3', tiempo: '300', distancia: '1000' }, enabled_metrics: ['tiempo', 'distancia', 'rir'], notes: null },
+      },
+    }],
+  }
+  it('lee duracion como tiempo, en mm:ss, y normaliza enabled_metrics', () => {
+    const d = buildDraft(legacy)
+    expect(d[10]['7#1']!.values.tiempo).toBe('0:45')
+    expect(d[10]['7#1']!.enabledMetrics).toEqual(['tiempo', 'rir'])
+    expect(d[11]['7#1']!.values.tiempo).toBe('5:00')
+    expect(d[11]['7#1']!.values.distancia).toBe('1000')
+  })
+  it('sin tocar no hay cambios; reescribir el mismo tiempo en otro formato tampoco', () => {
+    expect(computeChanges(legacy, buildDraft(legacy)).changes).toEqual([])
+    const d = setValue(buildDraft(legacy), 11, '7#1', 'tiempo', '300')
+    expect(computeChanges(legacy, d).changes).toEqual([])
+  })
+  it('al cambiar escribe tiempo en segundos y borra duracion', () => {
+    const d = setValue(buildDraft(legacy), 10, '7#1', 'tiempo', '1:00')
+    expect(computeChanges(legacy, d).changes[0]).toMatchObject({ type: 'update', row_id: 20, prescribed: { tiempo: '60', duracion: '' } })
+  })
+  it('distancia acepta km y guarda metros', () => {
+    const d = setValue(buildDraft(legacy), 11, '7#1', 'distancia', '1,5 km')
+    expect(computeChanges(legacy, d).changes[0]).toMatchObject({ prescribed: { distancia: '1500' } })
+  })
+  it('las celdas nuevas escriben tiempo, nunca duracion', () => {
+    let d = addCell(buildDraft(legacy), 12, '7#1')
+    d = setValue(d, 12, '7#1', 'tiempo', '0:30')
+    const add = computeChanges(legacy, d).changes.find(c => c.type === 'add')
+    expect(add).toMatchObject({ prescribed: { tiempo: '30' } })
+    expect(JSON.stringify(add)).not.toContain('duracion')
   })
 })

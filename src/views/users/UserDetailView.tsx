@@ -1,7 +1,7 @@
 import { fuzzyMatch } from '@/lib/textSearch'
 
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
-import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TrashIcon, FlameIcon, LayersIcon, Table2Icon as TableIcon } from 'lucide-react'
+import { ArrowLeftIcon, DumbbellIcon, UtensilsIcon, CalendarIcon, ActivityIcon, CameraIcon, BarChart3Icon, SettingsIcon, WatchIcon, VaultIcon, ClipboardCheckIcon, ClipboardListIcon, CheckSquareIcon, HeartIcon, PlusIcon, DownloadIcon, CopyIcon, SearchIcon, XIcon, FileTextIcon, UploadIcon, CheckCircleIcon, MessageSquareIcon, TrophyIcon, MoreVerticalIcon, HistoryIcon, TargetIcon, AlertTriangleIcon, ScaleIcon, PencilIcon, ExternalLinkIcon, ClockIcon, TimerIcon, TrashIcon, FlameIcon, LayersIcon, Table2Icon as TableIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +46,8 @@ const MuscleVolumeOverTimeChart = lazy(() => import('@/components/charts/trainin
 const MuscleVolumeStackedChart = lazy(() => import('@/components/charts/training-volume-charts').then(m => ({ default: m.MuscleVolumeStackedChart })))
 const MuscleVolumeCompareChart = lazy(() => import('@/components/charts/training-volume-charts').then(m => ({ default: m.MuscleVolumeCompareChart })))
 const MuscleBodyHeatmap = lazy(() => import('@/components/charts/training-volume-charts').then(m => ({ default: m.MuscleBodyHeatmap })))
+// Pestaña «Acondicionamiento» (Hyrox): lleva recharts, se carga solo al abrirla.
+const ConditioningStatsPanel = lazy(() => import('@/components/users/ConditioningStatsPanel'))
 const ChartFallback = ({ height = 200 }: { height?: number }) => (
   <div style={{ height }} className='flex items-center justify-center'>
     <div className='h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent' />
@@ -176,6 +178,7 @@ const TABS = [
   { value: 'habits', label: 'Hábitos', icon: HeartIcon },
   { value: 'photos', label: 'Fotos', icon: CameraIcon },
   { value: 'metrics', label: 'Métricas', icon: BarChart3Icon },
+  { value: 'conditioning', label: 'Acondicionamiento', icon: TimerIcon },
   { value: 'resources', label: 'Recursos', icon: FileTextIcon },
   { value: 'wearable', label: 'Wearable', icon: WatchIcon },
   { value: 'vault', label: 'Vault', icon: VaultIcon },
@@ -192,6 +195,7 @@ const TAB_SLUGS: Record<string, string> = {
   habits: 'habitos',
   photos: 'fotos',
   metrics: 'metricas',
+  conditioning: 'acondicionamiento',
   resources: 'recursos',
   wearable: 'wearable',
   vault: 'vault',
@@ -1675,6 +1679,13 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
           </CardContent></Card>
           {records.length > 0 && <Card><CardHeader><CardTitle className='text-base flex items-center gap-2'><HistoryIcon className='size-4' /> Historial de ejercicios</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Ejercicio</TableHead><TableHead>Peso</TableHead><TableHead>Repeticiones</TableHead><TableHead>1RM</TableHead></TableRow></TableHeader><TableBody>{records.map(r => <TableRow key={r.id}><TableCell>{r.date}</TableCell><TableCell className='font-medium'>{r.exercise?.title || `Ejercicio #${r.exercise_id}`}</TableCell><TableCell>{r.weight ?? '—'} kg</TableCell><TableCell>{r.reps ?? '—'}</TableCell><TableCell>{r.one_rm ?? '—'} kg</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>}
         </div>)}
+
+        {/* ═══ ACONDICIONAMIENTO ═══ */}
+        {activeTab === 'conditioning' && (
+          <Suspense fallback={<ChartFallback height={280} />}>
+            <ConditioningStatsPanel clientId={userId} />
+          </Suspense>
+        )}
 
         {/* ═══ RESOURCES ═══ */}
         {activeTab === 'resources' && (<div className='space-y-4'>

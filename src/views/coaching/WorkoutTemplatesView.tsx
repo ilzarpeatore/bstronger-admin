@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import type { BlockKind, BlockParams } from '@/lib/blockKinds'
 import WorkoutTemplateViewer, {
   type WorkoutViewerBlock,
   type WorkoutViewerExercise,
@@ -47,6 +48,8 @@ type ApiBlock = {
   title: string | null
   instructions: string | null
   order: number
+  kind?: BlockKind | string | null
+  params?: BlockParams | null
   exercises: ApiBlockExercise[]
 }
 
@@ -315,6 +318,19 @@ export default function WorkoutTemplatesView() {
     }
   }
 
+  // Tipo de bloque + params (Hyrox / acondicionamiento). El backend valida
+  // con BlockKinds y responde 422 {message} si algo no cuadra.
+  const handleUpdateBlockKind = async (blockId: number, kind: BlockKind, params: BlockParams | null) => {
+    const previous = detail?.blocks.find(b => b.id === blockId)
+    updateBlockLocally(blockId, { kind, params })
+    try {
+      await api.post('/admin/workout-template-block-update', { id: blockId, kind, params })
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo guardar el tipo de bloque')
+      if (previous) updateBlockLocally(blockId, { kind: previous.kind ?? 'normal', params: previous.params ?? null })
+    }
+  }
+
   const handleUpdateBlockInstructions = async (blockId: number, value: string) => {
     updateBlockLocally(blockId, { instructions: value || null })
     try {
@@ -455,6 +471,8 @@ export default function WorkoutTemplatesView() {
     id: b.id,
     title: b.title,
     instructions: b.instructions,
+    kind: b.kind ?? 'normal',
+    params: b.params ?? null,
     exercises: b.exercises.map(e => ({
       id: e.id,
       exercise_id: e.exercise_id,
@@ -498,6 +516,7 @@ export default function WorkoutTemplatesView() {
               onRemoveBlock={handleRemoveBlock}
               onSaveBlockAsSection={openSaveAsSection}
               onUpdateBlockInstructions={handleUpdateBlockInstructions}
+              onUpdateBlockKind={handleUpdateBlockKind}
               onAddExercise={handleAddExercise}
               onRemoveExercise={handleRemoveExercise}
               onUpdateExerciseField={handleUpdateField}
