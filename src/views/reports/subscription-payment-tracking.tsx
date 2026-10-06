@@ -12,7 +12,10 @@ import { CardContent } from '@/components/ui/card'
 import { DashboardCard } from '@/components/shared/dashboard-card'
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
-import type { ClientPaymentRow, SubscriptionPaymentsPayload, SubscriptionPaymentsSummary } from '@/types/apps/subscription-payments'
+import type { BillingSummary, ClientPaymentRow, PaymentControlPayload, SubscriptionPaymentsPayload, SubscriptionPaymentsSummary } from '@/types/apps/subscription-payments'
+import PaymentControlForm from '@/components/users/PaymentControlForm'
+import { TONE_CLASS, billingLabel } from '@/components/users/payment-control-utils'
+import PaymentControlBar from './payment-control-bar'
 import AddExternalClientDialog from './add-external-client-dialog'
 import NotionImportDialog from './notion-import-dialog'
 import MergeDuplicatesDialog from './merge-duplicates-dialog'
@@ -39,6 +42,27 @@ export default function SubscriptionPaymentTracking() {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [savingCell, setSavingCell] = useState<string | null>(null)
+  const [openBilling, setOpenBilling] = useState<string | null>(null)
+  // Remonta la barra del control de impago para recontar avisos/bloqueos.
+  const [billingBarKey, setBillingBarKey] = useState(0)
+
+  const setRowBilling = useCallback((client: ClientPaymentRow, billing: BillingSummary) => {
+    setPayload((prev) => prev && ({
+      ...prev,
+      clients: prev.clients.map((c) => clientKey(c) === clientKey(client) ? { ...c, billing } : c),
+    }))
+  }, [])
+
+  // Marcar o desmarcar el mes vigente cambia el estado de impago del cliente.
+  const refreshBilling = useCallback(async (client: ClientPaymentRow) => {
+    if (clientSource(client) !== 'user' || !client.billing) return
+    try {
+      const res = await api.get(`/admin/users/${client.id}/payment-control`)
+      const control = (res?.data ?? res) as PaymentControlPayload
+      setRowBilling(client, control.status)
+      setBillingBarKey((k) => k + 1)
+    } catch { /* no crítico: se ve bien al recargar */ }
+  }, [setRowBilling])
 
   useEffect(() => {
     api.get('/admin/subscription-payments/years').then((res) => {
@@ -88,6 +112,7 @@ export default function SubscriptionPaymentTracking() {
         clients: prev.clients.map((c) => clientKey(c) === clientKey(client) ? { ...c, months: { ...c.months, [month]: { paid: res.data.paid, amount: res.data.amount, paid_at: res.data.paid_at, notes: res.data.notes } } } : c),
       }))
       fetchSummaryOnly()
+      if (client.billing?.period.year === year && client.billing?.period.month === month) refreshBilling(client)
     } catch {
       setPayload((prev) => prev && ({
         ...prev,
@@ -113,6 +138,7 @@ export default function SubscriptionPaymentTracking() {
     }))
     setOpenCell(null)
     fetchSummaryOnly()
+    if (client.billing?.period.year === year && client.billing?.period.month === month) refreshBilling(client)
   }
 
   const saveTariff = async (client: ClientPaymentRow, fee: number) => {
@@ -180,6 +206,8 @@ export default function SubscriptionPaymentTracking() {
         onOpenChange={setMergeOpen}
         onMerged={(merged) => { setNotice(`${merged} clientes no registrados fusionados con su usuario real.`); fetchData() }}
       />
+
+      <PaymentControlBar key={billingBarKey} onChanged={fetchData} />
 
       {notice && (
         <div className="flex items-center justify-between gap-3 border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-sm">
@@ -252,6 +280,28 @@ export default function SubscriptionPaymentTracking() {
                                 {clientSource(client) === 'external' && <Badge variant="outline" className="text-[10px]">No registrado</Badge>}
                               </p>
                               <p className="text-xs text-muted-foreground truncate">{client.email || '—'}</p>
+                              {client.billing && client.billing.state !== 'not_applicable' && (
+                                <Popover open={openBilling === clientKey(client)} onOpenChange={(open) => setOpenBilling(open ? clientKey(client) : null)}>
+                                  <PopoverTrigger render={
+                                    <button
+                                      title="Control de impago"
+                                      className={cn('mt-1 inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium cursor-pointer', TONE_CLASS[billingLabel(client.billing).tone], !client.billing.enforcement_enabled && 'opacity-60')}
+                                    >
+                                      {billingLabel(client.billing).label}
+                                    </button>
+                                  } />
+                                  <PopoverContent align="start" className="w-80">
+                                    <PopoverHeader>
+                                      <PopoverTitle>Control de impago</PopoverTitle>
+                                    </PopoverHeader>
+                                    <PaymentControlForm
+                                      userId={client.id}
+                                      compact
+                                      onChange={(control) => { setRowBilling(client, control.status); setBillingBarKey((k) => k + 1) }}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              )}
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                             {clientSource(client) === 'external' && (

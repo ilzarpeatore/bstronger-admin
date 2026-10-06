@@ -48,13 +48,63 @@ clients.forEach((c, i) => {
   }
 })
 
+// ═══ Control de impago (Bckbs docs/AVISO_IMPAGO.md), versión simplificada ═══
+const billingGlobal = { enabled: false, since: null as string | null }
+const billingControls = new Map<number, { exempt: boolean; due_day: number; grace_until: string | null }>()
+const todayIso = () => new Date().toISOString().slice(0, 10)
+
+function mockBilling(c: MockClient) {
+  const control = billingControls.get(c.id) ?? { exempt: false, due_day: 1, grace_until: null }
+  const now = new Date()
+  const due = now.getDate() >= control.due_day
+    ? new Date(now.getFullYear(), now.getMonth(), control.due_day)
+    : new Date(now.getFullYear(), now.getMonth() - 1, control.due_day)
+  const year = due.getFullYear()
+  const month = due.getMonth() + 1
+  const record = records.get(key('user', c.id, year, month))
+  const anchor = billingGlobal.enabled && billingGlobal.since && new Date(billingGlobal.since) > due ? new Date(billingGlobal.since) : billingGlobal.enabled ? due : new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const day = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - anchor.getTime()) / 86400000) + 1
+  const blockDate = new Date(anchor.getTime() + 3 * 86400000).toISOString().slice(0, 10)
+  const state: 'ok' | 'exempt' | 'grace' | 'warning' | 'blocked' = control.exempt
+    ? 'exempt'
+    : record?.paid
+      ? 'ok'
+      : control.grace_until && control.grace_until >= todayIso()
+        ? 'grace'
+        : day <= 3 ? 'warning' : 'blocked'
+  const pending = state === 'warning' || state === 'blocked' || state === 'grace'
+  return {
+    state,
+    effective_state: billingGlobal.enabled ? state : (pending ? 'ok' : state),
+    enforcement_enabled: billingGlobal.enabled,
+    day: pending ? day : null,
+    block_date: pending ? blockDate : null,
+    due_day: control.due_day,
+    exempt: control.exempt,
+    grace_until: control.grace_until,
+    period: { year, month, label: `${MONTH_LABELS[month]} ${year}` },
+    due_date: due.toISOString().slice(0, 10),
+    paid: !!record?.paid,
+    amount: record?.amount ?? c.monthly_fee,
+    currency: 'EUR',
+    days_until_block: state === 'warning' ? 4 - day : null,
+    message: null,
+  }
+}
+
+function billingSettingsPayload() {
+  const counts = { ok: 0, grace: 0, warning: 0, blocked: 0, exempt: 0 }
+  clients.filter((c) => c.source === 'user').forEach((c) => { counts[mockBilling(c).state]++ })
+  return { enabled: billingGlobal.enabled, stored_enabled: billingGlobal.enabled, force_off: false, since: billingGlobal.since, warning_days: 3, counts }
+}
+
 function buildClientsPayload(year: number) {
   return clients.map((c) => {
     const months: Record<number, Record_> = {}
     for (let m = 1; m <= 12; m++) {
       months[m] = records.get(key(c.source, c.id, year, m)) ?? { paid: false, amount: c.monthly_fee, paid_at: null, notes: null }
     }
-    return { id: c.id, source: c.source, name: c.name, email: c.email, status: c.status, monthly_fee: c.monthly_fee, months }
+    return { id: c.id, source: c.source, name: c.name, email: c.email, status: c.status, monthly_fee: c.monthly_fee, months, billing: c.source === 'user' ? mockBilling(c) : null }
   })
 }
 
@@ -79,6 +129,36 @@ async function saveMonth(source: Source, request: Request, params: Record<string
 }
 
 export const SubscriptionPaymentsHandlers = [
+  http.get('*/admin/payment-control/settings', () => HttpResponse.json({ data: billingSettingsPayload() })),
+
+  http.put('*/admin/payment-control/settings', async ({ request }) => {
+    const body = (await request.json()) as { enabled: boolean }
+    if (body.enabled && !billingGlobal.enabled) billingGlobal.since = todayIso()
+    billingGlobal.enabled = !!body.enabled
+    return HttpResponse.json({ data: billingSettingsPayload() })
+  }),
+
+  http.get('*/admin/users/:userId/payment-control', ({ params }) => {
+    const client = findClient('user', Number(params.userId))
+    if (!client) return HttpResponse.json({ data: { user_id: Number(params.userId), applies: false, settings: { exempt: false, due_day: 1, grace_until: null }, status: null } })
+    const control = billingControls.get(client.id) ?? { exempt: false, due_day: 1, grace_until: null }
+    return HttpResponse.json({ data: { user_id: client.id, applies: true, settings: control, status: mockBilling(client) } })
+  }),
+
+  http.put('*/admin/users/:userId/payment-control', async ({ request, params }) => {
+    const client = findClient('user', Number(params.userId))
+    if (!client) return HttpResponse.json({ message: 'Cliente no encontrado.' }, { status: 404 })
+    const body = (await request.json()) as { exempt?: boolean; due_day?: number; grace_days?: number }
+    const control = { ...(billingControls.get(client.id) ?? { exempt: false, due_day: 1, grace_until: null }) }
+    if (body.exempt !== undefined) control.exempt = body.exempt
+    if (body.due_day !== undefined) control.due_day = body.due_day
+    if (body.grace_days !== undefined) {
+      control.grace_until = body.grace_days > 0 ? new Date(Date.now() + body.grace_days * 86400000).toISOString().slice(0, 10) : null
+    }
+    billingControls.set(client.id, control)
+    return HttpResponse.json({ data: { user_id: client.id, applies: true, settings: control, status: mockBilling(client) } })
+  }),
+
   http.get('*/admin/subscription-payments/summary', ({ request }) => {
     const url = new URL(request.url)
     const year = Number(url.searchParams.get('year')) || currentYear
