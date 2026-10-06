@@ -136,7 +136,7 @@ const ChallengeWizard = ({ open, onOpenChange, editing, metrics, programs, habit
     const payload: Record<string, unknown> = toPayload(form, metric, status)
     if (locked) {
       // Una vez activo no se pueden cambiar métrica, formato ni inicio, ni el estado desde aquí.
-      for (const k of ['metric_key', 'metric_params', 'format', 'start_date', 'status']) delete payload[k]
+      for (const k of ['metric_key', 'metric_params', 'format', 'start_date', 'status', 'visibility']) delete payload[k]
     }
     const clientIds = form.visibility === 'closed' ? invites.map(c => c.id) : []
     setSaving(true)
@@ -175,7 +175,7 @@ const ChallengeWizard = ({ open, onOpenChange, editing, metrics, programs, habit
         <DialogHeader>
           <DialogTitle>{editing ? `Editar reto: ${editing.title}` : 'Nuevo reto'}</DialogTitle>
           <DialogDescription>
-            {locked ? 'El reto ya ha empezado: la métrica, el formato y la fecha de inicio no se pueden cambiar.' : 'Los clientes solo verán el reto cuando lo publiques.'}
+            {locked ? 'El reto ya ha empezado: el tipo, la métrica, el formato y la fecha de inicio no se pueden cambiar.' : 'Los clientes solo verán el reto cuando lo publiques.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -237,8 +237,9 @@ const ChallengeWizard = ({ open, onOpenChange, editing, metrics, programs, habit
                   <button
                     key={o.v}
                     type='button'
+                    disabled={locked}
                     onClick={() => set('visibility', o.v)}
-                    className={cn('flex gap-3 rounded-lg border p-3 text-left transition-colors', form.visibility === o.v ? 'border-primary bg-primary/5' : 'hover:bg-muted/50')}
+                    className={cn('flex gap-3 rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60', form.visibility === o.v ? 'border-primary bg-primary/5' : 'hover:bg-muted/50')}
                   >
                     <o.Icon className='mt-0.5 size-4 shrink-0' />
                     <span>
