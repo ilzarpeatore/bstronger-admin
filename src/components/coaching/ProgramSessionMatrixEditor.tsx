@@ -77,7 +77,8 @@ const FIELD_WIDTH: Record<FieldKey, string> = {
   intensity: 'w-12',
   descanso: 'w-14',
   tempo: 'w-20',
-  duracion: 'w-14',
+  tiempo: 'w-16',
+  distancia: 'w-16',
 }
 
 const variantOf = (title: string) => title.match(/\(S\d+\)\s*$/i)?.[0]?.trim() ?? ''
@@ -93,7 +94,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
   const [subs, setSubs] = useState<Record<string, Substitutions>>({})
   const [extraRows, setExtraRows] = useState<Record<string, MatrixRow[]>>({})
   const [deload, setDeload] = useState<Record<number, boolean>>({})
-  // Columnas opcionales visibles (tempo, duración) y orden de ejercicios por tipo de sesión.
+  // Columnas opcionales visibles (tempo, tiempo, distancia) y orden de ejercicios por tipo de sesión.
   const [optionalFields, setOptionalFields] = useState<FieldKey[]>([])
   const fields = useMemo(() => visibleFields(optionalFields), [optionalFields])
   const [rowOrder, setRowOrder] = useState<Record<string, string[]>>({})
@@ -406,7 +407,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
                           onClick={() => setOptionalFields(prev => (prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]))}
                         >
                           <span className='mr-2 inline-block w-3'>{optionalFields.includes(f) ? '✓' : ''}</span>
-                          {f === 'tempo' ? 'Tempo' : 'Duración'}
+                          {FIELD_LABELS[f]}
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
@@ -614,7 +615,7 @@ export default function ProgramSessionMatrixEditor({ open, onOpenChange, program
           {cascade && cascadeBaseCol && cascadePreview && slot && (
             <div className='space-y-3 text-sm'>
               <div className='grid gap-2 sm:grid-cols-2'>
-                {CASCADE_FIELDS.filter(f => f !== 'duracion').map(f => {
+                {CASCADE_FIELDS.filter(f => f !== 'tiempo').map(f => {
                   const label = f === 'intensity' ? (draft[cascadeBaseCol.assignment_id]?.[cascade.rowKey]?.intensityKey ?? 'rir').toUpperCase() : FIELD_LABELS[f]
                   return (
                     <label key={f} className='flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5'>

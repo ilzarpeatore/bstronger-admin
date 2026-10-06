@@ -39,6 +39,17 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { BlockKindSelect, BlockParamsEditor, BLOCK_KIND_ICONS } from '@/components/coaching/BlockKindEditor'
+import { PrescribedDistanceInput, PrescribedDurationInput } from '@/components/coaching/DurationInput'
+import {
+  CONDITIONING_METRIC_KEYS,
+  formatDuration,
+  blockKindSummary,
+  isConditioningKind,
+  normalizeKind,
+  type BlockKind,
+  type BlockParams,
+} from '@/lib/blockKinds'
 
 // Filtros de la Biblioteca de ejercicios (pedido explícito 2026-09-20) --
 // bodypartId/equipmentId/levelId son ids reales (bodypart-list/equipment-list/
@@ -106,6 +117,10 @@ export type WorkoutViewerBlock = {
   // AISLAMIENTO (auditoría 2026-09-18): true si el bloque entero lo añadió
   // el coach solo para este cliente (client_block_overrides).
   is_addition?: boolean
+  // Hyrox / acondicionamiento (contrato hyrox/contrato-api.md): tipo de
+  // bloque y sus parámetros. Ausente o null = 'normal'.
+  kind?: BlockKind | string | null
+  params?: BlockParams | null
 }
 
 export type WorkoutTemplateViewerProps = {
@@ -133,6 +148,11 @@ export type WorkoutTemplateViewerProps = {
   // Guardar el bloque como plantilla de sección reutilizable (/section-templates).
   onSaveBlockAsSection?: (block: WorkoutViewerBlock) => void
   onUpdateBlockInstructions?: (blockId: number, value: string) => void
+  // Tipo de bloque + params (EMOM, AMRAP...). Sin esto el tipo solo se
+  // muestra (resumen en la cabecera). `canEditBlockKind` limita qué bloques
+  // se pueden cambiar (p. ej. en la sesión de un cliente, solo los suyos).
+  onUpdateBlockKind?: (blockId: number, kind: BlockKind, params: BlockParams | null) => void
+  canEditBlockKind?: (block: WorkoutViewerBlock) => boolean
   onAddExercise?: (blockId: number, exercise: WorkoutViewerExercise) => void
   onRemoveExercise?: (blockId: number, exerciseId: number) => void
   onUpdateExerciseField?: (exercise: WorkoutViewerExercise, blockId: number, field: string, value: string) => void
@@ -171,13 +191,20 @@ const FALLBACK_METRIC_OPTIONS = [
   { value: 'reps', label: 'Repeticiones' },
   { value: 'carga', label: 'Carga' },
   { value: 'descanso', label: 'Descanso' },
-  { value: 'tiempo', label: 'Tiempo' },
+  { value: 'tiempo', label: 'Tiempo', input_type: 'time' },
+  { value: 'distancia', label: 'Distancia' },
+  { value: 'calorias', label: 'Calorías' },
   { value: 'tempo', label: 'Tempo' },
   { value: 'rpe', label: 'RPE' },
   { value: 'rir', label: 'RIR' },
 ]
 
-type MetricOption = { value: string; label: string }
+type MetricOption = { value: string; label: string; input_type?: string | null }
+
+/** `duracion` es alias de lectura de `tiempo` (contrato Hyrox): se lee, nunca se escribe. */
+const TIME_ALIAS: Record<string, string> = { duracion: 'tiempo' }
+const isTimeMetric = (key: string, options: MetricOption[]) =>
+  key === 'tiempo' || key === 'duracion' || options.find(o => o.value === key)?.input_type === 'time'
 
 let metricOptionsCache: MetricOption[] | null = null
 let metricOptionsPromise: Promise<MetricOption[]> | null = null
@@ -193,8 +220,8 @@ function getMetricOptions(): Promise<MetricOption[]> {
         const options: MetricOption[] = [
           { value: '', label: '(Opcional)' },
           ...items
-            .filter((m: any) => m.key !== 'series')
-            .map((m: any) => ({ value: m.key, label: m.label })),
+            .filter((m: any) => m.key !== 'series' && m.key !== 'duracion')
+            .map((m: any) => ({ value: m.key, label: m.label, input_type: m.input_type ?? null })),
         ]
         metricOptionsCache = options
         return options
@@ -292,12 +319,17 @@ function PrescribedEditor({
   exercise,
   readOnly,
   metricsReadOnly,
+  conditioning,
   onFieldChange,
   onMetricsChange,
 }: {
   exercise: WorkoutViewerExercise
   readOnly?: boolean
   metricsReadOnly?: boolean
+  // Bloque de acondicionamiento (EMOM/AMRAP/For Time/Intervalos/Carrera):
+  // columnas reps/carga/tiempo/distancia/calorías y sin RIR/RPE por
+  // ejercicio (el RPE se pide una vez para todo el bloque).
+  conditioning?: boolean
   onFieldChange?: (field: string, value: string) => void
   onMetricsChange?: (metrics: string[]) => void
 }) {
@@ -318,11 +350,20 @@ function PrescribedEditor({
     setLocalValues({})
   }, [exercise.id])
 
-  const getFieldValue = (key: string) => localValues[key] ?? (exercise.prescribed?.[key] ?? '')
+  // `tiempo` se lee también de `duracion` (dato viejo del importador/matriz).
+  const prescribedValue = (key: string) => {
+    const v = exercise.prescribed?.[key]
+    if ((v === null || v === undefined || v === '') && key === 'tiempo') return exercise.prescribed?.duracion
+    return v
+  }
+  const getFieldValue = (key: string) => localValues[key] ?? String(prescribedValue(key) ?? '')
   const handleFieldChange = (key: string, value: string) => setLocalValues(prev => ({ ...prev, [key]: value }))
   const handleFieldBlur = (key: string, value: string) => onFieldChange?.(key, value)
 
-  const enabledMetrics = exercise.enabled_metrics || []
+  const enabledMetrics = useMemo(
+    () => [...new Set((exercise.enabled_metrics || []).map(m => TIME_ALIAS[m] ?? m))],
+    [exercise.enabled_metrics]
+  )
   // Si por lo que sea vinieran los dos a la vez (dato viejo), RIR gana --
   // es el default del backend. Si no hay ninguno (no debería pasar tras el
   // backfill), tambien cae a RIR.
@@ -349,7 +390,106 @@ function PrescribedEditor({
     onMetricsChange?.(buildMetrics(intensityKey, next))
   }
 
+  // --- Acondicionamiento: cada columna es una métrica que se activa/desactiva.
+  const conditioningKeys = CONDITIONING_METRIC_KEYS as readonly string[]
+  const conditioningEnabled = (key: string) => enabledMetrics.includes(key)
+  const buildConditioningMetrics = (enabled: string[]) => [
+    ...conditioningKeys.filter(k => enabled.includes(k)),
+    // Se conservan otras métricas (descanso, tempo...) pero no RIR/RPE por ejercicio.
+    ...enabledMetrics.filter(m => !conditioningKeys.includes(m) && m !== 'rir' && m !== 'rpe'),
+  ]
+  const toggleConditioningMetric = (key: string) => {
+    const current = enabledMetrics.filter(m => conditioningKeys.includes(m))
+    const next = current.includes(key) ? current.filter(m => m !== key) : [...current, key]
+    onMetricsChange?.(buildConditioningMetrics(next))
+  }
+  const commitConditioningField = (key: string, value: string) => {
+    if (value.trim() !== String(prescribedValue(key) ?? '').trim()) onFieldChange?.(key, value)
+    // Escribir un valor activa la métrica para que el cliente pueda registrarla.
+    if (value.trim() && !conditioningEnabled(key)) {
+      onMetricsChange?.(buildConditioningMetrics([...enabledMetrics.filter(m => conditioningKeys.includes(m)), key]))
+    }
+  }
+  const CONDITIONING_LABELS: Record<string, string> = { reps: 'Reps', carga: 'Carga', tiempo: 'Tiempo', distancia: 'Dist. (m)', calorias: 'Cal' }
+  const metricLabel = (key: string) => CONDITIONING_LABELS[key] ?? metricOptions.find(o => o.value === key)?.label ?? key
+
   const lastPerformanceText = formatLastPerformance(exercise.last_performance)
+
+  const renderReadOnlyCell = (key: string) => (
+    <div className='h-7 flex items-center justify-center rounded-md border bg-muted/50 text-xs px-1'>
+      {(() => {
+        const v = prescribedValue(key)
+        if (v === null || v === undefined || v === '') return <span className='text-muted-foreground'>—</span>
+        if (isTimeMetric(key, metricOptions) && /^\d+$/.test(String(v))) return formatDuration(Number(v))
+        if (key === 'distancia' && /^\d+$/.test(String(v))) return `${v} m`
+        return v
+      })()}
+    </div>
+  )
+
+  // Input de un valor de prescribed: mm:ss para métricas de tiempo, metros
+  // para distancia, texto libre para lo demás.
+  const renderValueInput = (key: string, placeholder?: string, onCommit?: (value: string) => void) => {
+    const commit = onCommit ?? ((v: string) => handleFieldBlur(key, v))
+    if (isTimeMetric(key, metricOptions)) {
+      return <PrescribedDurationInput value={String(prescribedValue(key) ?? '')} onCommit={commit} aria-label={metricLabel(key)} />
+    }
+    if (key === 'distancia') {
+      return <PrescribedDistanceInput value={String(prescribedValue(key) ?? '')} onCommit={commit} placeholder='Dist.' aria-label='Distancia' />
+    }
+    return (
+      <Input
+        className='h-7 text-center text-xs px-1'
+        value={getFieldValue(key)}
+        onChange={e => handleFieldChange(key, e.target.value)}
+        onBlur={e => commit(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        placeholder={placeholder}
+      />
+    )
+  }
+
+  if (conditioning) {
+    return (
+      <div>
+        {lastPerformanceText && (
+          <div className='flex items-center gap-1.5 mb-2 text-[11px] text-blue-600'>
+            <ClockIcon className='size-3 shrink-0' />
+            <span className='font-medium shrink-0'>Última vez:</span>
+            <span className='truncate'>{lastPerformanceText}</span>
+          </div>
+        )}
+        {/* Series + reps/carga/tiempo/distancia/calorías. Pulsar la cabecera activa o quita la métrica que registra el cliente. */}
+        <div className='grid grid-cols-3 sm:grid-cols-6 gap-2 mb-1'>
+          <span className='text-[10px] uppercase tracking-wider text-muted-foreground text-center self-center'>Series</span>
+          {conditioningKeys.map(key => (
+            <button
+              key={key}
+              type='button'
+              disabled={metricsReadOnly}
+              onClick={() => toggleConditioningMetric(key)}
+              title={conditioningEnabled(key) ? 'El cliente registra esta métrica (clic para quitarla)' : 'Clic para que el cliente registre esta métrica'}
+              className={cn(
+                'h-6 rounded-md border text-[10px] uppercase tracking-wider transition-colors disabled:cursor-default',
+                conditioningEnabled(key) ? 'border-primary/40 bg-primary/10 text-foreground font-medium' : 'border-dashed text-muted-foreground hover:bg-muted'
+              )}
+            >
+              {metricLabel(key)}
+            </button>
+          ))}
+        </div>
+        <div className='grid grid-cols-3 sm:grid-cols-6 gap-2'>
+          {['series', ...conditioningKeys].map(key => (
+            <div key={key} className='flex flex-col gap-1'>
+              {readOnly
+                ? renderReadOnlyCell(key)
+                : renderValueInput(key, key === 'series' ? 'Series' : metricLabel(key), key === 'series' ? undefined : v => commitConditioningField(key, v))}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -391,58 +531,22 @@ function PrescribedEditor({
         <div className='grid grid-cols-3 sm:grid-cols-6 gap-2'>
           {(['series', 'reps', 'carga'] as const).map(key => (
             <div key={key} className='flex flex-col gap-1'>
-              {readOnly ? (
-                <div className='h-7 flex items-center justify-center rounded-md border bg-muted/50 text-xs px-1'>
-                  {exercise.prescribed?.[key] ?? <span className='text-muted-foreground'>—</span>}
-                </div>
-              ) : (
-                <Input
-                  className='h-7 text-center text-xs px-1'
-                  value={getFieldValue(key)}
-                  onChange={e => handleFieldChange(key, e.target.value)}
-                  onBlur={e => handleFieldBlur(key, e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                  placeholder={key === 'series' ? 'Series' : key === 'reps' ? 'Reps' : 'Carga'}
-                />
-              )}
+              {readOnly ? renderReadOnlyCell(key) : renderValueInput(key, key === 'series' ? 'Series' : key === 'reps' ? 'Reps' : 'Carga')}
             </div>
           ))}
           <div className='flex flex-col gap-1'>
-            {readOnly ? (
-              <div className='h-7 flex items-center justify-center rounded-md border bg-muted/50 text-xs px-1'>
-                {exercise.prescribed?.[intensityKey] ?? <span className='text-muted-foreground'>—</span>}
-              </div>
-            ) : (
-              <Input
-                className='h-7 text-center text-xs px-1'
-                value={getFieldValue(intensityKey)}
-                onChange={e => handleFieldChange(intensityKey, e.target.value)}
-                onBlur={e => handleFieldBlur(intensityKey, e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                placeholder={intensityKey.toUpperCase()}
-              />
-            )}
+            {readOnly ? renderReadOnlyCell(intensityKey) : renderValueInput(intensityKey, intensityKey.toUpperCase())}
           </div>
           {otherMetrics.map((m, i) => {
             // La clave de metrica (m) ES la clave real de prescribed - sin mapeo indirecto.
             return (
               <div key={i} className='flex flex-col gap-1'>
-                {!m || readOnly ? (
-                  <div className={cn(
-                    'h-7 flex items-center justify-center rounded-md border text-xs px-1',
-                    m ? 'bg-muted/50' : 'bg-transparent border-transparent'
-                  )}>
-                    {m ? (exercise.prescribed?.[m] ?? <span className='text-muted-foreground'>—</span>) : ''}
-                  </div>
+                {!m ? (
+                  <div className='h-7 flex items-center justify-center rounded-md border text-xs px-1 bg-transparent border-transparent' />
+                ) : readOnly ? (
+                  renderReadOnlyCell(m)
                 ) : (
-                  <Input
-                    className='h-7 text-center text-xs px-1'
-                    value={getFieldValue(m)}
-                    onChange={e => handleFieldChange(m, e.target.value)}
-                    onBlur={e => handleFieldBlur(m, e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                    placeholder={otherOptions.find(o => o.value === m)?.label}
-                  />
+                  renderValueInput(m, otherOptions.find(o => o.value === m)?.label)
                 )}
               </div>
             )
@@ -470,6 +574,8 @@ export default function WorkoutTemplateViewer({
   onRemoveBlock,
   onSaveBlockAsSection,
   onUpdateBlockInstructions,
+  onUpdateBlockKind,
+  canEditBlockKind,
   onAddExercise,
   onRemoveExercise,
   onUpdateExerciseField,
@@ -901,7 +1007,15 @@ export default function WorkoutTemplateViewer({
           </div>
 
           {/* Blocks */}
-          {filteredBlocks.map(block => (
+          {filteredBlocks.map(block => {
+            const blockKind = normalizeKind(block.kind)
+            const conditioning = isConditioningKind(blockKind)
+            const kindEditable = !readOnly && !!onUpdateBlockKind && (canEditBlockKind?.(block) ?? true)
+            // El resumen cuenta los ejercicios reales del bloque, no los filtrados por la búsqueda.
+            const fullBlock = blocks.find(b => b.id === block.id) ?? block
+            const kindSummary = blockKindSummary(blockKind, block.params, fullBlock.exercises.length)
+            const KindIcon = BLOCK_KIND_ICONS[blockKind]
+            return (
             <Collapsible
               key={block.id}
               open={expandedBlocks.has(block.id)}
@@ -941,9 +1055,28 @@ export default function WorkoutTemplateViewer({
                     {block.is_addition && (
                       <Badge variant='secondary' className='text-[10px] px-1.5 py-0 h-4 shrink-0'>Personalizado</Badge>
                     )}
+                    {/* Tipo de bloque: resumen legible («EMOM 12' · 3 ejercicios»). */}
+                    {kindSummary && (
+                      <Badge variant='outline' className='text-[10px] px-1.5 py-0 h-5 gap-1 shrink min-w-0 truncate' title={kindSummary}>
+                        <KindIcon className='size-3 shrink-0' />
+                        <span className='truncate'>{kindSummary}</span>
+                      </Badge>
+                    )}
+                    {block.params?.benchmark_key && (
+                      <Badge variant='secondary' className='text-[10px] px-1.5 py-0 h-5 shrink-0' title='Benchmark: se compara con resultados anteriores'>
+                        {block.params.benchmark_key}
+                      </Badge>
+                    )}
                   </CollapsibleTrigger>
                   <div className='flex items-center gap-2 shrink-0'>
-                    <span className='text-xs text-muted-foreground'>{block.exercises.length} ejercicios</span>
+                    {kindEditable && (
+                      <BlockKindSelect
+                        kind={blockKind}
+                        params={block.params}
+                        onChange={(k, p) => onUpdateBlockKind?.(block.id, k, p)}
+                      />
+                    )}
+                    {!kindSummary && <span className='text-xs text-muted-foreground'>{block.exercises.length} ejercicios</span>}
                     {!readOnly && mode === 'library' && (
                       <Button
                         variant={targetBlockId === block.id ? 'default' : 'ghost'}
@@ -976,8 +1109,22 @@ export default function WorkoutTemplateViewer({
                     )}
                   </div>
                 </div>
+                {kindEditable && blockKind !== 'normal' && (
+                  <div className='border-t bg-muted/20 px-4 py-2.5'>
+                    <BlockParamsEditor
+                      kind={blockKind}
+                      params={block.params}
+                      onChange={(k, p) => onUpdateBlockKind?.(block.id, k, p)}
+                    />
+                  </div>
+                )}
                 <CollapsibleContent>
                   <div className='p-3 space-y-3'>
+                    {conditioning && (
+                      <p className='text-[11px] text-muted-foreground'>
+                        Bloque de acondicionamiento: sin RIR/RPE por ejercicio, el cliente da un RPE para todo el bloque al terminar.
+                      </p>
+                    )}
                     {onUpdateBlockInstructions ? (
                       <Textarea
                         key={block.id}
@@ -1080,6 +1227,7 @@ export default function WorkoutTemplateViewer({
                               exercise={ex}
                               readOnly={prescribedReadOnly}
                               metricsReadOnly={metricsReadOnly ?? readOnly}
+                              conditioning={conditioning}
                               onFieldChange={(field, value) => onUpdateExerciseField?.(ex, block.id, field, value)}
                               onMetricsChange={metrics => onUpdateExerciseMetrics?.(ex, block.id, metrics)}
                             />
@@ -1128,7 +1276,8 @@ export default function WorkoutTemplateViewer({
                 </CollapsibleContent>
               </div>
             </Collapsible>
-          ))}
+            )
+          })}
 
           {!readOnly && (
             <div className='flex items-center gap-2 pt-1'>

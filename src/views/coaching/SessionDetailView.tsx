@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import type { BlockKind, BlockParams } from '@/lib/blockKinds'
 import { cn } from '@/lib/utils'
 import { fetchExerciseBodyparts, primaryBodypart } from '@/lib/muscle-groups'
 import WorkoutTemplateViewer, {
@@ -88,6 +89,8 @@ type SessionBlock = {
   is_addition?: boolean
   title: string | null
   instructions?: string | null
+  kind?: BlockKind | string | null
+  params?: BlockParams | null
   exercises: SessionExercise[]
 }
 
@@ -199,6 +202,8 @@ function mapSessionToViewer(sessionData: SessionData): {
       title: b.title,
       instructions: b.instructions,
       is_addition: b.is_addition,
+      kind: b.kind ?? 'normal',
+      params: b.params ?? null,
       exercises: b.exercises.map(e => ({
         id: sessionExerciseKey(e),
         exercise_id: e.exercise_id,
@@ -722,6 +727,29 @@ function SessionContent({
     }
   }
 
+  // Tipo de bloque (Hyrox / acondicionamiento): solo en los bloques propios
+  // de este cliente (client_block_overrides, id negativo en el visor) -- los
+  // compartidos se cambian en la plantilla, no desde aquí.
+  const handleUpdateBlockKind = async (blockId: number, kind: BlockKind, params: BlockParams | null) => {
+    if (blockId >= 0) return
+    onUpdate({
+      ...sessionData,
+      blocks: sessionData.blocks.map(b => (sessionBlockKey(b) === blockId ? { ...b, kind, params } : b)),
+    })
+    try {
+      await api.post('/admin/session-detail-update-block', {
+        program_day_assignment_id: Number(programDayAssignmentId),
+        client_id: Number(clientId),
+        client_block_override_id: -blockId,
+        kind,
+        params,
+      })
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo guardar el tipo de bloque')
+      refreshSession().catch(() => {})
+    }
+  }
+
   const handleAddExercise = async (blockId: number, exercise: WorkoutViewerExercise) => {
     try {
       await api.post('/admin/session-detail-add-exercise', {
@@ -802,6 +830,8 @@ function SessionContent({
           availableExercises={availableExercises}
           availableExercisesLoading={availableLoading}
           onAddBlock={handleAddBlock}
+          onUpdateBlockKind={handleUpdateBlockKind}
+          canEditBlockKind={block => block.id < 0}
           onAddExercise={handleAddExercise}
           onRemoveExercise={handleRemoveExercise}
           onUpdateExerciseField={handleOverrideField}

@@ -5,6 +5,8 @@
 // Backend: GET admin/program-session-matrix y POST admin/program-session-matrix-save
 // (Bckbs::ProgramSessionMatrixService).
 
+import { formatDuration, parseDistance, parseDuration } from './blockKinds'
+
 export type MatrixCellApi = {
   id: number
   block_id: number
@@ -42,13 +44,16 @@ export type MatrixSlot = {
   rows: MatrixRow[]
 }
 
-export type FieldKey = 'series' | 'reps' | 'carga' | 'intensity' | 'descanso' | 'tempo' | 'duracion'
+// `tiempo` es la clave única de tiempo (contrato Hyrox, fase 0.2): `duracion`
+// (importador Excel y matriz antiguos) se sigue LEYENDO como alias, pero
+// siempre se escribe `tiempo`, en segundos enteros (se teclea en mm:ss).
+export type FieldKey = 'series' | 'reps' | 'carga' | 'intensity' | 'descanso' | 'tempo' | 'tiempo' | 'distancia'
 export type IntensityKey = 'rir' | 'rpe'
 
 /** Columnas visibles por defecto. */
 export const FIELD_KEYS: FieldKey[] = ['series', 'reps', 'carga', 'intensity', 'descanso']
 /** Columnas que se pueden mostrar/ocultar desde "Columnas". */
-export const OPTIONAL_FIELD_KEYS: FieldKey[] = ['tempo', 'duracion']
+export const OPTIONAL_FIELD_KEYS: FieldKey[] = ['tempo', 'tiempo', 'distancia']
 export const ALL_FIELD_KEYS: FieldKey[] = [...FIELD_KEYS, ...OPTIONAL_FIELD_KEYS]
 export const FIELD_LABELS: Record<FieldKey, string> = {
   series: 'Series',
@@ -57,8 +62,36 @@ export const FIELD_LABELS: Record<FieldKey, string> = {
   intensity: 'RIR/RPE',
   descanso: 'Desc.',
   tempo: 'Tempo',
-  duracion: 'Dur.',
+  tiempo: 'Tiempo',
+  distancia: 'Dist. (m)',
 }
+
+/**
+ * Valor canónico de un campo para guardar/comparar: `tiempo` en segundos
+ * ("5:00" → "300"), `distancia` en metros ("5km" → "5000"). Lo que no se
+ * entiende como tiempo/distancia («máx») se deja tal cual.
+ */
+export function canonicalFieldValue(field: FieldKey, value: string | undefined): string {
+  const v = (value ?? '').trim()
+  if (!v) return ''
+  if (field === 'tiempo') {
+    const sec = parseDuration(v)
+    return sec === null ? v : String(sec)
+  }
+  if (field === 'distancia') {
+    const m = parseDistance(v)
+    return m === null ? v : String(m)
+  }
+  return v
+}
+
+/** Cómo se muestra en la celda: tiempo en mm:ss. */
+function displayFieldValue(field: FieldKey, raw: string): string {
+  if (field === 'tiempo' && /^\d+$/.test(raw.trim())) return formatDuration(Number(raw.trim()))
+  return raw
+}
+
+const sameField = (f: FieldKey, a: string | undefined, b: string | undefined) => canonicalFieldValue(f, a) === canonicalFieldValue(f, b)
 
 /** Campos visibles en el orden canónico: los de por defecto + los opcionales elegidos. */
 export function visibleFields(optional: readonly FieldKey[] = []): FieldKey[] {
@@ -178,10 +211,13 @@ export function cellFromApi(cell: MatrixCellApi): CellDraft {
       intensity: str(p[intensityKey]),
       descanso: str(p.descanso),
       tempo: str(p.tempo),
-      duracion: str(p.duracion),
+      tiempo: displayFieldValue('tiempo', str(p.tiempo) || str(p.duracion)),
+      distancia: str(p.distancia),
     },
     intensityKey,
-    enabledMetrics: cell.enabled_metrics && cell.enabled_metrics.length ? [...cell.enabled_metrics] : [...DEFAULT_METRICS],
+    enabledMetrics: cell.enabled_metrics && cell.enabled_metrics.length
+      ? [...new Set(cell.enabled_metrics.map(m => (m === 'duracion' ? 'tiempo' : m)))]
+      : [...DEFAULT_METRICS],
     notes: str(cell.notes),
     technique: {
       ...(str(p.tecnica)
@@ -194,7 +230,7 @@ export function cellFromApi(cell: MatrixCellApi): CellDraft {
 
 export function emptyCell(intensityKey: IntensityKey = 'rir'): CellDraft {
   return {
-    values: { series: '', reps: '', carga: '', intensity: '', descanso: '', tempo: '', duracion: '' },
+    values: { series: '', reps: '', carga: '', intensity: '', descanso: '', tempo: '', tiempo: '', distancia: '' },
     intensityKey,
     enabledMetrics: DEFAULT_METRICS.map(m => (m === 'rir' ? intensityKey : m)),
     notes: '',
@@ -363,7 +399,8 @@ function prescribedFromCell(cell: CellDraft): Record<string, string> {
   if (trim(cell.values.carga)) out.carga = trim(cell.values.carga)
   if (trim(cell.values.descanso)) out.descanso = trim(cell.values.descanso)
   if (trim(cell.values.tempo)) out.tempo = trim(cell.values.tempo)
-  if (trim(cell.values.duracion)) out.duracion = trim(cell.values.duracion)
+  if (trim(cell.values.tiempo)) out.tiempo = canonicalFieldValue('tiempo', cell.values.tiempo)
+  if (trim(cell.values.distancia)) out.distancia = canonicalFieldValue('distancia', cell.values.distancia)
   if (trim(cell.values.intensity)) out[cell.intensityKey] = trim(cell.values.intensity)
   return { ...out, ...techniquePrescribed(cell.technique), ...recordingPrescribed(cell.technique.recording) }
 }
@@ -432,9 +469,11 @@ export function computeChanges(
       const patch: Record<string, string> = {}
       const fieldLines: string[] = []
 
-      for (const f of ['series', 'reps', 'carga', 'descanso', 'tempo', 'duracion'] as const) {
-        if (trim(before.values[f]) !== trim(cur.values[f])) {
-          patch[f] = trim(cur.values[f])
+      for (const f of ['series', 'reps', 'carga', 'descanso', 'tempo', 'tiempo', 'distancia'] as const) {
+        if (!sameField(f, before.values[f], cur.values[f])) {
+          patch[f] = canonicalFieldValue(f, cur.values[f])
+          // El dato viejo en `duracion` se borra al escribir `tiempo` ('' = quitar).
+          if (f === 'tiempo' && str(prescribedOf(orig).duracion)) patch.duracion = ''
           fieldLines.push(`${FIELD_LABELS[f]} "${trim(before.values[f]) || '—'}" → "${trim(cur.values[f]) || '—'}"`)
         }
       }
@@ -505,7 +544,7 @@ export function cellIsDirty(orig: MatrixCellApi | undefined, cur: CellDraft | un
     trim(before.notes) !== trim(cur.notes) ||
     !techniqueEquals(before.technique, cur.technique) ||
     !recordingEquals(before.technique.recording, cur.technique.recording) ||
-    ALL_FIELD_KEYS.some(f => trim(before.values[f]) !== trim(cur.values[f]))
+    ALL_FIELD_KEYS.some(f => !sameField(f, before.values[f], cur.values[f]))
   )
 }
 
@@ -592,8 +631,8 @@ export function computeReorder(slot: MatrixSlot, order: readonly string[] | unde
 // Cascada por ejercicio: parte de la primera semana rellenada y va sumando/restando semana a semana
 // ---------------------------------------------------------------------------
 
-export type CascadeField = 'series' | 'reps' | 'intensity' | 'descanso' | 'duracion'
-export const CASCADE_FIELDS: CascadeField[] = ['series', 'reps', 'intensity', 'descanso', 'duracion']
+export type CascadeField = 'series' | 'reps' | 'intensity' | 'descanso' | 'tiempo'
+export const CASCADE_FIELDS: CascadeField[] = ['series', 'reps', 'intensity', 'descanso', 'tiempo']
 export type CargaHint = '' | 'Mantener' | 'Subir' | 'Bajar'
 export const CARGA_HINTS: CargaHint[] = ['Mantener', 'Subir', 'Bajar']
 
@@ -627,7 +666,7 @@ const CASCADE_LIMITS: Record<CascadeField, { min: number; max: number }> = {
   reps: { min: 1, max: 999 },
   intensity: { min: 0, max: 10 },
   descanso: { min: 0, max: 3600 },
-  duracion: { min: 0, max: 36000 },
+  tiempo: { min: 0, max: 36000 },
 }
 
 /** Semanas distintas del tipo de sesión, en orden. */

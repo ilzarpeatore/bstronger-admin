@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import { BlockKindSelect, BlockParamsEditor } from '@/components/coaching/BlockKindEditor'
+import { blockKindSummary, normalizeKind, type BlockKind, type BlockParams } from '@/lib/blockKinds'
 
 type SectionExercise = {
   id: number
@@ -25,6 +27,9 @@ type Section = {
   id: number
   title: string
   instructions: string | null
+  // Tipo de bloque (Hyrox / acondicionamiento): se copia al importar la sección en un entrenamiento.
+  kind?: BlockKind | string | null
+  params?: BlockParams | null
   exercises?: SectionExercise[]
 }
 
@@ -59,6 +64,8 @@ export default function SectionsView() {
   const [editingItem, setEditingItem] = useState<Section | null>(null)
   const [title, setTitle] = useState('')
   const [instructions, setInstructions] = useState('')
+  const [kind, setKind] = useState<BlockKind>('normal')
+  const [kindParams, setKindParams] = useState<BlockParams | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
@@ -104,6 +111,8 @@ export default function SectionsView() {
     setEditingItem(null)
     setTitle('')
     setInstructions('')
+    setKind('normal')
+    setKindParams(null)
     setDialogOpen(true)
   }
 
@@ -111,6 +120,8 @@ export default function SectionsView() {
     setEditingItem(item)
     setTitle(item.title)
     setInstructions(item.instructions || '')
+    setKind(normalizeKind(item.kind))
+    setKindParams(item.params ?? null)
     setDialogOpen(true)
   }
 
@@ -119,10 +130,10 @@ export default function SectionsView() {
     setSubmitting(true)
     try {
       if (editingItem) {
-        await api.post('/admin/section-template-update', { id: editingItem.id, title, instructions })
+        await api.post('/admin/section-template-update', { id: editingItem.id, title, instructions, kind, params: kindParams })
         toast.success('Sección actualizada')
       } else {
-        await api.post('/admin/section-template-store', { title, instructions })
+        await api.post('/admin/section-template-store', { title, instructions, kind, params: kindParams })
         toast.success('Sección creada')
       }
       setDialogOpen(false)
@@ -241,6 +252,9 @@ export default function SectionsView() {
             <CardTitle>{selectedSection.title}</CardTitle>
             {selectedSection.instructions && (
               <Badge variant='secondary'>{selectedSection.instructions}</Badge>
+            )}
+            {blockKindSummary(selectedSection.kind, selectedSection.params) && (
+              <Badge variant='outline'>{blockKindSummary(selectedSection.kind, selectedSection.params)}</Badge>
             )}
           </div>
           <Button onClick={() => { fetchExercises(); setAddExerciseDialogOpen(true) }}>
@@ -411,6 +425,15 @@ export default function SectionsView() {
                 onChange={e => setInstructions(e.target.value)}
                 placeholder='Instrucciones opcionales'
               />
+            </Field>
+            <Field className='gap-2'>
+              <FieldLabel>Tipo de bloque</FieldLabel>
+              <div>
+                <BlockKindSelect kind={kind} params={kindParams} onChange={(k, p) => { setKind(k); setKindParams(p) }} />
+              </div>
+              {kind !== 'normal' && (
+                <BlockParamsEditor kind={kind} params={kindParams} onChange={(k, p) => { setKind(k); setKindParams(p) }} />
+              )}
             </Field>
           </FieldGroup>
           <DialogFooter>
