@@ -18,6 +18,32 @@ export type BenchmarkEntry = {
   rpe?: number | null
 }
 
+/** Parcial comparado con el del resultado anterior (fase 2). */
+export type SplitComparison = {
+  index: number
+  label: string
+  is_run: boolean
+  t_sec: number | null
+  previous_t_sec: number | null
+  diff_sec: number | null
+}
+
+export type SplitAnalysis = {
+  runs: { count: number; avg_t_sec: number; fastest_t_sec?: number; slowest: { label: string; position: number; t_sec: number; diff_vs_avg_sec: number } } | null
+  slowest_station: { label: string; position: number; t_sec: number; avg_t_sec: number | null; diff_vs_avg_sec: number | null; basis: 'media_propia' | 'mas_larga' } | null
+  runs_sec?: number
+  stations_sec?: number
+}
+
+export type BlockComparison = {
+  previous: BenchmarkEntry | null
+  total_diff_sec: number | null
+  splits: SplitComparison[]
+  analysis: SplitAnalysis | null
+}
+
+export type LastSimulation = BlockComparison & { benchmark_key: string; current: BenchmarkEntry }
+
 export type ConditioningStats = {
   weeks: number
   weekly_km: { week_start: string; km: number }[]
@@ -27,6 +53,12 @@ export type ConditioningStats = {
   total_km: number
   results_count: number
   benchmarks: Record<string, BenchmarkEntry[]>
+  // Fase 2 (opcionales: un backend sin fase 2 no los manda).
+  weekly_pace: { week_start: string; pace_sec_km: number | null }[]
+  pace_change_sec_km: number | null
+  hr_max_estimate: number | null
+  hr_zone_minutes: { zone: number; minutes: number }[] | null
+  last_simulation: LastSimulation | null
 }
 
 const num = (v: unknown): number | null => {
@@ -58,7 +90,49 @@ export function normalizeConditioningStats(raw: unknown): ConditioningStats | nu
     total_km: num(d.total_km) ?? weeklyKm.reduce((s: number, w: any) => s + (num(w.km) ?? 0), 0),
     results_count: num(d.results_count) ?? 0,
     benchmarks,
+    weekly_pace: Array.isArray(d.weekly_pace) ? d.weekly_pace.map((w: any) => ({ week_start: String(w.week_start), pace_sec_km: num(w.pace_sec_km) })) : [],
+    pace_change_sec_km: num(d.pace_change_sec_km),
+    hr_max_estimate: num(d.hr_max_estimate),
+    hr_zone_minutes: Array.isArray(d.hr_zone_minutes)
+      ? d.hr_zone_minutes.map((z: any) => ({ zone: num(z.zone) ?? 0, minutes: num(z.minutes) ?? 0 })).filter((z: { zone: number }) => z.zone >= 1 && z.zone <= 5)
+      : null,
+    last_simulation: normalizeComparison(d.last_simulation) as LastSimulation | null,
   }
+}
+
+/** Normaliza `comparison` (block-result / .../comparison / last_simulation). null si no es un objeto. */
+export function normalizeComparison(raw: unknown): BlockComparison | null {
+  const c = raw as Record<string, any> | null | undefined
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return null
+  const splits: SplitComparison[] = Array.isArray(c.splits)
+    ? c.splits.map((x: any, i: number) => ({
+        index: num(x.index) ?? i,
+        label: String(x.label ?? `Paso ${i + 1}`),
+        is_run: Boolean(x.is_run),
+        t_sec: num(x.t_sec),
+        previous_t_sec: num(x.previous_t_sec),
+        diff_sec: num(x.diff_sec),
+      }))
+    : []
+  return { ...c, previous: c.previous ?? null, total_diff_sec: num(c.total_diff_sec), splits, analysis: c.analysis ?? null } as BlockComparison
+}
+
+/** Diferencia de tiempo con signo: «−0:12» (mejor) / «+1:05» (peor) / «=». */
+export function formatDiff(sec: number | null | undefined): string {
+  if (sec === null || sec === undefined || !Number.isFinite(sec)) return ''
+  if (sec === 0) return '='
+  const abs = Math.abs(Math.round(sec))
+  const m = Math.floor(abs / 60)
+  const s = abs % 60
+  return `${sec < 0 ? '−' : '+'}${m}:${String(s).padStart(2, '0')}`
+}
+
+export const HR_ZONE_LABELS: Record<number, string> = {
+  1: 'Z1 recuperación',
+  2: 'Z2 aeróbico',
+  3: 'Z3 tempo',
+  4: 'Z4 umbral',
+  5: 'Z5 máximo',
 }
 
 export function hasConditioningData(s: ConditioningStats | null): boolean {

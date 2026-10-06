@@ -86,6 +86,7 @@ const MealPlanTemplateDetail = Loadable(lazy(() => import('../views/coaching/Mea
 const ClientTags = Loadable(lazy(() => import('../views/coaching/ClientTagsView')));
 const SectionTemplates = Loadable(lazy(() => import('../views/coaching/SectionsView')));
 const WorkoutTemplates = Loadable(lazy(() => import('../views/coaching/WorkoutTemplatesView')));
+const HyroxLibrary = Loadable(lazy(() => import('../views/coaching/HyroxLibraryView')));
 const TrainingPrograms = Loadable(lazy(() => import('../views/coaching/TrainingProgramsView')));
 const Macrocycles = Loadable(lazy(() => import('../views/coaching/MacrocyclesView')));
 const MacrocycleDashboard = Loadable(lazy(() => import('../views/coaching/MacrocycleDashboardView')));
@@ -267,6 +268,7 @@ const Router = [
       { path: '/section-templates/:id', element: <SectionTemplates /> },
       { path: '/workout-templates', element: <WorkoutTemplates /> },
       { path: '/workout-templates/:id', element: <WorkoutTemplates /> },
+      { path: '/hyrox-library', element: <HyroxLibrary /> },
       { path: '/training-programs', element: <TrainingPrograms /> },
       { path: '/training-programs/:id', element: <TrainingPrograms /> },
       { path: '/training-programs/:id/asignar-dia/:mode', element: <TrainingPrograms /> },

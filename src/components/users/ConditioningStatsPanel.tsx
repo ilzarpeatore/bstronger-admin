@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { FootprintsIcon, GaugeIcon, TimerIcon, TrophyIcon, RefreshCwIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, ApiError } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { formatDuration, formatPace } from '@/lib/blockKinds'
+import SimulationComparisonCard from './SimulationComparisonCard'
 import {
+  HR_ZONE_LABELS,
   benchmarkLabel,
   benchmarkScoreKind,
   benchmarkTitle,
@@ -21,6 +23,9 @@ const WEEK_OPTIONS = [4, 8, 12, 26]
 const KM_COLOR = '#2563eb'
 const MIN_COLOR = '#16a34a'
 const BENCH_COLOR = '#8b5cf6'
+const PACE_COLOR = '#ea580c'
+// Z1 → Z5, de frío a caliente.
+const ZONE_COLORS = ['#60a5fa', '#34d399', '#facc15', '#fb923c', '#ef4444']
 
 const shortDate = (v: unknown) => new Date(String(v)).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const fmtNumber = (n: number, digits = 1) => n.toLocaleString('es-ES', { maximumFractionDigits: digits })
@@ -139,6 +144,11 @@ export default function ConditioningStatsPanel({ clientId }: { clientId: number 
   // Si el backend mandara minutos sin km (o al revés), se usan las semanas de minutos.
   const chartData = weeklyData.length ? weeklyData : s.weekly_minutes.map(m => ({ week: m.week_start, km: 0, minutes: m.minutes }))
   const weeksWithKm = s.weekly_km.length || weeks
+  const paceData = s.weekly_pace.map(w => ({ week: w.week_start, pace: w.pace_sec_km }))
+  const paceWeeks = paceData.filter(p => p.pace !== null).length
+  const zoneData = s.hr_zone_minutes && s.hr_zone_minutes.some(z => z.minutes > 0)
+    ? s.hr_zone_minutes.map(z => ({ zone: z.zone, name: HR_ZONE_LABELS[z.zone]?.split(' ')[0] ?? `Z${z.zone}`, minutes: z.minutes }))
+    : null
 
   return (
     <div className='space-y-4'>
@@ -147,7 +157,14 @@ export default function ConditioningStatsPanel({ clientId }: { clientId: number 
         <CardContent className='space-y-4'>
           <div className='grid grid-cols-2 lg:grid-cols-4 gap-3'>
             <StatTile icon={FootprintsIcon} label='Km por semana' value={fmtNumber(s.total_km / Math.max(1, weeksWithKm))} hint={`${fmtNumber(s.total_km)} km en ${weeksWithKm} semanas`} />
-            <StatTile icon={GaugeIcon} label='Ritmo medio' value={formatPace(s.avg_pace_sec_km) || '—'} />
+            <StatTile
+              icon={GaugeIcon}
+              label='Ritmo medio'
+              value={formatPace(s.avg_pace_sec_km) || '—'}
+              hint={s.pace_change_sec_km !== null
+                ? `${s.pace_change_sec_km < 0 ? `${fmtNumber(Math.abs(s.pace_change_sec_km), 0)} s/km más rápido` : s.pace_change_sec_km > 0 ? `${fmtNumber(s.pace_change_sec_km, 0)} s/km más lento` : 'igual'} que al inicio del periodo`
+                : undefined}
+            />
             <StatTile icon={TimerIcon} label='Min. acondicionamiento' value={fmtNumber(s.conditioning_minutes, 0)} hint={`en ${weeks} semanas`} />
             <StatTile icon={TrophyIcon} label='Resultados registrados' value={String(s.results_count)} />
           </div>
@@ -184,8 +201,52 @@ export default function ConditioningStatsPanel({ clientId }: { clientId: number 
               </div>
             </div>
           )}
+
+          {(paceWeeks > 1 || zoneData) && (
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+              {paceWeeks > 1 && (
+                <div>
+                  <p className='text-xs font-medium mb-1'>Ritmo medio por semana (carrera)</p>
+                  <div className='h-[200px]'>
+                    <ResponsiveContainer width='100%' height='100%'>
+                      <LineChart data={paceData}>
+                        <CartesianGrid strokeDasharray='3 3' className='stroke-muted' vertical={false} />
+                        <XAxis dataKey='week' tick={{ fontSize: 10 }} tickFormatter={shortDate} />
+                        <YAxis tick={{ fontSize: 10 }} width={44} reversed domain={['auto', 'auto']} tickFormatter={v => formatPace(Number(v)).replace('/km', '')} />
+                        <Tooltip labelFormatter={v => `Semana del ${shortDate(v)}`} formatter={value => [formatPace(Number(value)), 'Ritmo']} />
+                        <Line type='monotone' dataKey='pace' stroke={PACE_COLOR} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+              {zoneData && (
+                <div>
+                  <p className='text-xs font-medium mb-1'>
+                    Minutos por zona de FC{s.hr_max_estimate ? <span className='font-normal text-muted-foreground'> · FC máx. estimada {s.hr_max_estimate} ppm (por edad)</span> : null}
+                  </p>
+                  <div className='h-[200px]'>
+                    <ResponsiveContainer width='100%' height='100%'>
+                      <BarChart data={zoneData}>
+                        <CartesianGrid strokeDasharray='3 3' className='stroke-muted' vertical={false} />
+                        <XAxis dataKey='name' tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} width={36} />
+                        <Tooltip formatter={value => [`${fmtNumber(Number(value), 0)} min`, 'Tiempo']} />
+                        <Bar dataKey='minutes' radius={[4, 4, 0, 0]}>
+                          {zoneData.map(z => <Cell key={z.zone} fill={ZONE_COLORS[z.zone - 1]} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className='text-[11px] text-muted-foreground'>Según la FC media de cada bloque registrado; es una aproximación.</p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {s.last_simulation && <SimulationComparisonCard sim={s.last_simulation} />}
 
       <Card>
         <CardHeader className='pb-2'>
