@@ -42,6 +42,7 @@
     "lucide-react": "^1.47.0",
     "motion": "^13.4.3",
     "msw": "^2.14.2",
+    "pusher-js": "^8.6.0",
     "react": "^19.3.0",
     "react-aria": "^3.52.1",
     "react-aria-components": "^1.21.1",
