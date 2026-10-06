@@ -255,3 +255,34 @@ describe('detalle', () => {
     expect(todayMadrid(new Date('2026-10-04T22:30:00Z'))).toBe('2026-10-05')
   })
 })
+
+describe('fase 2: avisos y medallas', async () => {
+  const { pushSummary, pushKindLabel, pushStatusLabel, leaderboardVisible } = await import('./challengeForm')
+
+  it('resume avisos por tipo', () => {
+    const base = { title: null, message: null, created_at: null }
+    const rows = pushSummary([
+      { id: 1, client_id: 1, kind: 'threshold', status: 'sent', ...base },
+      { id: 2, client_id: 2, kind: 'threshold', status: 'capped', ...base },
+      { id: 3, client_id: 1, kind: 'overtaken', status: 'disabled', ...base },
+      { id: 4, client_id: 1, kind: 'raro', status: 'sent', ...base },
+    ])
+    expect(rows).toEqual([
+      { kind: 'threshold', sent: 1, notSent: 1 },
+      { kind: 'overtaken', sent: 0, notSent: 1 },
+    ])
+    expect(pushSummary(undefined)).toEqual([])
+  })
+
+  it('etiquetas con respaldo', () => {
+    expect(pushKindLabel('final_push')).toBe('Último empujón')
+    expect(pushKindLabel('otro')).toBe('otro')
+    expect(pushStatusLabel('capped')).toMatch(/ya tenía/)
+  })
+
+  it('clasificación visible según el mínimo del reto', () => {
+    expect(leaderboardVisible({ min_participants: 3 }, 3)).toBe(true)
+    expect(leaderboardVisible({ min_participants: 5 }, 4)).toBe(false)
+    expect(leaderboardVisible({ min_participants: null }, 2)).toBe(false)
+  })
+})
