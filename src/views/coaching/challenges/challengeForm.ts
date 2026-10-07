@@ -63,6 +63,28 @@ export type ChallengeParticipant = {
   threshold_reached?: boolean
   excluded_reason?: string | null
   joined_at?: string | null
+  /** Avisos de este reto activados por el cliente. */
+  notify?: boolean
+  /** Fase 2: interruptor global «Avisos de retos» del cliente. */
+  push_enabled?: boolean | null
+  /** Fase 2: medalla al cerrar (gold|silver|bronze|goal) o null. */
+  medal?: ChallengeMedal
+}
+
+export type ChallengeMedal = 'gold' | 'silver' | 'bronze' | 'goal' | null | undefined
+
+export type PushKind = 'invite' | 'start' | 'threshold' | 'overtaken' | 'final_push' | 'results'
+export type PushStatus = 'sent' | 'capped' | 'disabled' | 'no_device' | 'failed'
+
+/** Fase 2: un aviso de retos intentado (challenge_push_logs). */
+export type ChallengePush = {
+  id: number
+  client_id: number
+  kind: PushKind | string
+  status: PushStatus | string
+  title: string | null
+  message: string | null
+  created_at: string | null
 }
 
 export type ChallengeSnapshot = {
@@ -75,6 +97,7 @@ export type ChallengeSnapshot = {
 export type ChallengeDetail = Challenge & {
   participants: ChallengeParticipant[]
   snapshots?: ChallengeSnapshot[]
+  pushes?: ChallengePush[]
 }
 
 // ── Pestañas ────────────────────────────────────────────────────────────────
@@ -492,3 +515,49 @@ export function unwrapList<T>(res: unknown): T[] {
   const dd = (d as { data?: unknown } | null)?.data
   return Array.isArray(dd) ? (dd as T[]) : []
 }
+
+// ── Fase 2: avisos y medallas ───────────────────────────────────────────────
+
+export const PUSH_KIND_LABEL: Record<PushKind, string> = {
+  invite: 'Invitación',
+  start: 'Inicio',
+  threshold: 'Objetivo conseguido',
+  overtaken: 'Te han adelantado',
+  final_push: 'Último empujón',
+  results: 'Resultados',
+}
+
+export const PUSH_STATUS_LABEL: Record<PushStatus, string> = {
+  sent: 'Enviado',
+  capped: 'No enviado: ya tenía su aviso del día',
+  disabled: 'No enviado: avisos de retos desactivados',
+  no_device: 'No enviado: sin la app instalada o sin permiso',
+  failed: 'Error al enviar',
+}
+
+export const MEDAL_LABEL: Record<'gold' | 'silver' | 'bronze' | 'goal', string> = {
+  gold: 'Oro',
+  silver: 'Plata',
+  bronze: 'Bronce',
+  goal: 'Objetivo',
+}
+
+export const pushKindLabel = (k: string) => PUSH_KIND_LABEL[k as PushKind] ?? k
+export const pushStatusLabel = (s: string) => PUSH_STATUS_LABEL[s as PushStatus] ?? s
+
+/** Recuento de avisos: enviados y no enviados por tipo, en el orden de PUSH_KIND_LABEL. */
+export function pushSummary(pushes: ChallengePush[] | undefined): { kind: PushKind; sent: number; notSent: number }[] {
+  const out = new Map<PushKind, { kind: PushKind; sent: number; notSent: number }>()
+  for (const k of Object.keys(PUSH_KIND_LABEL) as PushKind[]) out.set(k, { kind: k, sent: 0, notSent: 0 })
+  for (const p of pushes ?? []) {
+    const row = out.get(p.kind as PushKind)
+    if (!row) continue
+    if (p.status === 'sent') row.sent++
+    else row.notSent++
+  }
+  return [...out.values()].filter(r => r.sent || r.notSent)
+}
+
+/** La clasificación se ve en la app con al menos min_participants unidos (3 por defecto). */
+export const leaderboardVisible = (c: Pick<Challenge, 'min_participants'>, joined: number) =>
+  joined >= Math.max(1, c.min_participants ?? 3)

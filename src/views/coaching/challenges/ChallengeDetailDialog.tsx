@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BanIcon, FlagIcon, MoreHorizontalIcon, PencilIcon, RotateCcwIcon, UserMinusIcon, UserPlusIcon, XCircleIcon } from 'lucide-react'
+import { BanIcon, BellOffIcon, FlagIcon, MedalIcon, MoreHorizontalIcon, PencilIcon, RotateCcwIcon, UserMinusIcon, UserPlusIcon, XCircleIcon } from 'lucide-react'
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,12 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { api } from '@/lib/api'
 import ClientPicker from './ClientPicker'
 import {
+  MEDAL_LABEL,
   PARTICIPANT_STATUS_LABEL,
+  leaderboardVisible,
+  pushKindLabel,
+  pushStatusLabel,
+  pushSummary,
   STATUS_LABEL,
   buildEvolution,
   canInvite,
@@ -40,6 +45,13 @@ const CATEGORICAL = [
   { light: '#eda100', dark: '#c98500' },
   { light: '#e87ba4', dark: '#d55181' },
 ]
+
+const MEDAL_CLASS: Record<'gold' | 'silver' | 'bronze' | 'goal', string> = {
+  gold: 'text-amber-500',
+  silver: 'text-slate-400',
+  bronze: 'text-orange-700',
+  goal: 'text-emerald-600',
+}
 
 type Confirm =
   | { kind: 'cancel' }
@@ -96,6 +108,15 @@ const ChallengeDetailDialog = ({ challengeId, onClose, metrics, onEdit, onChange
   const joined = participants.filter(p => p.status === 'joined')
   const invited = participants.filter(p => p.status === 'invited')
   const reached = joined.filter(p => p.threshold_reached).length
+  const visible = detail ? leaderboardVisible(detail, joined.length) : false
+  const [showAllPushes, setShowAllPushes] = useState(false)
+  const pushes = detail?.pushes ?? []
+  const pushRows = useMemo(() => pushSummary(detail?.pushes), [detail])
+  const nameOf = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const p of detail?.participants ?? []) m.set(p.client_id, participantLabel(p))
+    return m
+  }, [detail])
 
   const evolution = useMemo(() => buildEvolution(detail?.snapshots, detail?.participants ?? [], 5), [detail])
   const chartConfig = useMemo(() => {
@@ -212,8 +233,8 @@ const ChallengeDetailDialog = ({ challengeId, onClose, metrics, onEdit, onChange
                 {[
                   { label: 'Unidos', value: joined.length },
                   { label: 'Invitados pendientes', value: invited.length },
-                  { label: detail.format === 'threshold' ? 'Han llegado al objetivo' : 'Mínimo para empezar', value: detail.format === 'threshold' ? reached : detail.min_participants ?? 3 },
-                  { label: 'Clasificación visible', value: joined.length >= 3 ? 'Sí' : 'No (< 3)' },
+                  { label: detail.format === 'threshold' ? 'Han llegado al objetivo' : 'Mínimo para ver la clasificación', value: detail.format === 'threshold' ? reached : detail.min_participants ?? 3 },
+                  { label: 'Clasificación visible', value: visible ? 'Sí' : `No (< ${detail.min_participants ?? 3})` },
                 ].map(s => (
                   <div key={s.label} className='rounded-lg border p-3'>
                     <p className='text-xs text-muted-foreground'>{s.label}</p>
@@ -261,9 +282,25 @@ const ChallengeDetailDialog = ({ challengeId, onClose, metrics, onEdit, onChange
                       const pct = progressPct(p, detail)
                       return (
                         <TableRow key={p.client_id} className={p.status === 'excluded' || p.status === 'left' || p.status === 'declined' ? 'opacity-60' : undefined}>
-                          <TableCell className='tabular-nums'>{p.status === 'joined' ? p.rank ?? '—' : '—'}</TableCell>
+                          <TableCell className='tabular-nums'>
+                            <div className='flex items-center gap-1'>
+                              {p.status === 'joined' ? p.rank ?? '—' : '—'}
+                              {p.medal && (
+                                <span title={`Medalla: ${MEDAL_LABEL[p.medal]}`} className={MEDAL_CLASS[p.medal]}>
+                                  <MedalIcon className='size-4' aria-label={`Medalla: ${MEDAL_LABEL[p.medal]}`} />
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
-                            <div className='font-medium'>{participantLabel(p)}</div>
+                            <div className='flex items-center gap-1.5 font-medium'>
+                              {participantLabel(p)}
+                              {(p.push_enabled === false || (p.status === 'joined' && p.notify === false)) && (
+                                <span title={p.push_enabled === false ? 'Tiene desactivados los avisos de retos' : 'Tiene desactivados los avisos de este reto'} className='text-muted-foreground'>
+                                  <BellOffIcon className='size-3.5' aria-label='Sin avisos' />
+                                </span>
+                              )}
+                            </div>
                             {p.email && <div className='text-xs text-muted-foreground'>{p.email}</div>}
                           </TableCell>
                           <TableCell>{p.alias ?? <span className='text-muted-foreground'>sin alias</span>}</TableCell>
@@ -311,6 +348,59 @@ const ChallengeDetailDialog = ({ challengeId, onClose, metrics, onEdit, onChange
                 </Table>
               </div>
               <p className='text-xs text-muted-foreground'>Los nombres reales solo los ves tú; los clientes ven únicamente los alias.</p>
+
+              <div className='rounded-lg border p-3'>
+                <div className='mb-2 flex flex-wrap items-baseline justify-between gap-2'>
+                  <p className='text-sm font-medium'>Avisos enviados</p>
+                  <p className='text-xs text-muted-foreground'>Como mucho uno por cliente y día; salen a las 10:00 (las acciones del panel, al momento salvo de 22:00 a 9:00).</p>
+                </div>
+                {pushRows.length ? (
+                  <>
+                    <div className='mb-3 flex flex-wrap gap-2'>
+                      {pushRows.map(r => (
+                        <Badge key={r.kind} variant='outline' className='font-normal'>
+                          {pushKindLabel(r.kind)}: <span className='ml-1 font-semibold tabular-nums'>{r.sent}</span>
+                          {r.notSent ? <span className='ml-1 text-muted-foreground'>(+{r.notSent} sin enviar)</span> : null}
+                        </Badge>
+                      ))}
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className='w-[130px]'>Fecha</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Aviso</TableHead>
+                          <TableHead>Resultado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(showAllPushes ? pushes : pushes.slice(0, 15)).map(l => (
+                          <TableRow key={l.id}>
+                            <TableCell className='text-xs tabular-nums text-muted-foreground'>{l.created_at ? new Date(l.created_at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</TableCell>
+                            <TableCell>{nameOf.get(l.client_id) ?? `Cliente #${l.client_id}`}</TableCell>
+                            <TableCell>
+                              <div>{pushKindLabel(l.kind)}</div>
+                              {l.message && <div className='max-w-[320px] truncate text-xs text-muted-foreground' title={l.message}>{l.message}</div>}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={l.status === 'sent' ? 'default' : l.status === 'failed' ? 'destructive' : 'secondary'} className='whitespace-normal text-left font-normal'>
+                                {pushStatusLabel(l.status)}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {pushes.length > 15 && (
+                      <Button variant='ghost' size='sm' className='mt-2' onClick={() => setShowAllPushes(v => !v)}>
+                        {showAllPushes ? 'Ver menos' : `Ver los ${pushes.length}`}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <p className='text-sm text-muted-foreground'>Todavía no se ha enviado ningún aviso de este reto.</p>
+                )}
+              </div>
             </div>
           ) : null}
 
