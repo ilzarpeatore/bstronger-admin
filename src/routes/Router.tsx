@@ -117,6 +117,7 @@ const Postings = Loadable(lazy(() => import('../views/community/PostingView')));
 const ReportedPostings = Loadable(lazy(() => import('../views/community/ReportedPostingView')));
 const ReportedComments = Loadable(lazy(() => import('../views/community/ReportedCommentView')));
 const AppFeedback = Loadable(lazy(() => import('../views/community/AppFeedbackView')));
+const AppMonitoring = Loadable(lazy(() => import('../views/monitoring/AppMonitoringView')));
 const Languages = Loadable(lazy(() => import('../views/languages/LanguageView')));
 const LanguageKeywords = Loadable(lazy(() => import('../views/languages/LanguageKeywordView')));
 const DefaultKeywords = Loadable(lazy(() => import('../views/pages-config/DefaultKeywordView')));
@@ -307,6 +308,7 @@ const Router = [
       { path: '/reported-postings', element: <ReportedPostings /> },
       { path: '/reported-comments', element: <ReportedComments /> },
       { path: '/app-feedback', element: <AppFeedback /> },
+      { path: '/app-monitoring', element: <AppMonitoring /> },
       { path: '/languages', element: <Languages /> },
       { path: '/language-keywords', element: <LanguageKeywords /> },
       { path: '/default-keywords', element: <DefaultKeywords /> },
