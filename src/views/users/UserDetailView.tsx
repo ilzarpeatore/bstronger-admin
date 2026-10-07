@@ -31,6 +31,7 @@ import { useProgramSessionEditor, distinctPrograms } from '@/components/coaching
 import OnboardingAnswersDialog, { type OnboardingSection } from '@/components/users/OnboardingAnswersDialog'
 import OnboardingExtraFields from '@/components/users/OnboardingExtraFields'
 import ClientCoachSelector from '@/components/users/ClientCoachSelector'
+import ClientPaymentControlCard from '@/components/users/ClientPaymentControlCard'
 import { SessionDetailModal } from '@/views/coaching/SessionDetailView'
 import HabitDialog from '@/components/coaching/HabitDialog'
 import HabitProgressPanel, { type HabitProgressItem } from '@/components/coaching/HabitProgressPanel'
@@ -904,6 +905,8 @@ export default function UserDetailView({ userId, tab }: { userId: string; tab?: 
       <div className='p-3 sm:p-6 space-y-6'>
         {/* Entrenador asignado (ítem 49): visible en todas las pestañas, con aviso si no hay ninguno. */}
         <ClientCoachSelector userId={userId} />
+        {/* Aviso/bloqueo por impago (Bckbs docs/AVISO_IMPAGO.md): solo clientes 1:1; se recarga al cambiar el nivel de acceso. */}
+        <ClientPaymentControlCard key={String(personalClient)} userId={userId} />
 
         {/* ═══ OVERVIEW ═══ */}
         {activeTab === 'overview' && (
