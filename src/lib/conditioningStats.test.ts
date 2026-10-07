@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { benchmarkLabel, benchmarkScoreKind, benchmarkTitle, benchmarkValue, hasConditioningData, normalizeConditioningStats } from './conditioningStats'
+import { benchmarkLabel, benchmarkScoreKind, benchmarkTitle, benchmarkValue, formatDiff, hasConditioningData, normalizeComparison, normalizeConditioningStats } from './conditioningStats'
 
 describe('normalizeConditioningStats', () => {
   it('acepta {success, data} y ordena benchmarks por fecha', () => {
@@ -43,5 +43,44 @@ describe('benchmarks', () => {
     expect(benchmarkLabel({ performed_date: 'x', time_sec: 1500, capped: true })).toBe('25:00 (límite)')
     expect(benchmarkLabel({ performed_date: 'x', distance_m: 5000, time_sec: 1450 })).toBe('5 km en 24:10')
     expect(benchmarkTitle('hyrox_full_sim')).toBe('Hyrox full sim')
+  })
+})
+
+describe('fase 2: comparación y nuevos campos', () => {
+  it('normaliza ritmo semanal, zonas y último simulacro', () => {
+    const s = normalizeConditioningStats({
+      data: {
+        weekly_km: [],
+        weekly_pace: [{ week_start: '2026-09-28', pace_sec_km: '300' }, { week_start: '2026-10-05', pace_sec_km: null }],
+        pace_change_sec_km: -12.5,
+        hr_max_estimate: 187,
+        hr_zone_minutes: [{ zone: 2, minutes: 30 }, { zone: 9, minutes: 1 }],
+        last_simulation: {
+          benchmark_key: 'hyrox_full_sim',
+          current: { performed_date: '2026-10-01', time_sec: 4000 },
+          previous: null,
+          total_diff_sec: null,
+          splits: [{ label: 'Carrera', t_sec: 300, is_run: true }, { t_sec: '400' }],
+        },
+      },
+    })!
+    expect(s.weekly_pace[0].pace_sec_km).toBe(300)
+    expect(s.weekly_pace[1].pace_sec_km).toBeNull()
+    expect(s.pace_change_sec_km).toBe(-12.5)
+    expect(s.hr_zone_minutes).toEqual([{ zone: 2, minutes: 30 }])
+    expect(s.last_simulation?.splits[1]).toMatchObject({ index: 1, label: 'Paso 2', t_sec: 400, previous_t_sec: null, is_run: false })
+  })
+  it('backend sin fase 2: valores vacíos', () => {
+    const s = normalizeConditioningStats({ data: { weekly_km: [] } })!
+    expect(s.weekly_pace).toEqual([])
+    expect(s.hr_zone_minutes).toBeNull()
+    expect(s.last_simulation).toBeNull()
+    expect(normalizeComparison(null)).toBeNull()
+  })
+  it('formatDiff', () => {
+    expect(formatDiff(-12)).toBe('−0:12')
+    expect(formatDiff(65)).toBe('+1:05')
+    expect(formatDiff(0)).toBe('=')
+    expect(formatDiff(null)).toBe('')
   })
 })
