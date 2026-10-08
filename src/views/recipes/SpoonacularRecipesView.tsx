@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Clock, Users, UtensilsCrossed, ExternalLink, ImageOff } from 'lucide-react'
+import { Search, Clock, Users, UtensilsCrossed, ExternalLink, ImageOff, Download, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -14,9 +14,10 @@ import { api, ApiError } from '@/lib/api'
 
 /**
  * Página de PRUEBA (2026-10-08) para evaluar el catálogo de Spoonacular.
- * Deliberadamente NO tiene botón de guardar/importar: de momento solo se
- * mira si las recetas y sus macros nos sirven. La clave de API vive en el
- * .env del backend (SPOONACULAR_KEY), aquí no hay nada que configurar.
+ * Desde el detalle de una receta se puede guardar una copia en la biblioteca
+ * propia, que es lo que permite asignársela luego a un cliente. La clave de
+ * API vive en el .env del backend (SPOONACULAR_KEY), aquí no hay nada que
+ * configurar.
  */
 
 type SpoonacularIngredient = {
@@ -70,6 +71,12 @@ export default function SpoonacularRecipesView() {
 
   const [selected, setSelected] = useState<SpoonacularRecipe | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+
+  // external_id -> id de la receta local, para las que ya se han guardado en
+  // esta sesión. El backend es idempotente, así que esto es solo para no
+  // ofrecer dos veces el mismo botón y poder enseñar el id local.
+  const [imported, setImported] = useState<Record<number, number>>({})
+  const [importing, setImporting] = useState(false)
 
   const handleSearch = async () => {
     setLoading(true)
@@ -132,14 +139,42 @@ export default function SpoonacularRecipesView() {
     }
   }
 
+  /**
+   * Guarda una copia permanente en la biblioteca propia. A partir de ahí la
+   * receta es una receta normal: se asigna a un cliente desde Calendario de
+   * comidas con la fuente «recetas propias», y el cliente la ve en la app
+   * sin que haya que tocar nada más.
+   */
+  const importRecipe = async (recipe: SpoonacularRecipe) => {
+    setImporting(true)
+    try {
+      const res = await api.post(`/admin/spoonacular/recipes/${recipe.external_id}/import`, {})
+      setImported(prev => ({ ...prev, [recipe.external_id]: res.data.recipe_id }))
+      toast.success(
+        res.data.ya_existia
+          ? `Ya estaba en la biblioteca (receta #${res.data.recipe_id})`
+          : `Guardada como receta #${res.data.recipe_id}. Ya puedes asignarla desde Calendario de comidas.`
+      )
+    } catch (err) {
+      const apiErr = err as ApiError
+      toast.error(
+        apiErr?.status === 402
+          ? apiErr.data?.message || 'Cuota diaria de Spoonacular agotada.'
+          : apiErr?.data?.message || 'No se pudo guardar la receta'
+      )
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <>
       <Card>
         <CardHeader>
           <CardTitle>Recetas · Spoonacular</CardTitle>
           <p className='text-xs text-muted-foreground mt-1'>
-            Prueba de la API de Spoonacular. Los macros son por ración. Todavía no se puede
-            guardar nada: esto solo sirve para ver si su catálogo nos vale.
+            Prueba de la API de Spoonacular. Los macros son por ración. Desde el detalle de una
+            receta puedes guardarla en la biblioteca para asignarla luego a un cliente.
           </p>
         </CardHeader>
         <CardContent className='space-y-6'>
@@ -360,6 +395,28 @@ export default function SpoonacularRecipesView() {
                       </li>
                     ))}
                   </ol>
+                )}
+              </div>
+
+              <Separator />
+
+              <div className='flex flex-wrap items-center justify-between gap-3'>
+                <p className='text-xs text-muted-foreground max-w-sm'>
+                  Al guardarla se queda una copia en la biblioteca. Para que un cliente la vea,
+                  asígnala después en <strong>Calendario de comidas</strong> con la fuente
+                  «recetas propias».
+                </p>
+
+                {imported[selected.external_id] ? (
+                  <Badge variant='secondary'>
+                    <Check className='size-3 mr-1' />
+                    En la biblioteca (#{imported[selected.external_id]})
+                  </Badge>
+                ) : (
+                  <Button onClick={() => importRecipe(selected)} disabled={importing || loadingDetail}>
+                    <Download className='size-4 mr-1' />
+                    {importing ? 'Guardando...' : 'Guardar en la biblioteca'}
+                  </Button>
                 )}
               </div>
             </div>
