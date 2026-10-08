@@ -81,6 +81,7 @@ import {
   ShoppingBasket,
   Mail,
   Inbox,
+  Activity,
   LucideIcon,
 } from "lucide-react"
 
@@ -462,6 +463,12 @@ const SidebarContent: MenuItem[] = [
         name: "Ajustes de la aplicación",
         icon: Smartphone,
         url: "/app-settings",
+      },
+      {
+        id: uniqueId(),
+        name: "Errores y uso de la app",
+        icon: Activity,
+        url: "/app-monitoring",
       },
       {
         id: uniqueId(),
