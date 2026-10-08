@@ -48,6 +48,8 @@ const DietMealItems = Loadable(lazy(() => import('../views/diet/DietMealItemsVie
 const LegacyDiets = Loadable(lazy(() => import('../views/diet/DietView')));
 const DietCategories = Loadable(lazy(() => import('../views/diet/CategoryDietView')));
 const Recipes = Loadable(lazy(() => import('../views/recipes/RecipeView')));
+// Prueba de la API de Spoonacular (2026-10-08): solo mirar, sin importar nada.
+const SpoonacularRecipes = Loadable(lazy(() => import('../views/recipes/SpoonacularRecipesView')));
 const RecipeCategories = Loadable(lazy(() => import('../views/recipes/RecipeCategoryView')));
 const RecipeTags = Loadable(lazy(() => import('../views/recipes/RecipeTagView')));
 const Ingredients = Loadable(lazy(() => import('../views/recipes/IngredientView')));
@@ -238,6 +240,7 @@ const Router = [
       { path: '/diet-meal-items', element: <DietMealItems /> },
       { path: '/diet-categories', element: <DietCategories /> },
       { path: '/recipes', element: <Recipes /> },
+      { path: '/spoonacular-recipes', element: <SpoonacularRecipes /> },
       { path: '/recipe-categories', element: <RecipeCategories /> },
       { path: '/recipe-tags', element: <RecipeTags /> },
       { path: '/ingredients', element: <Ingredients /> },
