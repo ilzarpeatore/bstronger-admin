@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { Search, Clock, Users, UtensilsCrossed, ExternalLink, ImageOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,10 +13,10 @@ import { toast } from 'sonner'
 import { api, ApiError } from '@/lib/api'
 
 /**
- * PÃ¡gina de PRUEBA (2026-10-08) para evaluar el catÃ¡logo de Spoonacular.
- * Deliberadamente NO tiene botÃ³n de guardar/importar: de momento solo se
+ * Página de PRUEBA (2026-10-08) para evaluar el catálogo de Spoonacular.
+ * Deliberadamente NO tiene botón de guardar/importar: de momento solo se
  * mira si las recetas y sus macros nos sirven. La clave de API vive en el
- * .env del backend (SPOONACULAR_KEY), aquÃ­ no hay nada que configurar.
+ * .env del backend (SPOONACULAR_KEY), aquí no hay nada que configurar.
  */
 
 type SpoonacularIngredient = {
@@ -41,7 +41,7 @@ type SpoonacularRecipe = {
   source_url: string | null
 }
 
-/** Cocinas que admite complexSearch (su lista cerrada, en minÃºsculas). */
+/** Cocinas que admite complexSearch (su lista cerrada, en minúsculas). */
 const CUISINES = [
   'african', 'american', 'asian', 'british', 'cajun', 'caribbean', 'chinese',
   'eastern european', 'european', 'french', 'german', 'greek', 'indian',
@@ -53,7 +53,7 @@ const CUISINES = [
 const ANY_CUISINE = '__any__'
 
 function macro(value: number | null, unit: string): string {
-  return value === null ? 'â€”' : `${value}${unit}`
+  return value === null ? '—' : `${value}${unit}`
 }
 
 export default function SpoonacularRecipesView() {
@@ -88,7 +88,7 @@ export default function SpoonacularRecipesView() {
       setSearched(true)
     } catch (err) {
       const apiErr = err as ApiError
-      // 402 = puntos del dÃ­a agotados. No es un fallo nuestro y conviene
+      // 402 = puntos del día agotados. No es un fallo nuestro y conviene
       // que se quede en pantalla, no en un toast que desaparece.
       if (apiErr?.status === 402) {
         setQuotaMessage(apiErr.data?.message || 'Se ha agotado la cuota diaria de Spoonacular.')
@@ -102,16 +102,16 @@ export default function SpoonacularRecipesView() {
   }
 
   /**
-   * El modal pide siempre el detalle, aunque la bÃºsqueda ya traiga
+   * El modal pide siempre el detalle, aunque la búsqueda ya traiga
    * ingredientes y pasos. Comprobado contra la API real (2026-10-08):
-   * complexSearch devuelve las cantidades YA DIVIDIDAS por raciÃ³n
+   * complexSearch devuelve las cantidades YA DIVIDIDAS por ración
    * ("0.13 bay leaf" en una receta de 8 raciones), mientras que
-   * /{id}/information trae extendedIngredients.original con la lÃ­nea de la
+   * /{id}/information trae extendedIngredients.original con la línea de la
    * receta entera ("1 bay leaf"), que es lo que se puede leer. El backend
-   * cachea el detalle 1h, asÃ­ que reabrir la misma receta no gasta puntos.
+   * cachea el detalle 1h, así que reabrir la misma receta no gasta puntos.
    *
-   * Mientras llega, se muestra lo que ya tenemos de la bÃºsqueda, y si la
-   * llamada falla eso es lo que se queda (mejor incompleto que vacÃ­o).
+   * Mientras llega, se muestra lo que ya tenemos de la búsqueda, y si la
+   * llamada falla eso es lo que se queda (mejor incompleto que vacío).
    */
   const openRecipe = async (recipe: SpoonacularRecipe) => {
     setSelected(recipe)
@@ -125,7 +125,7 @@ export default function SpoonacularRecipesView() {
       toast.error(
         apiErr?.status === 402
           ? apiErr.data?.message || 'Cuota diaria de Spoonacular agotada.'
-          : 'No se pudo cargar el detalle: se muestra lo que vino de la bÃºsqueda'
+          : 'No se pudo cargar el detalle: se muestra lo que vino de la búsqueda'
       )
     } finally {
       setLoadingDetail(false)
@@ -136,10 +136,10 @@ export default function SpoonacularRecipesView() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Recetas Â· Spoonacular</CardTitle>
+          <CardTitle>Recetas · Spoonacular</CardTitle>
           <p className='text-xs text-muted-foreground mt-1'>
-            Prueba de la API de Spoonacular. Los macros son por raciÃ³n. TodavÃ­a no se puede
-            guardar nada: esto solo sirve para ver si su catÃ¡logo nos vale.
+            Prueba de la API de Spoonacular. Los macros son por ración. Todavía no se puede
+            guardar nada: esto solo sirve para ver si su catálogo nos vale.
           </p>
         </CardHeader>
         <CardContent className='space-y-6'>
@@ -148,7 +148,7 @@ export default function SpoonacularRecipesView() {
             onSubmit={e => { e.preventDefault(); handleSearch() }}
           >
             <Field>
-              <FieldLabel htmlFor='sp-query'>BÃºsqueda</FieldLabel>
+              <FieldLabel htmlFor='sp-query'>Búsqueda</FieldLabel>
               <Input
                 id='sp-query'
                 placeholder='pollo, lentejas, tortilla...'
@@ -173,7 +173,7 @@ export default function SpoonacularRecipesView() {
             </Field>
 
             <Field>
-              <FieldLabel htmlFor='sp-kcal'>Kcal mÃ¡x.</FieldLabel>
+              <FieldLabel htmlFor='sp-kcal'>Kcal máx.</FieldLabel>
               <Input
                 id='sp-kcal'
                 type='number'
@@ -186,7 +186,7 @@ export default function SpoonacularRecipesView() {
             </Field>
 
             <Field>
-              <FieldLabel htmlFor='sp-protein'>ProteÃ­na mÃ­n. (g)</FieldLabel>
+              <FieldLabel htmlFor='sp-protein'>Proteína mín. (g)</FieldLabel>
               <Input
                 id='sp-protein'
                 type='number'
@@ -219,9 +219,9 @@ export default function SpoonacularRecipesView() {
           ) : recipes.length === 0 ? (
             <div className='flex flex-col items-center justify-center py-20 text-muted-foreground'>
               <UtensilsCrossed className='size-12 mb-4 opacity-50' />
-              <p>{searched ? 'Ninguna receta cumple esos filtros' : 'Haz una bÃºsqueda para ver recetas'}</p>
+              <p>{searched ? 'Ninguna receta cumple esos filtros' : 'Haz una búsqueda para ver recetas'}</p>
               {searched && (
-                <p className='text-xs mt-1'>Prueba a subir las kcal mÃ¡ximas o a bajar la proteÃ­na mÃ­nima.</p>
+                <p className='text-xs mt-1'>Prueba a subir las kcal máximas o a bajar la proteína mínima.</p>
               )}
             </div>
           ) : (
@@ -251,7 +251,7 @@ export default function SpoonacularRecipesView() {
                     )}
 
                     <div className='p-3 space-y-2'>
-                      <p className='text-sm font-medium line-clamp-2'>{recipe.title ?? 'Sin tÃ­tulo'}</p>
+                      <p className='text-sm font-medium line-clamp-2'>{recipe.title ?? 'Sin título'}</p>
 
                       <div className='flex flex-wrap gap-1'>
                         <Badge variant='default'>{macro(recipe.kcal, ' kcal')}</Badge>
@@ -291,10 +291,10 @@ export default function SpoonacularRecipesView() {
             <div className='space-y-5'>
               <div className='flex flex-wrap items-center gap-2'>
                 <Badge variant='default'>{macro(selected.kcal, ' kcal')}</Badge>
-                <Badge variant='secondary'>ProteÃ­na {macro(selected.protein_g, 'g')}</Badge>
+                <Badge variant='secondary'>Proteína {macro(selected.protein_g, 'g')}</Badge>
                 <Badge variant='secondary'>Hidratos {macro(selected.carbs_g, 'g')}</Badge>
                 <Badge variant='secondary'>Grasa {macro(selected.fat_g, 'g')}</Badge>
-                <span className='text-xs text-muted-foreground'>por raciÃ³n</span>
+                <span className='text-xs text-muted-foreground'>por ración</span>
               </div>
 
               <div className='flex items-center gap-4 text-xs text-muted-foreground'>
@@ -335,7 +335,7 @@ export default function SpoonacularRecipesView() {
                   <ul className='space-y-1'>
                     {selected.ingredients.map((ing, i) => (
                       <li key={i} className='text-sm flex gap-2'>
-                        <span className='text-muted-foreground'>Â·</span>
+                        <span className='text-muted-foreground'>·</span>
                         <span className='first-letter:uppercase'>{ing.text}</span>
                       </li>
                     ))}
@@ -346,7 +346,7 @@ export default function SpoonacularRecipesView() {
               <Separator />
 
               <div>
-                <h4 className='text-sm font-semibold mb-2'>PreparaciÃ³n</h4>
+                <h4 className='text-sm font-semibold mb-2'>Preparación</h4>
                 {selected.steps.length === 0 ? (
                   <p className='text-xs text-muted-foreground'>Spoonacular no da los pasos para esta receta.</p>
                 ) : (
