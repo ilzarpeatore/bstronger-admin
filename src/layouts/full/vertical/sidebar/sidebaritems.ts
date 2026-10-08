@@ -277,6 +277,7 @@ const SidebarContent: MenuItem[] = [
           { id: uniqueId(), name: "Dietas", url: "/diets" },
           { id: uniqueId(), name: "Dietas (catálogo de la app)", url: "/legacy-diets" },
           { id: uniqueId(), name: "Recetas", url: "/recipes" },
+          { id: uniqueId(), name: "Recetas · Spoonacular", url: "/spoonacular-recipes" },
           { id: uniqueId(), name: "Elementos de comidas", url: "/diet-meal-items" },
           {
             id: uniqueId(),
