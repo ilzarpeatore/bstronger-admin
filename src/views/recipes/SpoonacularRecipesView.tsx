@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Clock, Users, UtensilsCrossed, ExternalLink, ImageOff, Download, Check } from 'lucide-react'
+import { Search, Clock, Users, UtensilsCrossed, ExternalLink, ImageOff, Download, Check, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -72,10 +72,10 @@ export default function SpoonacularRecipesView() {
   const [selected, setSelected] = useState<SpoonacularRecipe | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
 
-  // external_id -> id de la receta local, para las que ya se han guardado en
-  // esta sesión. El backend es idempotente, así que esto es solo para no
-  // ofrecer dos veces el mismo botón y poder enseñar el id local.
-  const [imported, setImported] = useState<Record<number, number>>({})
+  // external_id -> receta local guardada en esta sesión. El backend es
+  // idempotente, así que esto es solo para no ofrecer dos veces el mismo
+  // botón, enseñar el id local y recordar si entró traducida.
+  const [imported, setImported] = useState<Record<number, { id: number; traducida: boolean }>>({})
   const [importing, setImporting] = useState(false)
 
   const handleSearch = async () => {
@@ -149,12 +149,28 @@ export default function SpoonacularRecipesView() {
     setImporting(true)
     try {
       const res = await api.post(`/admin/spoonacular/recipes/${recipe.external_id}/import`, {})
-      setImported(prev => ({ ...prev, [recipe.external_id]: res.data.recipe_id }))
-      toast.success(
-        res.data.ya_existia
-          ? `Ya estaba en la biblioteca (receta #${res.data.recipe_id})`
-          : `Guardada como receta #${res.data.recipe_id}. Ya puedes asignarla desde Calendario de comidas.`
-      )
+      setImported(prev => ({
+        ...prev,
+        [recipe.external_id]: { id: res.data.recipe_id, traducida: res.data.traducida !== false },
+      }))
+
+      // La traducción puede fallar sin que el import falle (DeepL sin cuota,
+      // por ejemplo): la receta se guarda igual, pero en inglés. Eso tiene
+      // que verse aquí y no solo en el log del servidor, que es como 25
+      // recetas acabaron en inglés sin que nadie se diera cuenta.
+      if (res.data.traducida === false) {
+        toast.warning(
+          `Guardada como receta #${res.data.recipe_id}, pero SIN TRADUCIR: se queda en inglés. ` +
+            'Revisa la cuota de DeepL y luego lánzale `php artisan recetas:traducir`.',
+          { duration: 10000 }
+        )
+      } else {
+        toast.success(
+          res.data.ya_existia
+            ? `Ya estaba en la biblioteca (receta #${res.data.recipe_id})`
+            : `Guardada como receta #${res.data.recipe_id}. Ya puedes asignarla desde Calendario de comidas.`
+        )
+      }
     } catch (err) {
       const apiErr = err as ApiError
       toast.error(
@@ -408,10 +424,17 @@ export default function SpoonacularRecipesView() {
                 </p>
 
                 {imported[selected.external_id] ? (
-                  <Badge variant='secondary'>
-                    <Check className='size-3 mr-1' />
-                    En la biblioteca (#{imported[selected.external_id]})
-                  </Badge>
+                  imported[selected.external_id].traducida ? (
+                    <Badge variant='secondary'>
+                      <Check className='size-3 mr-1' />
+                      En la biblioteca (#{imported[selected.external_id].id})
+                    </Badge>
+                  ) : (
+                    <Badge variant='destructive'>
+                      <AlertTriangle className='size-3 mr-1' />
+                      En la biblioteca (#{imported[selected.external_id].id}), sin traducir
+                    </Badge>
+                  )
                 ) : (
                   <Button onClick={() => importRecipe(selected)} disabled={importing || loadingDetail}>
                     <Download className='size-4 mr-1' />
